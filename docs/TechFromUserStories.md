@@ -18,7 +18,12 @@ Stories are in [`UserStories.md`](UserStories.md).
   request and exits with code 2.
 - `slice <COURSE>` command pulls one course and everything it reaches (areas of study recursively,
   their subjects, requisites, one hop of requisite subjects) and writes a manifest.
-- Files: `scraper/src/http.ts`, `scraper/src/handbook.ts`, `scraper/src/cli.ts`, `package.json`, `tsconfig.json`, `.gitignore`.
+- `report <COURSE>` summarises a slice (in scope / fetched / failed) to stdout and
+  `data/reports/coverage-<year>-<course>.json`, exiting 1 if any in-scope item is missing.
+- First slice, 24 Sep 2026, 2027 handbook, C10148 at 1 request / 3 s: 1 course, 28 areas of study,
+  195 subjects, 64 requisite-only subjects. 404s: SMJ10196, 6 structure subjects, 36 requisite-only
+  subjects (mostly retired subjects kept as OR alternatives in requisite rules).
+- Files: `scraper/src/http.ts`, `scraper/src/handbook.ts`, `scraper/src/cli.ts`, `package.json`, `tsconfig.json`, `.gitignore`, `data/reports/coverage-2027-C10148.json`.
 
 ### US-002 Pull prerequisites
 - Requisites are not in the handbook; they come from

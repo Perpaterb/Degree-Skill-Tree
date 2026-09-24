@@ -17,9 +17,9 @@ personal data): US-007, US-011, US-012, US-014 changed; US-017 and US-018 added.
 As the project owner, I want the handbook's courses, areas of study and subjects pulled so the
 tree is built from real data.
 - [x] Lists all courses, areas of study and subjects for a handbook year, matching the search API totals (2026: 441 / 933 / 3,543)
-- [ ] Fetches detail for every item in scope (POC scope: C10148 Bachelor of IT, 2027, and everything it reaches), cached so no page is fetched twice
+- [ ] Fetches detail for every item in scope (POC scope: C10148 Bachelor of IT, 2027, and everything it reaches), cached so no page is fetched twice. *Partial: everything the handbook publishes was fetched; 1 area of study and 6 subjects in the structure return 404 in the 2027 handbook (see `data/reports/coverage-2027-C10148.json`). Decision pending on how to represent them.*
 - [x] Stops the whole run on HTTP 403 and never retries against a block
-- [ ] Writes a coverage report: items in scope, fetched, failed
+- [x] Writes a coverage report: items in scope, fetched, failed (exits non-zero when anything in scope is missing)
 
 ### US-002 Pull prerequisites
 As the project owner, I want every in-scope subject's requisites and anti-requisites as evaluable rules.

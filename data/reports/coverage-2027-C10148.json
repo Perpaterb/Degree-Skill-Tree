@@ -1,0 +1,61 @@
+{
+  "year": "2027",
+  "course": "C10148",
+  "inScope": {
+    "courses": 1,
+    "areasOfStudy": 28,
+    "subjects": 195
+  },
+  "requisiteOnlySubjects": 64,
+  "failed": {
+    "coursesOrAreas": [
+      "aos/SMJ10196: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width\"/><link rel=\"icon\" href=\"/theme/uts/uts-favicon.ico\"/><title>Handbook - 404 Page</title><link rel=\"c"
+    ],
+    "subjects": [
+      "48033: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "21129: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "21228: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31256: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "97509: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "97510: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>"
+    ],
+    "requisiteSubjects": [
+      "37171: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31276: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31475: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31267: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31465: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48440: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31244: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31281: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31469: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31279: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "41192: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31488: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31508: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31140: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31270: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48720: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48410: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48450: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48740: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "24108: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "976001: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "97110: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "23000: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "23001: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "68101: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "35101: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "33290: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "37131: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "339130: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "37132: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "33190: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "35151: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "37151: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "68103: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "35252: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "35363: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>"
+    ]
+  }
+}

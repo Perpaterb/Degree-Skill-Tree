@@ -140,8 +140,41 @@ async function slice() {
   console.log(`done. ${missing.length} missing (see manifest)`);
 }
 
+/** Summarise what a slice holds: in scope, fetched, failed. Exits non-zero if anything in scope is missing. */
+async function report() {
+  const name = process.argv[3];
+  if (!name) throw new Error('usage: npm run scrape -- report <COURSE_CODE>');
+  const m = JSON.parse(await readFile(`${RAW}/slice-${name}.json`, 'utf8')) as {
+    items: string[];
+    requisiteSubjects: string[];
+    missing: string[];
+  };
+  const failed = async (label: string): Promise<{ thing: string; error: string }[]> =>
+    JSON.parse(await readFile(`${RAW}/failures-${label}.json`, 'utf8').catch(() => '[]'));
+  const byKind = (k: string) => m.items.filter((i) => i.startsWith(`${k}/`)).length;
+  const subjectFailures = await failed('slice-subjects');
+  const hopFailures = await failed('slice-requisites');
+  const summary = {
+    year: YEAR,
+    course: name,
+    inScope: { courses: byKind('course'), areasOfStudy: byKind('aos'), subjects: byKind('subject') },
+    requisiteOnlySubjects: m.requisiteSubjects.length,
+    failed: {
+      coursesOrAreas: m.missing,
+      subjects: subjectFailures.map((f) => `${f.thing}: ${f.error.slice(0, 60)}`),
+      requisiteSubjects: hopFailures.map((f) => `${f.thing}: ${f.error.slice(0, 60)}`),
+    },
+  };
+  console.log(JSON.stringify(summary, null, 2));
+  await mkdir('data/reports', { recursive: true });
+  await writeFile(`data/reports/coverage-${YEAR}-${name}.json`, JSON.stringify(summary, null, 2) + '\n');
+  const failures = m.missing.length + subjectFailures.length;
+  if (failures) process.exitCode = 1;
+}
+
 const commands: Record<string, () => Promise<unknown>> = {
   slice,
+  report,
   list,
   pages,
   access,
