@@ -7,6 +7,11 @@ const LOAD_TIMEOUT = 20_000;
 /** Open the app at `./#hash`, or at an absolute URL, and wait until the tree has drawn. */
 export async function openTree(page: Page, hashOrUrl = '') {
   await page.goto(/^https?:/.test(hashOrUrl) ? hashOrUrl : hashOrUrl ? `./#${hashOrUrl}` : './');
+  await waitReady(page);
+}
+
+/** Wait until the page that is already loading has fetched, laid out and drawn the tree. */
+export async function waitReady(page: Page) {
   await expect(page.getByTestId('progress-total')).toBeVisible({ timeout: LOAD_TIMEOUT });
   // Wait for the canvas to exist and draw a few frames.
   await expect(page.locator('[data-testid="tree-canvas"] canvas')).toBeVisible({ timeout: LOAD_TIMEOUT });

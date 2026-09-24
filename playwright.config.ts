@@ -8,8 +8,8 @@ export default defineConfig({
   testDir: 'e2e',
   timeout: 45_000,
   fullyParallel: true,
-  // Software GL is CPU-bound; more workers than this starve each other.
-  workers: 4,
+  // Software GL is CPU-bound; more workers than this starve each other (CI runners have 2-4 cores).
+  workers: process.env.CI ? 2 : 4,
   reporter: [['list']],
   use: {
     baseURL: external ?? 'http://localhost:4173/Degree-Skill-Tree/',

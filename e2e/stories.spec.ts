@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { clickCentre, goTo, openTree } from './helpers';
+import { clickCentre, goTo, openTree, waitReady } from './helpers';
 
 // Every test name starts with its story ID; scripts/story-coverage.mjs reads them.
 
@@ -88,6 +88,7 @@ test('US-007: marking a subject completed updates what is available and excluded
 });
 
 test('US-007: the plan survives a reload and a shared link reproduces it elsewhere', async ({ page, browser }) => {
+  test.slow(); // loads the whole tree three times (first visit, reload, second browser)
   await openTree(page);
   await goTo(page, '41039');
   await page.getByTestId('detail-panel').getByRole('button', { name: 'Mark completed' }).click();
@@ -97,7 +98,7 @@ test('US-007: the plan survives a reload and a shared link reproduces it elsewhe
   await expect(page).toHaveURL(/p=31251/);
 
   await page.reload();
-  await openTree(page, page.url().split('#')[1]);
+  await waitReady(page);
   await goTo(page, '41039');
   await expect(page.getByTestId('detail-panel')).toContainText('Completed');
 
