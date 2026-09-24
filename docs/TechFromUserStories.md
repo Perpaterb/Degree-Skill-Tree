@@ -121,3 +121,22 @@ Stories are in [`UserStories.md`](UserStories.md).
 - `web/src/analytics.ts`: `track(event, props)` no-op (logs in dev). Called for course opened, node
   inspected, subject marked, program toggled, search used, plan shared.
 - Files: `web/src/analytics.ts`, `web/src/store.ts`, `web/src/Panels.tsx`.
+
+### US-017 Host on GitHub Pages: first deploy (24 Sep 2026)
+- Pages enabled with the Actions build type. Live at <https://perpaterb.github.io/Degree-Skill-Tree/>.
+- Runs 35965382636 and 35965711410 (scope `all`) were blocked by the E2E gate: the share-link test
+  (US-007) failed on the runner, first by running past its time limit, then by the app not showing
+  its progress panel within 20s after a reload. Not reproducible locally, including on 2 pinned cores.
+  Mechanism fixes: wait for readiness after the reload instead of navigating again, `test.slow()`,
+  two CI workers; traces and screenshots are now kept and uploaded on failure.
+- Run 35966554412 (scope `all`): build, deploy and live smoke all passed. **Open:** the reload failure
+  is intermittent on CI and its cause is not yet known; the next failing run will have a trace.
+
+### Local development in containers (tooling, no story)
+- `Dockerfile` (Node 22, runs as uid 1000) and `docker-compose.yml`:
+  `docker compose up` runs the Vite dev server on :5173 with polling file watch (`VITE_POLL`),
+  verified to hot-update the browser from host edits; `docker compose run --rm test` runs unit and
+  E2E in `mcr.microsoft.com/playwright:v1.63.0-noble` (38 + 11 passed) and hands its output back to
+  uid 1000; `tools` runs any npm script. `@playwright/test` is pinned to exactly 1.63.0 to match the image.
+- Files: `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `vite.config.ts`, `package.json`,
+  `package-lock.json`, `README.md`.

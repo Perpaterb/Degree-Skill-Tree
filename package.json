@@ -17,7 +17,7 @@
     "smoke": "./scripts/smoke.sh"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "1.63.0",
     "@types/node": "^20.19.43",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

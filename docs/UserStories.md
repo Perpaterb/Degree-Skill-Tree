@@ -124,9 +124,9 @@ As an admin, I want to re-run the handbook import and review what changed.
 
 ### US-017 Host on GitHub Pages
 As the project owner, I want the site published on GitHub Pages automatically so there is nothing to run.
-- [ ] Merging to `main` builds and deploys the site through GitHub Actions. *Partial: the workflow exists but is manual-dispatch only until deploy rules are agreed; not yet run.*
+- [ ] Merging to `main` builds and deploys the site through GitHub Actions. *Partial: deploys run through GitHub Actions but are started manually (by agreement: each deploy is deliberate, with its test scope chosen). First live deploy 24 Sep 2026.*
 - [x] Works under the Pages sub-path (`/Degree-Skill-Tree/`), including deep links to a course and a shared plan (verified against the local production build)
-- [ ] `./scripts/smoke.sh --target <url>` passes against the deployed site before it is announced
+- [x] `./scripts/smoke.sh --target <url>` passes against the deployed site before it is announced (run 35966554412, 24 Sep 2026)
 
 ### US-018 Usage analytics without personal data (later)
 As the project owner, I want to know what people look at and do on the site, without collecting personal data.

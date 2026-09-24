@@ -1,0 +1,48 @@
+# Local development in containers.
+#   docker compose up                    dev server with hot reload: http://localhost:5173/Degree-Skill-Tree/
+#   docker compose run --rm test         unit tests + E2E stories against a production build
+#   docker compose run --rm tools npm run scrape -- slice C10148   any npm script (scraper, story-coverage, ...)
+
+name: degree-skill-tree
+
+services:
+  web:
+    build: .
+    ports:
+      - '5173:5173'
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    environment:
+      # File events do not always cross a bind mount; poll so edits reload reliably.
+      VITE_POLL: '1'
+
+  test:
+    # Must match the @playwright/test version in package.json (pinned exactly).
+    image: mcr.microsoft.com/playwright:v1.63.0-noble
+    profiles: [test]
+    working_dir: /app
+    ipc: host
+    volumes:
+      - .:/app
+      - test_node_modules:/app/node_modules
+    environment:
+      CI: '1'
+      HOME: /tmp
+    # Runs as root (new named volumes are root-owned); whatever it writes into the project is
+    # handed back to uid 1000 on exit, pass or fail.
+    command: >-
+      bash -c "trap 'chown -R 1000:1000 dist test-results 2>/dev/null' EXIT;
+      npm ci --no-audit --no-fund && npm test && npm run build && npx playwright test"
+
+  tools:
+    build: .
+    profiles: [tools]
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: npm run
+
+volumes:
+  node_modules:
+  test_node_modules:
