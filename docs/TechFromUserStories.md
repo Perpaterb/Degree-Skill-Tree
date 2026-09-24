@@ -185,6 +185,24 @@ Stories are in [`UserStories.md`](UserStories.md).
 - Files: `core/layout.ts`, `core/layout.test.ts`, `web/src/TreeCanvas.tsx`, `web/public/trees/uts-2027.json`,
   `scraper/src/cli.ts`, `package.json`, `package-lock.json`, `e2e/multidegree.spec.ts`.
 
+- 25 Sep 2026, feedback from testing:
+  - Copies of a marked (completed or planned) subject now all look the same: entry copies use the
+    full state look (keeping only a thin outer line as the doorway mark), and marked copies are not
+    faded for being outside the selected degree.
+  - Every copy of the hovered subject grows (at least 1.4x, and at least 18 px radius on screen at any
+    zoom), is raised above other subjects, gets a cyan halo and shows its code; copies of the selected
+    subject do the same at 1.25x / 14 px. Scaling lives in `applyLod`, so it follows zoom.
+  - Circle titles moved above their circles. The layout wraps each title (`titleBox`, generous glyph
+    width) and packs every circle by the disc around the circle and its title, so a title cannot touch
+    another circle, title or subject, and stays inside the circles around it. Degree titles are now a
+    fixed 160 world units instead of growing when zoomed out. The map grew from about 9820 x 9599 to
+    11284 x 10641 world units.
+  - Tests: layout tests for title placement and clearance; E2E tests that all 18 copies of 41039 look
+    the same once completed (with a degree selected) and that hovering one pops out all 18. Both E2E
+    tests were seen to fail with the old drawing; two packing mutations added to the mutation check.
+  - Files: `core/layout.ts`, `core/layout.test.ts`, `web/src/TreeCanvas.tsx`, `e2e/multidegree.spec.ts`,
+    `scripts/verify-tests-fail.sh`, `web/public/trees/uts-2027.json`.
+
 ### US-021 Select a degree and work backwards
 - `Plan.degree` (URL `d=`), `selectDegree` in the store; course conditions are evaluated against the
   selected degree (any degree on the map when none is selected). Top-bar picker (alphabetical) and

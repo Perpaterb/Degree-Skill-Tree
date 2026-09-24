@@ -2,12 +2,15 @@ import { Application, Container, Graphics, Text } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { useEffect, useRef } from 'react';
 import { compulsorySubjects, missingFor, subjectsUnder, unlockedBy } from '../../core/engine';
-import { circleAt, type Layout, type LayoutCircle, type LayoutNode, type PathCmd } from '../../core/layout';
+import { circleAt, TITLE_LINE, type Layout, type LayoutCircle, type LayoutNode, type PathCmd } from '../../core/layout';
 import type { MapDoc } from '../../core/model';
 import { useApp } from './store';
 import { canvas, degreeHues, mix, stateLook } from './theme';
 
 const LABEL_MIN_SCALE = 0.42;
+/** Copies of the hovered (or selected) subject grow by at least this much, and to at least this
+ * radius on screen, so they stand out however far the map is zoomed out. */
+const POP = { 2: { grow: 1.4, px: 18 }, 1: { grow: 1.25, px: 14 } } as const;
 /** How close to an outline (in screen pixels) a click selects that outline's circle. */
 const RIM_PX = 10;
 
@@ -16,6 +19,19 @@ interface NodeView {
   root: Container;
   shape: Graphics;
   label: Text;
+  /** What the last paint drew, for tests. */
+  drawn: CopyLook;
+  /** 2: a copy of the hovered subject, 1: of the selected one, 0: neither. */
+  pop: 0 | 1 | 2;
+}
+
+/** How one copy of a subject was drawn. */
+interface CopyLook {
+  fill: number;
+  ring: number;
+  alpha: number;
+  scale: number;
+  halo: boolean;
 }
 
 interface CircleView {
@@ -44,7 +60,13 @@ interface Scene {
 declare global {
   interface Window {
     /** Read-only helpers for tests: where on screen a node or circle can be clicked. */
-    __dst?: { pointFor(id: string): { x: number; y: number } | null; glowing(): string[]; highlighted(): string[] };
+    __dst?: {
+      pointFor(id: string): { x: number; y: number } | null;
+      glowing(): string[];
+      highlighted(): string[];
+      look(id: string): CopyLook | null;
+      copies(code: string): string[];
+    };
   }
 }
 
@@ -110,20 +132,23 @@ export function TreeCanvas() {
         const shape = new Graphics();
         circleLayer.addChild(shape);
         const degree = circle.kind === 'degree';
+        // The title sits above the circle, in the box the layout kept free for it (already wrapped).
+        const { label } = circle;
         const title = new Text({
-          text: circle.title,
+          text: label.lines.join('\n'),
           style: {
             fill: degree ? hue.get(circle.id)! : canvas.clusterTitle,
-            fontSize: degree ? 64 : 28,
+            fontSize: label.size,
+            lineHeight: label.size * TITLE_LINE,
             fontFamily: 'Georgia, serif',
             align: 'center',
-            wordWrap: true,
-            wordWrapWidth: Math.max(240, circle.r * 1.4),
           },
-          resolution: 2,
+          resolution: degree ? 1 : 2,
         });
-        title.anchor.set(0.5, 0);
-        title.position.set(circle.x, circle.y - circle.r + (degree ? 30 : 12));
+        title.anchor.set(0.5, 1);
+        // Never wider or taller than its box, whatever the font's real metrics are.
+        title.scale.set(Math.min(1, label.w / title.width, label.h / title.height));
+        title.position.set(label.x, label.y + label.h);
         titleLayer.addChild(title);
         return { circle, shape, title };
       });
@@ -132,6 +157,8 @@ export function TreeCanvas() {
       const edges = new Graphics();
       viewport.addChild(edges);
       const nodeLayer = new Container();
+      // Copies of the hovered or selected subject are raised above the rest.
+      nodeLayer.sortableChildren = true;
       viewport.addChild(nodeLayer);
       viewport.addChild(titleLayer);
 
@@ -157,7 +184,7 @@ export function TreeCanvas() {
           if (isClick(e)) useApp.getState().select(node.code);
         });
         nodeLayer.addChild(root);
-        nodes.set(node.id, { node, root, shape, label });
+        nodes.set(node.id, { node, root, shape, label, drawn: { fill: 0, ring: 0, alpha: 1, scale: 1, halo: false }, pop: 0 });
       }
       viewport.on('pointerdown', (e) => (downAt = { x: e.global.x, y: e.global.y }));
       viewport.on('pointertap', (e) => {
@@ -206,6 +233,8 @@ export function TreeCanvas() {
         },
         glowing: () => scene.current?.glowing ?? [],
         highlighted: () => scene.current?.highlighted ?? [],
+        look: (id) => scene.current?.nodes.get(id)?.drawn ?? null,
+        copies: (code) => [...(scene.current?.nodes.values() ?? [])].filter((v) => v.node.code === code).map((v) => v.node.id),
       };
 
       // In-app frame counter (US-004): ticks per second, published every half second. With
@@ -313,11 +342,15 @@ function clickPointForCircle(s: Scene, c: LayoutCircle) {
 function applyLod(s: Scene) {
   s.invalidate();
   const scale = s.viewport.scale.x;
-  for (const v of s.nodes.values()) v.label.visible = scale > LABEL_MIN_SCALE;
+  for (const v of s.nodes.values()) {
+    v.label.visible = scale > LABEL_MIN_SCALE || v.pop > 0;
+    const grow = v.pop ? Math.max(POP[v.pop].grow, POP[v.pop].px / (v.node.r * scale)) : 1;
+    v.root.scale.set(grow);
+    v.drawn.scale = grow;
+  }
   for (const v of s.circles) {
     // Program titles only once you are close enough to read them; degree titles always.
     v.title.visible = v.circle.kind === 'degree' || scale > 0.12;
-    v.title.scale.set(v.circle.kind === 'degree' ? Math.max(1, 0.12 / scale) : 1);
   }
 }
 
@@ -412,28 +445,45 @@ function paint(s: Scene) {
     const g = shape.clear();
     const state = states.get(code) ?? 'locked';
     const look = stateLook[state];
-    if (look.glow && !node.entry) g.circle(0, 0, node.r + 7).fill({ color: look.glow, alpha: 0.16 });
+    // Every copy of a subject the student has marked looks the same, entry copies included.
+    const marked = state === 'completed' || state === 'planned';
+    const hollow = node.entry && !marked;
+    // Every copy of the hovered (or selected) subject pops out, so it is obvious they are one subject.
+    const twin = code === hovered || code === selected;
+    if (twin) {
+      g.circle(0, 0, node.r + 30).fill({ color: canvas.glow, alpha: 0.1 });
+      g.circle(0, 0, node.r + 22).fill({ color: canvas.glow, alpha: 0.16 });
+      g.circle(0, 0, node.r + 15).fill({ color: canvas.glow, alpha: 0.28 });
+    } else if (look.glow && !hollow) g.circle(0, 0, node.r + 7).fill({ color: look.glow, alpha: 0.16 });
     if (matchSet.has(code) || glowSet.has(code)) g.circle(0, 0, node.r + 10).stroke({ color: canvas.glow, width: 3, alpha: 0.9 });
     if (path.has(code)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgePath, width: 3 });
     if (unlocks.has(code)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgeUnlock, width: 3 });
     if (needed.has(code) && insideSel(node.circle)) g.circle(0, 0, node.r + 5).stroke({ color: canvas.needed, width: 2, alpha: 0.85 });
     if (wasted.has(code)) g.circle(0, 0, node.r + 8).stroke({ color: canvas.wasted, width: 4 });
-    if (node.entry) {
+    if (hollow) {
       // An entry copy: a prerequisite from outside this circle. Hollow, so it reads as a doorway.
       g.circle(0, 0, node.r - 2).fill({ color: canvas.background, alpha: 0.9 }).stroke({ color: look.ring, width: 2, alpha: 0.8 });
     } else {
       g.circle(0, 0, node.r).fill(look.fill).stroke({ color: look.ring, width: look.ringWidth });
+      // A marked entry copy keeps a thin outer line, so it still reads as a doorway.
+      if (node.entry) g.circle(0, 0, node.r + 4).stroke({ color: look.ring, width: 1, alpha: 0.6 });
     }
     if (state === 'excluded') {
       const k = node.r * 0.45;
       g.moveTo(-k, -k).lineTo(k, k).moveTo(k, -k).lineTo(-k, k).stroke({ color: look.ring, width: 2, alpha: 0.7 });
     }
-    if (code === selected || code === hovered) {
-      g.circle(0, 0, node.r + 14).stroke({ color: 0xffffff, width: 2, alpha: code === selected ? 0.9 : 0.5 });
+    if (twin) {
+      g.circle(0, 0, node.r + 11).stroke({ color: canvas.glow, width: 4, alpha: 1 });
+      if (code === selected) g.circle(0, 0, node.r + 17).stroke({ color: 0xffffff, width: 2, alpha: 0.9 });
       s.highlighted.push(node.id);
     }
-    root.alpha = look.alpha * (lit(code) ? 1 : 0.22) * (insideSel(node.circle) || wasted.has(code) ? 1 : 0.35) * (node.entry ? 0.8 : 1);
-    v.label.style.fill = state === 'locked' || state === 'legacy' || node.entry ? canvas.labelDim : canvas.label;
+    v.pop = code === hovered ? 2 : twin ? 1 : 0;
+    root.zIndex = v.pop;
+    root.alpha = twin
+      ? 1
+      : look.alpha * (lit(code) ? 1 : 0.22) * (marked || insideSel(node.circle) || wasted.has(code) ? 1 : 0.35) * (hollow ? 0.8 : 1);
+    v.label.style.fill = state === 'locked' || state === 'legacy' || hollow ? canvas.labelDim : canvas.label;
+    v.drawn = { fill: hollow ? canvas.background : look.fill, ring: look.ring, alpha: root.alpha, scale: 1, halo: twin };
   }
 
   const e = s.edges.clear();

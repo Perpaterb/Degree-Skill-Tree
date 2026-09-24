@@ -37,8 +37,20 @@ export interface LayoutCircle {
   members: string[];
   /** The circle this one sits inside, if any. */
   parent: string | null;
+  /** The title's box, above the circle, with the title already wrapped into lines. */
+  label: CircleLabel;
   /** For a program placed outside every degree: the degrees that offer it. */
   sharedBy?: string[];
+}
+
+export interface CircleLabel {
+  lines: string[];
+  size: number;
+  /** Centre x and top y of the box, and its size, in world units. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export type EdgeKind =
@@ -71,6 +83,25 @@ const SPREAD = 5; // between parallel spokes leaving or entering one subject
 const PAD = 34; // circle rim beyond its contents
 const CHILD_GAP = 26; // between packed circles
 const TOP_GAP = 140; // between top-level circles
+
+// Circle titles sit above their circle, in space the packing keeps free. Sizes are world units.
+export const TITLE_SIZE = { degree: 160, program: 28 } as const;
+export const TITLE_LINE = 1.2; // line height, as a multiple of the size
+const TITLE_GAP = { degree: 30, program: 8 } as const; // between the title and its circle's outline
+const CHAR_W = 0.6; // generous average glyph width for the title font, as a multiple of the size
+
+/** Wrap a title into lines no wider than about `width` world units, and size its box. */
+function titleBox(text: string, size: number, width: number) {
+  const perLine = Math.max(8, Math.floor(width / (size * CHAR_W)));
+  const lines: string[] = [];
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const last = lines[lines.length - 1];
+    if (last !== undefined && (last + ' ' + word).length <= perLine) lines[lines.length - 1] = last + ' ' + word;
+    else lines.push(word);
+  }
+  const longest = Math.max(...lines.map((l) => l.length));
+  return { lines, w: Math.ceil(longest * size * CHAR_W), h: Math.ceil(lines.length * size * TITLE_LINE) };
+}
 
 const TAU = Math.PI * 2;
 const norm = (a: number) => ((a % TAU) + TAU) % TAU;
@@ -437,6 +468,9 @@ interface Box {
   disc: Disc;
   discAt: { x: number; y: number };
   children: { box: Box; x: number; y: number }[];
+  title: { lines: string[]; size: number; w: number; h: number; gap: number };
+  /** The smallest disc around the circle and its title, relative to the circle's centre. */
+  outer: Packed;
   sharedBy?: string[];
 }
 
@@ -474,16 +508,27 @@ export function layoutMap(map: MapDoc): Layout {
       .filter((p) => !topLevel.has(p) && !stack.includes(p) && !built.has(p))
       .sort()
       .map((p) => build(p, 'program', [...stack, id]));
-    const items: (Packed & { box?: Box })[] = [{ r: disc.r + CHILD_GAP / 2, x: 0, y: 0 }, ...kids.map((b) => ({ r: b.r + CHILD_GAP / 2, x: 0, y: 0, box: b }))];
+    // Children are packed by the disc around each child and its title, so no title can touch
+    // another circle, another title, or the parent's rim.
+    const items: (Packed & { box?: Box })[] = [{ r: disc.r + CHILD_GAP / 2, x: 0, y: 0 }, ...kids.map((b) => ({ r: b.outer.r + CHILD_GAP / 2, x: 0, y: 0, box: b }))];
     packSiblings(items);
     const e = packEnclose(items)!;
+    const r = e.r + PAD;
+    const size = TITLE_SIZE[kind];
+    const box = titleBox(kind === 'degree' ? map.degrees[id].title : map.programs[id].title, size, Math.max(size * 10, r * 1.6));
+    const gap = TITLE_GAP[kind];
+    const top = -r - gap - box.h;
+    const corners = [-1, 1].flatMap((sx) => [top, -r - gap].map((y) => ({ x: (sx * box.w) / 2, y, r: 0 })));
+    const outer = packEnclose([{ x: 0, y: 0, r }, ...corners])!;
     return {
       id,
       kind,
-      r: e.r + PAD,
+      r,
       disc,
       discAt: { x: items[0].x - e.x, y: items[0].y - e.y },
-      children: items.slice(1).map((it) => ({ box: it.box!, x: it.x - e.x, y: it.y - e.y })),
+      children: items.slice(1).map((it) => ({ box: it.box!, x: it.x - e.x - it.box!.outer.x, y: it.y - e.y - it.box!.outer.y })),
+      title: { ...box, size, gap },
+      outer: { x: outer.x, y: outer.y, r: outer.r },
     };
   }
 
@@ -494,7 +539,7 @@ export function layoutMap(map: MapDoc): Layout {
     b.sharedBy = [...(offeredBy.get(p) ?? [])].sort();
     tops.push(b);
   }
-  const placed = tops.map((b) => ({ r: b.r + TOP_GAP / 2, box: b, x: 0, y: 0 }));
+  const placed = tops.map((b) => ({ r: b.outer.r + TOP_GAP / 2, box: b, x: 0, y: 0 }));
   // Degrees first and largest first, so they settle in the middle with shared programs around them.
   placed.sort((a, b) => Number(b.box.kind === 'degree') - Number(a.box.kind === 'degree') || b.r - a.r || a.box.id.localeCompare(b.box.id));
   packSiblings(placed);
@@ -508,6 +553,7 @@ export function layoutMap(map: MapDoc): Layout {
       id: b.id,
       kind: b.kind,
       title: b.kind === 'degree' ? map.degrees[b.id].title : map.programs[b.id].title,
+      label: { lines: b.title.lines, size: b.title.size, x: round(x), y: round(y - b.r - b.title.gap - b.title.h), w: b.title.w, h: b.title.h },
       x: round(x),
       y: round(y),
       r: Math.ceil(b.r),
@@ -526,13 +572,13 @@ export function layoutMap(map: MapDoc): Layout {
     }
     for (const ch of b.children) emit(ch.box, x + ch.x, y + ch.y, b.id);
   };
-  for (const p of placed) emit(p.box, p.x, p.y, null);
+  for (const p of placed) emit(p.box, p.x - p.box.outer.x, p.y - p.box.outer.y, null);
   circles.sort((a, b) => b.r - a.r || a.id.localeCompare(b.id));
 
   const bounds = {
-    minX: Math.min(...circles.map((c) => c.x - c.r)) - 40,
-    minY: Math.min(...circles.map((c) => c.y - c.r)) - 140,
-    maxX: Math.max(...circles.map((c) => c.x + c.r)) + 40,
+    minX: Math.min(...circles.map((c) => Math.min(c.x - c.r, c.label.x - c.label.w / 2))) - 40,
+    minY: Math.min(...circles.map((c) => c.label.y)) - 40,
+    maxX: Math.max(...circles.map((c) => Math.max(c.x + c.r, c.label.x + c.label.w / 2))) + 40,
     maxY: Math.max(...circles.map((c) => c.y + c.r)) + 40,
   };
   return { nodes, circles, edges, bounds };

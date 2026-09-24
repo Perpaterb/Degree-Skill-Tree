@@ -119,3 +119,32 @@ test('US-022: completed subjects that do not count are listed under the selected
   await expect(list).toContainText('These subjects do not count towards this degree');
   for (const code of ['22208', '24109', '25400']) await expect(list).toContainText(code);
 });
+
+test('US-020: every copy of a completed subject looks the same, entry copies and copies outside the degree included', async ({ page }) => {
+  // Programming 1 has 18 copies, 14 of them entry copies, in circles inside and outside Business.
+  await openTree(page, 't=uts-2027&c=41039');
+  await chooseDegree(page, 'C10148');
+  const looks = await page.evaluate(() => window.__dst!.copies('41039').map((id) => ({ id, ...window.__dst!.look(id)! })));
+  expect(looks.length).toBe(18);
+  const first = { fill: looks[0].fill, ring: looks[0].ring, alpha: looks[0].alpha, scale: looks[0].scale };
+  for (const l of looks) expect({ fill: l.fill, ring: l.ring, alpha: l.alpha, scale: l.scale }, l.id).toEqual(first);
+  expect(first.alpha).toBe(1);
+});
+
+test('US-020: hovering one copy of a subject makes every copy pop out and glow', async ({ page }) => {
+  await openTree(page);
+  await goTo(page, '41039');
+  await page.getByRole('button', { name: 'Close' }).click();
+  const at = (await page.evaluate(() => window.__dst!.pointFor('41039')))!;
+  const b = (await page.getByTestId('tree-canvas').boundingBox())!;
+  await page.mouse.move(b.x + at.x, b.y + at.y);
+  await expect.poll(() => page.evaluate(() => window.__dst!.highlighted().length)).toBe(18);
+  const looks = await page.evaluate(() => window.__dst!.copies('41039').map((id) => window.__dst!.look(id)!));
+  for (const l of looks) {
+    expect(l).toMatchObject({ halo: true, alpha: 1 });
+    expect(l.scale).toBeGreaterThanOrEqual(1.4);
+  }
+  // Other subjects stay their normal size.
+  const other = await page.evaluate(() => window.__dst!.look(window.__dst!.copies('48023')[0])!);
+  expect(other).toMatchObject({ halo: false, scale: 1 });
+});

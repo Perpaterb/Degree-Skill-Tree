@@ -80,6 +80,45 @@ describe('US-020: circles that never overlap, with linked copies', () => {
   });
 });
 
+describe('US-020: circle titles above their circles', () => {
+  // Nearest point of an axis-aligned box to (x, y).
+  const gap = (b: { x: number; y: number; w: number; h: number }, x: number, y: number) =>
+    Math.hypot(x - Math.max(b.x - b.w / 2, Math.min(x, b.x + b.w / 2)), y - Math.max(b.y, Math.min(y, b.y + b.h)));
+  const ancestors = (id: string) => {
+    const out = new Set<string>();
+    for (let p = circle(id).parent; p; p = circle(p).parent) out.add(p);
+    return out;
+  };
+
+  it('puts every title above its own circle, centred on it', () => {
+    for (const c of layout.circles) {
+      expect(c.label.y + c.label.h, c.id).toBeLessThan(c.y - c.r);
+      expect(Math.abs(c.label.x - c.x), c.id).toBeLessThan(1);
+      expect(c.label.lines.join(' '), c.id).toBe(c.title.trim().replace(/\s+/g, ' '));
+    }
+  });
+
+  it('keeps every title clear of other circles, other titles and subjects, and inside the circles around it', () => {
+    const bad: string[] = [];
+    for (const c of layout.circles) {
+      const b = c.label;
+      const up = ancestors(c.id);
+      for (const o of layout.circles) {
+        if (o.id === c.id) continue;
+        if (up.has(o.id)) {
+          // Every corner of the title inside the enclosing circle.
+          for (const [x, y] of [[b.x - b.w / 2, b.y], [b.x + b.w / 2, b.y], [b.x - b.w / 2, b.y + b.h], [b.x + b.w / 2, b.y + b.h]])
+            if (Math.hypot(x - o.x, y - o.y) > o.r) bad.push(`${c.id} title leaves ${o.id}`);
+        } else if (gap(b, o.x, o.y) < o.r) bad.push(`${c.id} title touches circle ${o.id}`);
+        const q = o.label;
+        if (Math.abs(b.x - q.x) * 2 < b.w + q.w && b.y < q.y + q.h && q.y < b.y + b.h) bad.push(`${c.id} title touches title ${o.id}`);
+      }
+      for (const n of nodes) if (gap(b, n.x, n.y) < n.r) bad.push(`${c.id} title touches subject ${n.id}`);
+    }
+    expect([...new Set(bad)]).toEqual([]);
+  });
+});
+
 describe('US-020: rings by prerequisite depth', () => {
   it('runs a link outward to a further ring, except loop links in the source data, which run sideways along one ring', () => {
     // A loop: each subject accepts the other (directly or via a chain) as a prerequisite alternative.
@@ -134,7 +173,17 @@ describe('US-024: railway-style links', () => {
 });
 
 describe('circleAt (US-020: clicking picks the circle under the pointer)', () => {
-  const c = (id: string, x: number, y: number, r: number): LayoutCircle => ({ id, kind: 'program', title: id, x, y, r, members: [], parent: null });
+  const c = (id: string, x: number, y: number, r: number): LayoutCircle => ({
+    id,
+    kind: 'program',
+    title: id,
+    x,
+    y,
+    r,
+    members: [],
+    parent: null,
+    label: { lines: [id], size: 28, x, y: y - r - 40, w: 40, h: 34 },
+  });
   const L = { circles: [c('big', 0, 0, 100), c('a', -10, 0, 40), c('b', 10, 0, 40)] };
 
   it('picks the smallest circle containing the point', () => {

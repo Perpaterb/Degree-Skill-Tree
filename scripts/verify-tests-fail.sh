@@ -17,6 +17,8 @@ mutations=(
   "core/layout.ts|do loopOf.set((m = stack.pop()!), groups);|do loopOf.set((m = stack.pop()!), groups++);"
   "core/layout.ts|let ok = clearEnd(a, k, r.from) && clearEnd(a, t, r.to);|let ok = true;"
   "core/linkQuality.ts|else if (deg < 5 && segmentGap(A.s, B.s) < 2)|else if (deg < 5 && segmentGap(A.s, B.s) < 0)"
+  "core/layout.ts|...kids.map((b) => ({ r: b.outer.r + CHILD_GAP / 2,|...kids.map((b) => ({ r: b.r + CHILD_GAP / 2,"
+  "core/layout.ts|const placed = tops.map((b) => ({ r: b.outer.r + TOP_GAP / 2,|const placed = tops.map((b) => ({ r: b.r + TOP_GAP / 2,"
   "core/layout.ts|    got[n - 1] = Math.min(got[n - 1], got[0] + TAU - min);|"
   "core/layout.ts|      else if (!members.has(r)) entries.add(r);|"
   "core/layout.ts|if (!best || c.r < best.r || (c.r === best.r && d < bestD)) (best = c), (bestD = d);|if (!best || c.r < best.r) (best = c), (bestD = d);"
