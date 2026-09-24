@@ -68,7 +68,80 @@ async function access() {
   await runAll('access', subjects, (s) => fetchAccessConditions(RAW, s.code));
 }
 
+type Json = Record<string, unknown>;
+
+/** Collect every academic item referenced anywhere inside a curriculum structure. */
+export function structureRefs(node: unknown, out = new Map<string, string>()): Map<string, string> {
+  if (Array.isArray(node)) node.forEach((n) => structureRefs(n, out));
+  else if (node && typeof node === 'object') {
+    const n = node as Json;
+    const type = (n.academic_item_type as Json | undefined)?.value;
+    if (typeof n.academic_item_code === 'string' && typeof type === 'string') out.set(n.academic_item_code, type);
+    for (const v of Object.values(n)) if (v && typeof v === 'object') structureRefs(v, out);
+  }
+  return out;
+}
+
+/**
+ * Pull one course and everything it reaches: areas of study (recursively),
+ * their subjects, those subjects' requisites, and one hop of requisite subjects.
+ * Deliberately slow and sequential: see scraper/src/http.ts.
+ */
+async function slice() {
+  const courses = process.argv.slice(3);
+  if (!courses.length) throw new Error('usage: npm run scrape -- slice <COURSE_CODE>...');
+  const seen = new Set<string>();
+  const subjects = new Set<string>();
+  const missing: string[] = [];
+  const queue: { kind: string; code: string }[] = courses.map((code) => ({ kind: 'course', code }));
+
+  while (queue.length) {
+    const { kind, code } = queue.shift()!;
+    const key = `${kind}/${code}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (kind === 'subject') {
+      subjects.add(code);
+      continue;
+    }
+    let content: Json;
+    try {
+      content = await fetchItem(RAW, `/${kind}/${YEAR}/${code}`);
+    } catch (e) {
+      if (e instanceof BlockedError) throw e;
+      missing.push(`${key}: ${(e as Error).message}`);
+      continue;
+    }
+    console.log(`${key}: ${String(content.title)}`);
+    for (const [ref, type] of structureRefs(content.curriculumStructure)) {
+      queue.push({ kind: type === 'subject' ? 'subject' : 'aos', code: ref });
+    }
+  }
+
+  const fetchSubject = async (code: string) => {
+    await fetchItem(RAW, `/subject/${YEAR}/${code}`);
+    return fetchAccessConditions(RAW, code);
+  };
+  const inScope = [...subjects];
+  console.log(`${inScope.length} subjects in scope`);
+  await runAll('slice-subjects', inScope, fetchSubject);
+
+  // One hop out: subjects named in requisites that the course structure does not list.
+  const hop = new Set<string>();
+  for (const code of inScope) {
+    const ac = await fetchAccessConditions(RAW, code).catch(() => null);
+    for (const item of ac?.requisites?.items ?? []) if (item.kind === 'subject' && !subjects.has(item.code)) hop.add(item.code);
+  }
+  console.log(`${hop.size} extra requisite subjects`);
+  await runAll('slice-requisites', [...hop], fetchSubject);
+
+  const manifest = { year: YEAR, courses, items: [...seen].sort(), requisiteSubjects: [...hop].sort(), missing };
+  await writeFile(`${RAW}/slice-${courses.join('+')}.json`, JSON.stringify(manifest, null, 1));
+  console.log(`done. ${missing.length} missing (see manifest)`);
+}
+
 const commands: Record<string, () => Promise<unknown>> = {
+  slice,
   list,
   pages,
   access,

@@ -89,58 +89,84 @@ AND/OR of several nodes plus a "points spent" threshold. The rule engine handles
 
 ## 2. Architecture
 
-TypeScript end to end, one repo.
+Constraints (24 Sep 2026): hosted on **GitHub Pages**, **no logins and no personal data** for
+students, usage analytics wanted later (still no personal data). So there is no application server
+and no database: the site is static, the data is static JSON, and the CMS stores its changes in git.
 
 ```
-scraper/        UTS handbook importer (CourseLoop adapter). Pulls, caches, normalises.
-data/           Normalised datasets committed to git (raw cache is gitignored).
-packages/core/  The generic model + rule engine + planner logic. No UI, fully unit tested.
-apps/web/       Student tree viewer/planner and the admin editor (React + Vite).
-apps/api/       API + persistence for the CMS (Node, Postgres).
+scraper/        UTS handbook importer (CourseLoop adapter). Pulls, caches, normalises. Runs locally or in GitHub Actions.
+data/           Normalised tree datasets (JSON) committed to git. This IS the CMS content. Raw scrape cache is gitignored.
+packages/core/  Generic model, requisite evaluator, degree-progress and cost calculators. No UI, fully unit tested.
+apps/web/       One static site: student tree viewer/planner + admin editor. Built by GitHub Actions, served by Pages.
 ```
 
-### 2.1 Generic data model (institution-agnostic)
+### 2.1 What Path of Exile does (checked 24 Sep 2026)
+
+`pathofexile.com/passive-skill-tree` is a **hand-written Canvas 2D renderer** (a ~108 KB bundle,
+RequireJS/jQuery era, drawing sprites from an image atlas with `drawImage`; no WebGL, no framework)
+fed by **one static JSON document** embedded in the page describing every node, group, orbit and
+connection. The build lives in the URL. Its speed comes from static data, pre-baked sprite art and
+drawing only what is on screen, not from exotic tech.
+
+### 2.2 Proposed stack (for discussion)
+
+| Concern | Choice | Why |
+|---|---|---|
+| Tree rendering | **PixiJS v8** (WebGL, WebGPU when available) + `pixi-viewport` | GPU-batched sprites and lines stay at 60fps with 10k+ objects, glow/filters give the lit-path look cheaply, built-in hit-testing, and pan/zoom/pinch/inertia/culling come ready-made. Hand-rolled Canvas 2D (PoE's approach) is fast enough for one course but we would rewrite hit-testing, culling and zoom ourselves, and effects cost CPU. |
+| UI around the canvas (panels, search, admin forms) | **React + TypeScript + Vite** | Largest ecosystem for forms and components, easiest to find help for, fast builds. React never renders nodes; Pixi owns the canvas. |
+| State | Zustand | Small and explicit; shared by the canvas and the panels. |
+| Data | Static JSON per tree (index + one file per course), like PoE | Instant loads from the CDN, no server, cacheable, diffable in git. |
+| Student plans | `localStorage` + plan encoded in the URL | No accounts and no personal data; a plan is shareable as a link, as in PoE. |
+| Admin CMS | Editor inside the same app; saves by committing JSON through the GitHub API | Git gives drafts (branch/PR), publishing (merge, then auto-deploy), history and rollback for free. Editors are the repo's GitHub collaborators. |
+| Hosting / deploy | GitHub Pages via GitHub Actions | Required. Every merge to `main` rebuilds and deploys. |
+| Analytics (later) | Cookieless, no personal data (Plausible, Umami, GoatCounter or Cloudflare Web Analytics), behind our own `track()` hook | The hook exists from day one as a no-op, so adding a provider later changes one file. |
+| Tests | Vitest (core + scraper), Playwright (E2E through the built site) | Per the testing rules: E2E tagged by story ID. |
+
+Admin sign-in on a static host: GitHub's OAuth web flow needs a server-side secret, which Pages
+cannot hold. For the POC the admin pastes a fine-grained GitHub token (scoped to this repo, kept in
+`sessionStorage` only). If that becomes a chore, a tiny serverless OAuth exchange (e.g. a Cloudflare
+Worker) can be added later without changing the editor.
+
+### 2.3 Generic data model (institution-agnostic)
 
 Nothing in the model says "UTS". The UTS importer is one adapter that writes into it.
 
-- **Tree**: an institution + handbook year + version (draft or published).
+- **Tree**: an institution + handbook year.
 - **Node**: `kind` = subject | container (group/rule) | program (major, sub-major, stream) | degree.
   Carries display fields (title, code, credit points, description, tags/"stats") plus free-form
   attributes so admins can add fields without code changes.
-- **Requirement**: the rule tree from above: `and` / `or` over `{node}`, `{credit_points >= n in scope}`,
+- **Requirement**: the rule tree: `and` / `or` over `{node}`, `{credit_points >= n in scope}`,
   `{text}` (shown, not evaluated). Plus anti-requisites.
-- **Structure rule**: a container's "select N credit points from these children" (Path of Exile has
-  no equivalent; this is how degree completion is computed).
-- **Layout**: position per node per tree, plus PoE-style groups and orbits for clusters. Auto-generated
-  first, then hand-tuned by admins and saved.
-- **Cost model**: rate tables per student type, joined to subjects by band or override.
+- **Structure rule**: a container's "select N credit points from these children" (PoE has no
+  equivalent; this is how degree completion is computed).
+- **Layout**: position per node, plus PoE-style groups and orbits for clusters. Auto-generated first,
+  then hand-tuned by admins and saved.
+- **Cost model**: rate tables per year and student type, joined to subjects by band or override.
 
-### 2.2 Rendering (the part that has to feel like PoE)
+### 2.4 Rendering (the part that has to feel like PoE)
 
-- WebGL canvas via **PixiJS** with a pan/zoom viewport. The DOM cannot handle thousands of nodes and
-  edges smoothly; PoE's own web tree is canvas-based.
 - Level of detail: at far zoom, degree regions and major clusters with labels; closer, subject nodes;
   closest, codes and titles on nodes.
 - Node states, visually distinct: **completed**, **planned**, **available now** (requisites met),
   **locked** (not met), **excluded** (anti-requisite clash), **searched/matched**.
 - Hover: highlight the requisite chain back to what you already have (PoE's "path to this node"),
   and what this node unlocks forward.
-- Click: side panel with the full subject detail, requisite rule rendered readably, offerings,
-  cost, and handbook link.
+- Click: side panel with the full subject detail, requisite rule in plain language, offerings, cost
+  and handbook link.
 
-### 2.3 Layout strategy
+### 2.5 Layout strategy
 
 Degrees sit as large hubs. Each major/sub-major is a cluster (PoE "group") arranged around its
 degree, with subjects placed in rings by prerequisite depth: foundation subjects on the inner ring,
 capstones on the outer. Study-plan year/session ordering breaks ties. Subjects shared across
 majors sit between the clusters that use them. Admins can then drag anything and save it.
 
-### 2.4 Admin CMS (updatable without code changes)
+### 2.6 Admin CMS (updatable without code changes)
 
-- Create a tree from scratch, or import (UTS handbook adapter, CSV/JSON).
+- Create a tree from scratch, or import (UTS handbook adapter via a GitHub Action, CSV/JSON upload).
 - Visual editor on the same canvas: drag nodes, draw/remove requisite links, group into clusters.
 - Form editors for node fields, requisite rules (visual AND/OR builder), structure rules and cost tables.
-- Draft then publish, with version history and rollback. Students always see the published version.
+- Save = commit to a draft branch; publish = merge to `main`, which redeploys. History and rollback are git.
 - Re-import diff: when the handbook changes, show what changed and let the admin accept per item,
   without losing hand-tuned layout.
 
@@ -154,125 +180,33 @@ majors sit between the clusters that use them. Admins can then drag anything and
 | 1. Core engine | Generic model, requisite evaluator, degree-progress calculator, all unit tested | 0 |
 | 2. Tree viewer | Pan/zoom WebGL tree for one course, node states, detail panel, search | 1 |
 | 3. Planner | Mark completed/planned, availability updates live, path highlight, progress to degree, cost | 2 |
-| 4. Admin CMS | Accounts, tree editor, rule builder, cost tables, draft/publish | 1, API + DB |
+| 4. Admin CMS | GitHub-backed editing, tree editor, rule builder, cost tables, draft/publish | 1, 6 |
+| 6. Hosting | GitHub Pages deploy pipeline and smoke suite (brought forward as soon as there is a page to show) | 2 |
 | 5. Scale-out | All UTS courses, multi-year, re-import diffing, other CourseLoop institutions | 0-4 |
 
 Phases 2-3 are where "feeling right" gets iterated; expect several passes on layout and visuals.
 
 ---
 
-## 4. Proposed user stories (awaiting approval)
+## 4. User stories
 
-IDs are sequential `US-###`. Once approved these move into `docs/UserStories.md`, and tech notes go
-into `docs/TechFromUserStories.md`.
-
-### Data
-
-**US-001 Pull the UTS handbook catalogue.** As the project owner, I want every 2026 course, area of
-study and subject listed so the dataset is complete.
-- [x] Lists all courses, areas of study and subjects for a handbook year, matching the search API totals (441 / 933 / 3,543)
-- [ ] Fetches detail for every item in scope, cached so no page is fetched twice
-- [x] Stops the whole run on HTTP 403 and never retries against a block
-- [ ] Writes a coverage report: items in scope, fetched, failed
-
-**US-002 Pull prerequisites.** As the project owner, I want every in-scope subject's requisites and
-anti-requisites as evaluable rules.
-- [x] Parses the boolean rule into a tree (AND binds tighter than OR); malformed rules error, not guess
-- [x] Classifies items as subject, course, credit-point condition, or text
-- [ ] Every `ref` in every parsed rule resolves to an item (checked across the whole dataset)
-- [ ] Report of subjects whose requisites reference subjects missing from the dataset
-
-**US-003 Normalise into the generic model.** As a developer, I want the UTS data in the
-institution-agnostic format so the app never reads CourseLoop shapes directly.
-- [ ] Subjects, programs (major/sub-major/stream), degrees and structure containers in the generic model
-- [ ] Structure rules keep their "select N cp" semantics and AND/OR connectors
-- [ ] Study plans kept as suggested sequences
-- [ ] Round-trip test: C10148 normalised structure totals 144cp and matches the handbook groups
-
-### Tree viewer
-
-**US-004 Explore a degree as a skill tree.** As a student, I want to pan and zoom a PoE-style map of
-my degree so I can see the whole shape of it.
-- [ ] Smooth pan (drag) and zoom (wheel/pinch) at 60fps on a mid-range laptop with the largest course loaded
-- [ ] Degree hub, major/sub-major clusters and subject nodes laid out automatically
-- [ ] Requisite links drawn between subjects; level of detail changes with zoom
-- [ ] Works on a phone-width screen with touch
-
-**US-005 Inspect a subject.** As a student, I want to click a node and see everything about it.
-- [ ] Panel shows code, title, credit points, description, learning outcomes, offerings (session/campus/mode)
-- [ ] Requisite rule shown in plain language, each referenced subject clickable (flies the camera to it)
-- [ ] Anti-requisites and recommended prior study shown
-- [ ] Link to the official handbook page
-
-**US-006 Search the tree.** As a student, I want to type a code or keyword and see matching nodes light up.
-- [ ] Matches by code, title and description; matches highlighted, rest dimmed
-- [ ] Enter cycles the camera through matches
-
-### Planner
-
-**US-007 Mark what I have done.** As a student, I want to mark subjects completed so the tree shows
-what is open to me now.
-- [ ] Click to toggle completed; completed nodes and links render as "allocated"
-- [ ] Every other node recomputes available / locked / excluded from its requisite rule, including credit-point conditions
-- [ ] Plan saved and restorable (browser for anonymous users; account later)
-
-**US-008 See what unlocks what.** As a student, I want hovering a node to show the chain needed to
-reach it and what it opens up.
-- [ ] Hover a locked node: highlights the missing requisites back to my completed set (shortest route for OR branches)
-- [ ] Hover any node: highlights the subjects it directly unlocks
-- [ ] Explains in text why a locked node is locked
-
-**US-009 Plan a path to my degree.** As a student, I want to choose a major and plan future subjects
-and see progress to graduation.
-- [ ] Choose major/sub-majors/electives the course allows
-- [ ] Mark subjects as planned; progress per structure container ("Core: 30/48cp") and overall (x/144cp)
-- [ ] Warn when a plan breaks a rule (anti-requisite, over-selecting an option group, requisite not met by the time it is planned)
-- [ ] Optional session-by-session view using offerings
-
-**US-010 See the cost.** As a student, I want to see what my remaining plan will cost.
-- [ ] Cost per subject and total for completed / planned / remaining, by student type (domestic CSP, international)
-- [ ] Costs come from admin-maintained rate tables and are labelled as estimates with their year
-
-### Admin CMS
-
-**US-011 Admin accounts.** As an admin, I want to sign in so only authorised people can edit trees.
-- [ ] Admin login; students need no account to browse or plan
-- [ ] Roles: admin (everything), editor (edit drafts, cannot publish)
-
-**US-012 Create and import trees.** As an admin, I want to create a tree for my institution from
-scratch or by import.
-- [ ] Create empty tree (institution, year)
-- [ ] Import from the UTS/CourseLoop adapter and from CSV/JSON
-- [ ] Import report of what was created and anything that could not be mapped
-
-**US-013 Edit the tree visually.** As an admin, I want to edit nodes, links and layout on the canvas.
-- [ ] Drag nodes/clusters and save positions
-- [ ] Add/edit/delete nodes and their fields, including custom fields, without code changes
-- [ ] Visual AND/OR requisite builder; structure-rule editor ("select N cp from")
-- [ ] Undo/redo
-
-**US-014 Draft and publish.** As an admin, I want changes to go live only when I publish.
-- [ ] Students only ever see the published version
-- [ ] Version history with rollback
-
-**US-015 Maintain cost tables.** As an admin, I want to edit fee rates so costs stay current without a deploy.
-- [ ] Rate tables per year and student type; subject-to-band mapping with per-subject overrides
-
-**US-016 Re-import changes.** As an admin, I want to re-run the handbook import and review what changed.
-- [ ] Diff of added / changed / removed items; accept or reject per item
-- [ ] Hand-tuned layout and manual edits preserved
+Approved 24 Sep 2026. They live in [`UserStories.md`](UserStories.md), with the technical log in
+[`TechFromUserStories.md`](TechFromUserStories.md).
 
 ---
 
-## 5. Decisions needed
+## 5. Decisions
 
-1. **How to continue the scrape**, given `robots.txt` says no and the CDN is now blocking:
-   - (a) *Recommended:* POC slice only. Bachelor of IT (C10148), its majors/sub-majors and their
-     subjects: roughly 300 requests, fetched at 1 request every 3 seconds (~15 min) once the block
-     lifts. Enough to build and prove the whole experience. In parallel, ask UTS for a data export
-     for the full dataset.
-   - (b) Full pull, very slowly (1 request every 3-5 s, ~8 hours overnight, resumable).
-   - (c) No more scraping until UTS agrees; build against the 117 courses already cached.
-2. **Handbook year**: 2026 (current, what enrolled students follow) or 2027 (just published, what new
-   students will follow). The model supports both; this is only about which to load first.
-3. **Approval of the user stories above**, and of the stack (React + PixiJS web app, Node API, Postgres).
+Made 24 Sep 2026:
+
+1. Scrape: **POC slice only** (Bachelor of IT, C10148, and everything it reaches), slowly. Ask UTS for
+   a data export for the full catalogue.
+2. Handbook year: **2027** first.
+3. User stories US-001 to US-016 approved; adjusted for the hosting constraints below (see
+   `docs/UserStories.md`), and US-017 / US-018 added.
+4. Hosting: **GitHub Pages**. No student logins, no personal data. Usage analytics later, without
+   personal data.
+
+Open:
+
+- Confirm the stack in 2.2 (PixiJS + React), in particular PixiJS over a PoE-style hand-written Canvas 2D renderer.

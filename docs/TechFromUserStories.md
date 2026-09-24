@@ -1,0 +1,31 @@
+# Tech From User Stories
+
+One entry per story: what was actually built, and the files added or changed.
+Stories are in [`UserStories.md`](UserStories.md).
+
+---
+
+### US-001 Pull the UTS handbook catalogue
+- The handbook is a CourseLoop Next.js site. Item lists come from its search API
+  (`POST /api/search/search-academic-items`, filter `implementationYear`, max page size 100). All
+  results share one relevance score, so deep paging is unstable between requests; the lister repeats
+  full passes and unions them until the count matches the reported total.
+- Item detail is read from each page's embedded `__NEXT_DATA__` (`props.pageProps.pageContent`); only
+  that JSON is cached, not the ~160 KB of HTML.
+- Politeness: `robots.txt` disallows crawling, and CloudFront returned 403 after a few hundred requests
+  at 4/s on 24 Sep 2026. All fetches are throttled (`SCRAPE_GAP_MS`), cached on disk under
+  `data/raw/<year>/` (gitignored), and the first 403 raises `BlockedError`, which stops every queued
+  request and exits with code 2.
+- `slice <COURSE>` command pulls one course and everything it reaches (areas of study recursively,
+  their subjects, requisites, one hop of requisite subjects) and writes a manifest.
+- Files: `scraper/src/http.ts`, `scraper/src/handbook.ts`, `scraper/src/cli.ts`, `package.json`, `tsconfig.json`, `.gitignore`.
+
+### US-002 Pull prerequisites
+- Requisites are not in the handbook; they come from
+  `studentforms.uts.edu.au/evop/access/search.cfm?subjectcode=<code>` (no robots.txt on that host).
+- `parseRule` is a precedence parser (OR of ANDs) over item refs such as `1`, `2a`; it throws on
+  unbalanced or trailing tokens. `classifyItem` types each item as subject, course, credit-point
+  condition (`min`, `scope`) or text.
+- Tests use four real saved pages as fixtures. Verified the tests can fail: making OR parse as AND
+  turns 4 of 10 tests red.
+- Files: `scraper/src/access.ts`, `scraper/test/access.test.ts`, `scraper/test/fixtures/ac_*.html`.
