@@ -59,3 +59,65 @@ Stories are in [`UserStories.md`](UserStories.md).
   requires red for each. First run exposed that double counting was untested; fixed by listing a core
   subject in the test major. Result 24 Sep 2026: 7/7 caught.
 - Files: `core/engine.ts`, `core/engine.test.ts`, `scripts/verify-tests-fail.sh`, `package.json`.
+
+### US-004 Explore a degree as a skill tree
+- `core/layout.ts` (pure, tested): degree hub at the origin with core subjects on orbits around it;
+  each program (major/sub-major/stream) is a cluster centred on a program node, clusters on rings
+  (the degree's named majors inner, option programs outer, nested programs further out). Within a
+  cluster, orbits are by requisite depth, foundations inside. Requisite-only subjects join the
+  cluster where most of their dependents live. Cluster size comes from a dry run of the real
+  placement. An earlier overlap-relaxation pass was removed: the mutation check showed it never
+  changed anything.
+- `web/src/TreeCanvas.tsx`: PixiJS v8 + pixi-viewport (drag, pinch, wheel, decelerate, clamp zoom).
+  Node looks per state in `web/src/theme.ts`; cross-cluster links drawn quietly unless relevant;
+  labels hide when zoomed out. An in-app frame counter writes `document.body.dataset.fps`.
+- Performance: `e2e/perf.spec.ts` (`npm run test:perf`) runs on the real GPU via headless Chromium
+  with ANGLE on Vulkan. Functional E2E uses SwiftShader, whose frame rate (about 7fps) is meaningless.
+- Files: `core/layout.ts`, `core/layout.test.ts`, `web/src/TreeCanvas.tsx`, `web/src/theme.ts`,
+  `web/src/App.tsx`, `web/src/main.tsx`, `web/src/styles.css`, `web/index.html`, `vite.config.ts`,
+  `e2e/perf.spec.ts`, `e2e/stories.spec.ts`.
+
+### US-005 Inspect a subject
+- `DetailPanel` in `web/src/Panels.tsx`: subject detail, plain-language requisite tree (`RuleView`;
+  runs of identical credit-point alternatives collapse into one line), anti-requisites, "leads to",
+  recommended study, description, learning outcomes, offerings, handbook link. Program and degree
+  nodes show their structure. Legacy subjects explain they are not in this year's handbook.
+- Files: `web/src/Panels.tsx`, `web/src/store.ts`.
+
+### US-006 Search the tree
+- `matchesFor` in `web/src/store.ts`: programs first, then code/title matches, then description
+  matches. Matches glow on the canvas and everything else dims; Enter flies to the next match.
+- Files: `web/src/store.ts`, `web/src/Panels.tsx` (`TopBar`), `web/src/TreeCanvas.tsx`.
+
+### US-007 Mark what I have done
+- Zustand store holds the plan; every change recomputes `computeStates` and saves to
+  `localStorage` (`dst.plan.<treeId>`) and the URL hash (`#t=<tree>&c=...&p=...&m=...`, via
+  `replaceState`). A link carrying a plan wins over local storage.
+- Files: `web/src/store.ts`, `web/src/App.tsx`, `core/engine.ts`.
+
+### US-008 See what unlocks what
+- Hover (or selection) runs `missingFor` and `unlockedBy`; the canvas draws the missing chain in cyan
+  and unlocks in violet and dims the rest. The panel lists the chain and non-subject conditions.
+- Files: `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`.
+
+### US-009 Plan a path to my degree
+- Program nodes toggle "chosen" from the panel; `progress()` feeds the collapsible progress panel
+  (done in gold, planned in green, per container).
+- Files: `web/src/Panels.tsx` (`ProgressPanel`, `ProgramDetail`), `web/src/store.ts`.
+
+### US-017 Host on GitHub Pages
+- `vite.config.ts` builds to `dist/` with base `/Degree-Skill-Tree/`. `.github/workflows/deploy.yml`
+  is manual (`workflow_dispatch`) with a `tests` input (`all` / `unit` / `none`), never cancels a
+  running deploy (`concurrency: pages`, `cancel-in-progress: false`), and smokes the live URL after
+  deploying.
+- `scripts/smoke.sh --target <url>` checks the static files, then runs the E2E stories against the target.
+- `scripts/story-coverage.mjs` reports stories with an E2E test (24 Sep 2026: 6/18).
+- E2E stability: readiness waits get 20s (first load under parallel software GL can exceed 5s),
+  and workers are capped at 4. Three consecutive full runs: 11/11.
+- Files: `.github/workflows/deploy.yml`, `scripts/smoke.sh`, `scripts/story-coverage.mjs`,
+  `playwright.config.ts`, `e2e/helpers.ts`, `vitest.config.ts`, `package.json`.
+
+### US-018 Usage analytics without personal data (later)
+- `web/src/analytics.ts`: `track(event, props)` no-op (logs in dev). Called for course opened, node
+  inspected, subject marked, program toggled, search used, plan shared.
+- Files: `web/src/analytics.ts`, `web/src/store.ts`, `web/src/Panels.tsx`.

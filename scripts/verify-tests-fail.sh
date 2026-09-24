@@ -10,6 +10,8 @@ mutations=(
   "core/engine.ts|for (const p of parts) if (cost(p) < cost(best)) best = p;|best = parts[0];"
   "core/engine.ts|if (claimed.has(item.code)) continue;|"
   "core/engine.ts|else if (ruleMet(s.requisite, later)) state = 'reachable';|"
+  "core/layout.ts|const capacity = Math.max(1, Math.floor((2 * Math.PI * r) / (SUBJECT_R * 2 + NODE_GAP)));|const capacity = Math.max(1, Math.floor((2 * Math.PI * r) / SUBJECT_R));"
+  "core/layout.ts|out.push({ from: rule.subject, to, kind: inOr ? 'alt' : 'req' });|out.push({ from: rule.subject, to, kind: 'req' });"
   "scraper/src/access.ts|const orExpr = (): RuleNode => list('or', andExpr);|const orExpr = (): RuleNode => list('and', andExpr);"
   "scraper/src/normalize.ts|return { creditPoints: item.min, scope: item.scope };|return { text: item.scope };"
 )

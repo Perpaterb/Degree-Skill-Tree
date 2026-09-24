@@ -8,3 +8,5 @@ CLAUDE.md
 data/raw/
 releases/
 *.log
+test-results/
+playwright-report/

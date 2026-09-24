@@ -6,14 +6,34 @@
   "scripts": {
     "scrape": "tsx scraper/src/cli.ts",
     "test": "vitest run",
-    "test:verify-fails": "./scripts/verify-tests-fail.sh"
+    "test:verify-fails": "./scripts/verify-tests-fail.sh",
+    "dev": "vite",
+    "build": "tsc -p . && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc -p .",
+    "test:e2e": "playwright test",
+    "test:perf": "PERF=1 playwright test e2e/perf.spec.ts --project=desktop",
+    "story-coverage": "node scripts/story-coverage.mjs",
+    "smoke": "./scripts/smoke.sh"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^20.19.43",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "node-html-parser": "^9.0.4",
     "p-limit": "^7.3.3",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
+    "vite": "^8.3.0",
     "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "pixi-viewport": "^6.0.3",
+    "pixi.js": "^8.21.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zustand": "^5.0.15"
   }
 }

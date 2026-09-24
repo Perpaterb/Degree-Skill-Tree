@@ -40,42 +40,42 @@ CourseLoop shapes directly.
 
 ### US-004 Explore a degree as a skill tree
 As a student, I want to pan and zoom a PoE-style map of my degree so I can see the whole shape of it.
-- [ ] Smooth pan (drag) and zoom (wheel/pinch): a scripted Playwright pan/zoom over the largest course loaded holds a median of at least 55fps (in-app frame counter) on the dev machine
-- [ ] Degree hub, major/sub-major clusters and subject nodes laid out automatically
-- [ ] Requisite links drawn between subjects; level of detail changes with zoom
-- [ ] Works on a phone-width screen with touch
+- [x] Smooth pan (drag) and zoom (wheel/pinch): a scripted Playwright pan/zoom over the largest course loaded holds a median of at least 55fps (in-app frame counter) on the dev machine. *24 Sep 2026, C10148 on Intel Iris Xe: median 59.9fps, p95 59.9fps (`npm run test:perf`).*
+- [x] Degree hub, major/sub-major clusters and subject nodes laid out automatically
+- [x] Requisite links drawn between subjects; level of detail changes with zoom (subject codes hide when zoomed out; cluster titles grow)
+- [ ] Works on a phone-width screen with touch. *Partial: phone-width layout (bottom sheet, no horizontal scroll) verified by E2E on a Pixel 7 profile; touch pan/pinch is enabled but not yet verified on a real device.*
 
 ### US-005 Inspect a subject
 As a student, I want to click a node and see everything about it.
-- [ ] Panel shows code, title, credit points, description, learning outcomes, offerings (session/campus/mode)
-- [ ] Requisite rule shown in plain language, each referenced subject clickable (flies the camera to it)
-- [ ] Anti-requisites and recommended prior study shown
-- [ ] Link to the official handbook page
+- [x] Panel shows code, title, credit points, description, learning outcomes, offerings (session/campus/mode)
+- [x] Requisite rule shown in plain language, each referenced subject clickable (flies the camera to it)
+- [x] Anti-requisites and recommended prior study shown
+- [x] Link to the official handbook page
 
 ### US-006 Search the tree
 As a student, I want to type a code or keyword and see matching nodes light up.
-- [ ] Matches by code, title and description; matches highlighted, the rest dimmed
-- [ ] Enter cycles the camera through matches
+- [x] Matches by code, title and description; matches highlighted, the rest dimmed
+- [x] Enter cycles the camera through matches
 
 ## Planner
 
 ### US-007 Mark what I have done
 As a student, I want to mark subjects completed so the tree shows what is open to me now.
-- [ ] Click to toggle completed; completed nodes and links render as "allocated"
-- [ ] Every other node recomputes available / locked / excluded from its requisite rule, including credit-point conditions
-- [ ] Plan kept in the browser (`localStorage`) with no account, and restorable after a reload
-- [ ] Plan encoded in a shareable URL that reproduces it exactly on another device
+- [x] Click to toggle completed; completed nodes and links render as "allocated". *Toggled from the detail panel (click the node, then Mark completed). Gold rendering checked by screenshot, not by an automated assertion.*
+- [x] Every other node recomputes available / locked / excluded from its requisite rule, including credit-point conditions
+- [x] Plan kept in the browser (`localStorage`) with no account, and restorable after a reload
+- [x] Plan encoded in a shareable URL that reproduces it exactly on another device (verified in a separate browser profile)
 
 ### US-008 See what unlocks what
 As a student, I want hovering a node to show the chain needed to reach it and what it opens up.
-- [ ] Hover a locked node: highlights the missing requisites back to my completed set; where a rule has OR branches, the branch needing the fewest additional credit points is shown
-- [ ] Hover any node: highlights the subjects it directly unlocks
-- [ ] Explains in text why a locked node is locked
+- [ ] Hover a locked node: highlights the missing requisites back to my completed set; where a rule has OR branches, the branch needing the fewest additional credit points is shown. *Partial: branch choice is unit tested (`missingFor`); the canvas highlight is implemented but has no automated check yet.*
+- [ ] Hover any node: highlights the subjects it directly unlocks. *Implemented and seen in a screenshot; no automated check yet.*
+- [x] Explains in text why a locked node is locked
 
 ### US-009 Plan a path to my degree
 As a student, I want to choose a major and plan future subjects and see progress to graduation.
-- [ ] Choose major/sub-majors/electives the course allows
-- [ ] Mark subjects as planned; progress per structure container ("Core: 30/48cp") and overall (x/144cp)
+- [x] Choose major/sub-majors/electives the course allows (free electives are filled automatically from anything left over)
+- [x] Mark subjects as planned; progress per structure container ("Core: 30/48cp") and overall (x/144cp)
 - [ ] Warn when a plan breaks a rule (anti-requisite, over-selecting an option group, requisite not met by the time it is planned)
 - [ ] Optional session-by-session view using offerings
 
@@ -124,12 +124,12 @@ As an admin, I want to re-run the handbook import and review what changed.
 
 ### US-017 Host on GitHub Pages
 As the project owner, I want the site published on GitHub Pages automatically so there is nothing to run.
-- [ ] Merging to `main` builds and deploys the site through GitHub Actions
-- [ ] Works under the Pages sub-path (`/Degree-Skill-Tree/`), including deep links to a course and a shared plan
+- [ ] Merging to `main` builds and deploys the site through GitHub Actions. *Partial: the workflow exists but is manual-dispatch only until deploy rules are agreed; not yet run.*
+- [x] Works under the Pages sub-path (`/Degree-Skill-Tree/`), including deep links to a course and a shared plan (verified against the local production build)
 - [ ] `./scripts/smoke.sh --target <url>` passes against the deployed site before it is announced
 
 ### US-018 Usage analytics without personal data (later)
 As the project owner, I want to know what people look at and do on the site, without collecting personal data.
-- [ ] All tracking goes through one `track(event, props)` hook, a no-op until a provider is chosen
+- [x] All tracking goes through one `track(event, props)` hook, a no-op until a provider is chosen
 - [ ] No cookies, no user IDs, no IP storage; provider chosen from cookieless options
 - [ ] Events cover course opened, node inspected, subject marked done/planned, search used, plan shared

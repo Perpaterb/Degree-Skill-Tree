@@ -1,0 +1,73 @@
+name: Deploy to GitHub Pages
+
+# Manual only for now: every deploy is started deliberately, with its test scope chosen.
+on:
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: 'Tests to run before deploying'
+        type: choice
+        options: [all, unit, none]
+        default: all
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one part-way through.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Unit tests
+        if: inputs.tests != 'none'
+        run: npm test
+      - run: npm run build
+      - name: Install Playwright browser
+        if: inputs.tests == 'all'
+        run: npx playwright install --with-deps chromium
+      - name: E2E stories against the production build
+        if: inputs.tests == 'all'
+        run: npx playwright test
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  smoke:
+    needs: deploy
+    if: inputs.tests != 'none'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Smoke the live site
+        run: ./scripts/smoke.sh --target "${{ needs.deploy.outputs.url }}"

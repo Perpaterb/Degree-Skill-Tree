@@ -94,10 +94,11 @@ students, usage analytics wanted later (still no personal data). So there is no 
 and no database: the site is static, the data is static JSON, and the CMS stores its changes in git.
 
 ```
-scraper/        UTS handbook importer (CourseLoop adapter). Pulls, caches, normalises. Runs locally or in GitHub Actions.
-data/           Normalised tree datasets (JSON) committed to git. This IS the CMS content. Raw scrape cache is gitignored.
-packages/core/  Generic model, requisite evaluator, degree-progress and cost calculators. No UI, fully unit tested.
-apps/web/       One static site: student tree viewer/planner + admin editor. Built by GitHub Actions, served by Pages.
+scraper/          UTS handbook importer (CourseLoop adapter). Pulls, caches, normalises. Runs locally or in GitHub Actions.
+core/             Generic model, requisite evaluator, planner, progress and layout. No UI, fully unit tested.
+web/              The static site (React + PixiJS). web/public/trees/ holds the normalised tree JSON it serves.
+e2e/              Playwright tests, named by story ID, run against the production build or any URL.
+data/raw/         Scrape cache (gitignored). data/reports/ holds coverage reports.
 ```
 
 ### 2.1 What Path of Exile does (checked 24 Sep 2026)
@@ -209,4 +210,4 @@ Made 24 Sep 2026:
 
 Open:
 
-- Confirm the stack in 2.2 (PixiJS + React), in particular PixiJS over a PoE-style hand-written Canvas 2D renderer.
+- Stack confirmed 24 Sep 2026: PixiJS + React. Legacy subjects shown greyed.
