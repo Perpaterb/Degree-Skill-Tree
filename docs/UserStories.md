@@ -100,7 +100,7 @@ As a student, I want each degree, major, sub-major and stream drawn as a circle 
 - [x] Every circle whose structure lists a subject contains a copy of that subject; a program offered by one degree sits inside that degree's circle, and a program offered by several sits outside them all. *Changed 24 Sep 2026: circles no longer overlap (see below); the overlapping version was built and verified.*
 - [x] Circles never overlap (a circle may only contain another); a subject listed by several groups appears as a copy in each, and all copies share one state: marking, hovering or selecting any copy lights up every copy. No lines join copies. *Changed 24 Sep 2026: was "circles may overlap; a shared subject sits in the overlap", built and verified, then found too cluttered.*
 - [x] No centre node for programs: the circle itself is the selectable thing; hovering a circle makes it glow
-- [x] Inside each circle, subjects sit on rings by prerequisite depth: foundations in the middle, the most advanced on the outside
+- [x] Inside each circle, subjects sit on rings by prerequisite depth: foundations in the middle, the most advanced on the outside. Subjects that require each other in a loop share a ring.
 - [x] Clicking empty space selects the smallest circle under the pointer (ties: nearest centre); clicking within 10px inside an outline selects that outline's circle, so circles fully covered by smaller ones stay selectable; clicking a subject still selects the subject. *Rim rule added 24 Sep 2026: without it, 4 real circles could not be selected at all.*
 
 ### US-021 Select a degree and work backwards
@@ -125,7 +125,7 @@ As a student, I want to see, from what I have completed, which degrees I can sti
 ### US-024 Railway-style connections
 As a student, I want requisite links drawn like a railway map, so I can follow them without a tangle.
 - [x] Links are curved paths made of radial and ring-following segments with rounded corners, not straight lines across the map
-- [ ] Where two links cross, they cross at between 45 and 135 degrees; links never run on top of each other. *Partial (25 Sep 2026): median crossing angle over 85 degrees, but 9 crossings are under 45 degrees and 43 pairs of links still run together; held to a regression budget in `core/layout.test.ts`.*
+- [x] Where two links cross, they cross at between 45 and 135 degrees; links never run on top of each other. *Met 25 Sep 2026: 0 crossings under 45 degrees, 0 pairs running together, 0 links over a subject, asserted exactly in `core/layout.test.ts`.*
 - [x] A link joins copies in the same circle; a subject's prerequisite that is not in that circle appears there as an entry copy, drawn distinctly, so links never have to leave their circle
 
 ## Admin CMS

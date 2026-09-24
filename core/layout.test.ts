@@ -81,7 +81,7 @@ describe('US-020: circles that never overlap, with linked copies', () => {
 });
 
 describe('US-020: rings by prerequisite depth', () => {
-  it('runs a link outward to a further ring, except loop links in the source data, which run sideways', () => {
+  it('runs a link outward to a further ring, except loop links in the source data, which run sideways along one ring', () => {
     // A loop: each subject accepts the other (directly or via a chain) as a prerequisite alternative.
     const inLoop = (from: string, to: string) => {
       const seen = new Set<string>();
@@ -105,11 +105,13 @@ describe('US-020: rings by prerequisite depth', () => {
       const ra = Math.hypot(layout.nodes[e.from].x - cx, layout.nodes[e.from].y - cy);
       const rb = Math.hypot(layout.nodes[e.to].x - cx, layout.nodes[e.to].y - cy);
       if (rb > ra + 1) continue;
-      if (inLoop(e.fromCode, e.toCode)) loops++;
-      else wrong.push(`${e.from} -> ${e.toCode}`);
+      // Every subject in a loop shares a ring, so its links never cut across other rings.
+      if (inLoop(e.fromCode, e.toCode) && Math.abs(rb - ra) < 1) loops++;
+      else wrong.push(`${e.from} -> ${e.toCode} (ring ${ra.toFixed(0)} to ${rb.toFixed(0)})`);
     }
     expect(wrong).toEqual([]);
-    expect(loops).toBeGreaterThan(0); // the Chinese language subjects 97109 and 97112, for one
+    // The Japanese subjects 97207 to 97210 each accept any of the others; the Chinese 97109 and 97112 too.
+    expect(loops).toBeGreaterThan(0);
   });
 });
 
@@ -126,17 +128,8 @@ describe('US-024: railway-style links', () => {
     expect([...kinds].sort()).toEqual(['A', 'L', 'M', 'Q']);
   });
 
-  it('crosses almost always at 45 to 135 degrees, within a regression budget', () => {
-    // The criterion asks for every crossing at 45 to 135 degrees. Not yet met: the remaining shallow
-    // crossings are a spoke passing right by another line's rounded corner. Budgets are the measured
-    // values of 24 Sep 2026 and should only go down. (Drawing loop links sideways instead of inward
-    // took shallow crossings 11 -> 9 but running-together 39 -> 43 and over-a-subject 32 -> 34.)
-    const q = linkQuality(layout);
-    console.log('link quality', q);
-    expect(q.medianCrossingAngle).toBeGreaterThan(85);
-    expect(q.shallowCrossings).toBeLessThanOrEqual(9);
-    expect(q.runningTogether).toBeLessThanOrEqual(43);
-    expect(q.throughSubjects).toBeLessThanOrEqual(34);
+  it('crosses only at 45 to 135 degrees, never runs two links together, and never passes over a subject', () => {
+    expect(linkQuality(layout)).toMatchObject({ shallowCrossings: 0, runningTogether: 0, throughSubjects: 0 });
   });
 });
 

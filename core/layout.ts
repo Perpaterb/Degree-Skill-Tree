@@ -131,33 +131,52 @@ function buildDisc(map: MapDoc, members: Set<string>): Disc {
   const all = [...members, ...entries].sort();
   if (!all.length) return { r: SUBJECT_R * 2, nodes: [], edges: [] };
 
-  // Requisites can loop in the source data (e.g. two advanced subjects that each accept the other as an
-  // alternative). Break loops deterministically: a depth-first walk drops links back onto its own path.
-  const back = new Set<string>();
+  // Requisites can loop in the source data (e.g. four language subjects that each accept any of the
+  // others as an alternative). Subjects in one loop (a strongly connected group, found with Tarjan's
+  // algorithm) share a ring, so links inside the loop run sideways along that ring's track instead of
+  // stacking the loop into a chain of rings that its own links then cut across.
+  const loopOf = new Map<string, number>();
   {
-    const state = new Map<string, 1 | 2>();
-    const walk = (c: string) => {
-      state.set(c, 1);
+    const index = new Map<string, number>();
+    const low = new Map<string, number>();
+    const stack: string[] = [];
+    let next = 0;
+    let groups = 0;
+    const connect = (c: string) => {
+      index.set(c, next);
+      low.set(c, next++);
+      stack.push(c);
       for (const r of [...(reqs.get(c)?.keys() ?? [])].sort()) {
-        if (state.get(r) === 1) back.add(`${r}>${c}`);
-        else if (!state.has(r)) walk(r);
+        if (!index.has(r)) {
+          connect(r);
+          low.set(c, Math.min(low.get(c)!, low.get(r)!));
+        } else if (!loopOf.has(r)) low.set(c, Math.min(low.get(c)!, index.get(r)!));
       }
-      state.set(c, 2);
+      if (low.get(c) === index.get(c)) {
+        let m: string;
+        do loopOf.set((m = stack.pop()!), groups);
+        while (m !== c);
+        groups++;
+      }
     };
-    for (const c of all) if (!state.has(c)) walk(c);
+    for (const c of all) if (!index.has(c)) connect(c);
   }
-  // Depth inside this circle: entries are 0; a member is one ring beyond its deepest prerequisite here.
+  const looped = (r: string, c: string) => loopOf.get(r) === loopOf.get(c);
+  // Depth inside this circle: entries are 0; a member is one ring beyond its deepest prerequisite
+  // outside its own loop, and every subject in a loop takes the loop's deepest.
   const depth = new Map<string, number>();
+  const visitGroup = new Map<number, number>();
   const visit = (c: string): number => {
-    if (depth.has(c)) return depth.get(c)!;
     if (entries.has(c)) return 0;
-    const ins = [...(reqs.get(c)?.keys() ?? [])].filter((r) => !back.has(`${r}>${c}`));
+    const g = loopOf.get(c)!;
+    if (visitGroup.has(g)) return visitGroup.get(g)!;
+    visitGroup.set(g, 0);
+    const ins = all.filter((m) => loopOf.get(m) === g).flatMap((m) => [...(reqs.get(m)?.keys() ?? [])].filter((r) => !looped(r, m)));
     const d = ins.length ? 1 + Math.max(...ins.map(visit)) : 0;
-    depth.set(c, d);
+    visitGroup.set(g, d);
     return d;
   };
-  for (const c of all) visit(c);
-  for (const c of entries) depth.set(c, 0);
+  for (const c of all) depth.set(c, visit(c));
   const rings: string[][] = [];
   for (const c of all) (rings[depth.get(c)!] ??= []).push(c);
   for (let i = 0; i < rings.length; i++) rings[i] ??= [];
@@ -322,12 +341,16 @@ function buildDisc(map: MapDoc, members: Set<string>): Disc {
         corridors[j].every((c) => Math.abs(turn(a, c)) * r >= SPREAD + 1)
       );
     };
+    // The corridor also runs through the gap outside the source's ring and the gap inside the target's,
+    // where the spokes of the other subjects on those rings run: keep off those subjects too.
+    const clearEnd = (a: number, j: number, own: string) =>
+      radius[j] <= 0 || rings[j].every((n) => n === own || Math.abs(turn(a, angle.get(n)!)) * radius[j] >= SUBJECT_R + 5);
     const ordered = [...routes].sort((a, b) => depth.get(b.to)! - depth.get(b.from)! - (depth.get(a.to)! - depth.get(a.from)!) || a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
     for (const r of ordered) {
       const k = depth.get(r.from)!;
       const t = depth.get(r.to)!;
       if (t <= k) {
-        // A loop link (see `back`): out to a track outside the source's ring, along it, back in.
+        // A loop link (see `loopOf`): out to a track outside the source's ring, along it, back in.
         r.legs = [{ gap: k, from: r.dep, to: r.arr, track: 0 }];
         continue;
       }
@@ -338,7 +361,7 @@ function buildDisc(map: MapDoc, members: Set<string>): Disc {
       let corridor = r.arr;
       for (let step = 0; step <= 720; step++) {
         const a = r.arr + (step % 2 ? 1 : -1) * Math.ceil(step / 2) * (Math.PI / 720);
-        let ok = true;
+        let ok = clearEnd(a, k, r.from) && clearEnd(a, t, r.to);
         for (let j = k + 1; j < t && ok; j++) ok = clear(a, j);
         if (ok) {
           corridor = a;

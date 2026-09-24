@@ -16,6 +16,20 @@ export interface LinkQuality {
 
 type Seg = [number, number, number, number];
 
+/** Distance from a point to a segment. */
+function pointGap(x: number, y: number, s: Seg): number {
+  const vx = s[2] - s[0];
+  const vy = s[3] - s[1];
+  const t = Math.max(0, Math.min(1, ((x - s[0]) * vx + (y - s[1]) * vy) / (vx * vx + vy * vy || 1)));
+  return Math.hypot(x - s[0] - t * vx, y - s[1] - t * vy);
+}
+
+/** Shortest distance between two segments that do not cross. Measured between the segments
+ * themselves, not their extended lines: two short pieces in line but far apart are not together. */
+export function segmentGap(a: Seg, b: Seg): number {
+  return Math.min(pointGap(a[0], a[1], b), pointGap(a[2], a[3], b), pointGap(b[0], b[1], a), pointGap(b[2], b[3], a));
+}
+
 export function linkQuality(layout: Layout, step = 4): LinkQuality {
   const segs: { e: number; s: Seg }[] = [];
   layout.edges.forEach((e, i) => {
@@ -62,12 +76,7 @@ export function linkQuality(layout: Layout, step = 4): LinkQuality {
       const cos = Math.abs(va[0] * vb[0] + va[1] * vb[1]) / (Math.hypot(va[0], va[1]) * Math.hypot(vb[0], vb[1]));
       const deg = (Math.acos(Math.min(1, cos)) * 180) / Math.PI;
       if (cross(A.s, B.s)) angles.push(deg);
-      else if (deg < 5) {
-        const mx = (B.s[0] + B.s[2]) / 2;
-        const my = (B.s[1] + B.s[3]) / 2;
-        const dist = Math.abs(va[0] * (my - A.s[1]) - va[1] * (mx - A.s[0])) / Math.hypot(va[0], va[1]);
-        if (dist < 2) together.add(A.e < B.e ? `${A.e}|${B.e}` : `${B.e}|${A.e}`);
-      }
+      else if (deg < 5 && segmentGap(A.s, B.s) < 2) together.add(A.e < B.e ? `${A.e}|${B.e}` : `${B.e}|${A.e}`);
     }
   }
   angles.sort((a, b) => a - b);

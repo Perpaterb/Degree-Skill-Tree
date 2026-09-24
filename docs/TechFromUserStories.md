@@ -223,11 +223,30 @@ Stories are in [`UserStories.md`](UserStories.md).
   apart; links that skip rings go through corridors between subjects. A prerequisite not listed by a
   circle appears inside it as a hollow "entry" copy, so no link leaves its circle.
 - `core/linkQuality.ts` measures crossings, crossing angles, pairs running together and links passing
-  over a subject; the build prints it and a unit test holds a regression budget (measured 25 Sep 2026:
-  median crossing over 85 degrees, 9 shallow crossings, 43 running together, 34 over a subject).
-  The "never run on top of each other" criterion is therefore only partly met.
-- Mutation check (`scripts/verify-tests-fail.sh`) gained three layout mutations (arc end, ring spacing
-  wrap, entry copies); all 15 mutations caught on 25 Sep 2026.
+  over a subject; the build prints it. First measured 25 Sep 2026: 9 shallow crossings, 19 pairs
+  running together, 34 links over a subject.
+- 25 Sep 2026, all three brought to 0 (asserted exactly in `core/layout.test.ts`):
+  - Loops in the source data (e.g. Japanese 97207 to 97210 each accept any of the others) were broken
+    into a chain of rings stacked at one angle, so loop links ran back across the subjects in between
+    (all 34 "over a subject" cases). Loops are now found as strongly connected groups (Tarjan) and a
+    whole group shares one ring, so loop links only run sideways on the track outside it.
+  - A link skipping rings picked a corridor clear of subjects on the rings it passes through, but not
+    of the other subjects on its start and end rings, whose spokes share those gaps. It now keeps off
+    them too (`clearEnd`); this removed the last shallow crossing and the last pairs running together.
+  - The "running together" measure used the distance to a segment's extended line, so short pieces in
+    line but up to 18 units apart counted (the earlier budget of 43 was 19 real pairs). It now uses the
+    real distance between segments (`segmentGap`). `core/linkQuality.test.ts` proves each measure fires
+    on a known bad case, and does not fire on in-line segments 15 units apart.
+  - Tried and dropped: shrinking corners that sit beside another link's spoke. After the two fixes
+    above it changed no measure, so it was not kept.
+- Known clutter: a loop of n subjects draws n(n-1) links (12 for the Japanese four), as a bundle of
+  parallel tracks. Correct, but busy; could be drawn as one "any of these" group later.
+- Mutation check (`scripts/verify-tests-fail.sh`) gained layout mutations for ring spacing wrap, entry
+  copies, loop grouping, corridor end clearance, and the running-together measure; all 18 caught on
+  25 Sep 2026. Loop grouping and corridor clearance were also checked to turn the quality tests red on
+  their own, not only the stored-layout comparison.
+- Files (25 Sep 2026): `core/layout.ts`, `core/linkQuality.ts`, `core/linkQuality.test.ts`,
+  `core/layout.test.ts`, `scripts/verify-tests-fail.sh`, `web/public/trees/uts-2027.json`.
 - Files: `core/layout.ts`, `core/linkQuality.ts`, `core/layout.test.ts`, `web/src/TreeCanvas.tsx`,
   `scraper/src/cli.ts`, `scripts/verify-tests-fail.sh`.
 
