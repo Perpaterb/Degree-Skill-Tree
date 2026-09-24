@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Text } from 'pixi.js';
+import { Application, Circle, Container, Graphics, Text } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { useEffect, useRef } from 'react';
 import { compulsorySubjects, missingFor, subjectsUnder, unlockedBy } from '../../core/engine';
@@ -66,6 +66,7 @@ declare global {
       highlighted(): string[];
       look(id: string): CopyLook | null;
       copies(code: string): string[];
+      zoom(): number;
     };
   }
 }
@@ -168,6 +169,9 @@ export function TreeCanvas() {
         root.position.set(node.x, node.y);
         root.eventMode = 'static';
         root.cursor = 'pointer';
+        // Only the subject's own disc (enlarged with it) counts for the pointer, never its glow or rings,
+        // so hover ends as soon as the pointer leaves the circle.
+        root.hitArea = new Circle(0, 0, node.r);
         const shape = new Graphics();
         const label = new Text({
           text: node.code,
@@ -234,6 +238,7 @@ export function TreeCanvas() {
         glowing: () => scene.current?.glowing ?? [],
         highlighted: () => scene.current?.highlighted ?? [],
         look: (id) => scene.current?.nodes.get(id)?.drawn ?? null,
+        zoom: () => scene.current?.viewport.scale.x ?? 1,
         copies: (code) => [...(scene.current?.nodes.values() ?? [])].filter((v) => v.node.code === code).map((v) => v.node.id),
       };
 

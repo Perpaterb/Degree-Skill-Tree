@@ -192,6 +192,9 @@ Stories are in [`UserStories.md`](UserStories.md).
   - Every copy of the hovered subject grows (at least 1.4x, and at least 18 px radius on screen at any
     zoom), is raised above other subjects, gets a cyan halo and shows its code; copies of the selected
     subject do the same at 1.25x / 14 px. Scaling lives in `applyLod`, so it follows zoom.
+  - Each subject's pointer hit area is its own disc (`hitArea`), not its glow and rings, so hover ends
+    as soon as the pointer leaves the enlarged circle. E2E test moves just outside the disc, inside the
+    glow, and expects hover to end; it fails without the hit area.
   - Circle titles moved above their circles. The layout wraps each title (`titleBox`, generous glyph
     width) and packs every circle by the disc around the circle and its title, so a title cannot touch
     another circle, title or subject, and stays inside the circles around it. Degree titles are now a

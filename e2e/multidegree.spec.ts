@@ -148,3 +148,19 @@ test('US-020: hovering one copy of a subject makes every copy pop out and glow',
   const other = await page.evaluate(() => window.__dst!.look(window.__dst!.copies('48023')[0])!);
   expect(other).toMatchObject({ halo: false, scale: 1 });
 });
+
+test('US-020: hover ends as soon as the pointer leaves the enlarged subject, not its glow', async ({ page }) => {
+  await openTree(page);
+  await goTo(page, '41039');
+  await page.getByRole('button', { name: 'Close' }).click();
+  const b = (await page.getByTestId('tree-canvas').boundingBox())!;
+  const at = (await page.evaluate(() => window.__dst!.pointFor('41039')))!;
+  await page.mouse.move(b.x + at.x, b.y + at.y);
+  await expect.poll(() => page.evaluate(() => window.__dst!.highlighted().length)).toBe(18);
+  // Just outside the enlarged disc, but well inside its glow (which reaches 30 units further out).
+  // Every copy of the hovered subject is enlarged by the same amount.
+  const { scale, zoom } = await page.evaluate(() => ({ scale: window.__dst!.look(window.__dst!.copies('41039')[0])!.scale, zoom: window.__dst!.zoom() }));
+  const edge = 22 * scale * zoom;
+  await page.mouse.move(b.x + at.x + edge + 4, b.y + at.y, { steps: 4 });
+  await expect.poll(() => page.evaluate(() => window.__dst!.highlighted().length)).toBe(0);
+});
