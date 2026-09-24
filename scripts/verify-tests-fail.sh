@@ -23,6 +23,9 @@ mutations=(
   "core/layout.ts|      else if (!members.has(r)) entries.add(r);|"
   "core/layout.ts|if (!best || c.r < best.r || (c.r === best.r && d < bestD)) (best = c), (bestD = d);|if (!best || c.r < best.r) (best = c), (bestD = d);"
   "core/layout.ts|else if ('subject' in rule && !out.has(rule.subject)) out.set(rule.subject, inOr ? 'alt' : 'req');|else if ('subject' in rule && !out.has(rule.subject)) out.set(rule.subject, 'req');"
+  "core/engine.ts|const chooseOne = (description: string) => /\\bone of the following\\b/i.test(description);|const chooseOne = (description: string) => false;"
+  "core/engine.ts|      if (counted.length) {|      if (false) {"
+  "core/engine.ts|if (part.what !== 'electives' && pool.length) chosenHere = true;|"
   "scraper/src/access.ts|const orExpr = (): RuleNode => list('or', andExpr);|const orExpr = (): RuleNode => list('and', andExpr);"
   "scraper/src/normalize.ts|return { creditPoints: item.min, scope: item.scope };|return { text: item.scope };"
 )

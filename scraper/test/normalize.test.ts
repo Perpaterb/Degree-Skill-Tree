@@ -52,6 +52,15 @@ describe('US-003: C10148 Bachelor of IT (2027) normalised', () => {
     expect(options.items.map((i) => i.code).sort()).toEqual(['41039', '48023']);
   });
 
+  it('gives every structure container on the map a real id of its own', () => {
+    const ids: string[] = [];
+    const walk = (c: Container) => (ids.push(c.id), c.children.forEach(walk));
+    for (const d of Object.values(map.degrees)) walk(d.structure);
+    for (const p of Object.values(map.programs)) walk(p.structure);
+    expect(ids.filter((id) => !id || id.includes('[object'))).toEqual([]);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it('marks free-elective containers as free', () => {
     const free = bit.structure.children[2].children.filter((c) => c.kind === 'free');
     expect(free.length).toBeGreaterThan(0);

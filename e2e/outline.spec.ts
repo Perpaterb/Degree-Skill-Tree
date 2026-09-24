@@ -1,0 +1,63 @@
+import { expect, test, type Page } from '@playwright/test';
+import { goTo, openTree } from './helpers';
+
+// US-027: the Bachelor of IT outline in the degree panel, coloured by progress.
+// Compulsory (42cp): 31265 31268 31271 31269 41092 43030 31272.
+// Options (48cp), way 2 "two sub-majors": Advertising Principles SMJ08198 (24210 52662 24109 24202)
+// and Innovation and Entrepreneurship SMJ10156 (81547 81529 48080 81546).
+const COMPULSORY = ['31265', '31268', '31271', '31269', '41092', '43030', '31272'];
+const ADV = ['24210', '52662', '24109', '24202'];
+const INN = ['81547', '81529', '48080', '81546'];
+
+async function outline(page: Page, hash: string) {
+  await openTree(page, `t=uts-2027&d=C10148&${hash}`);
+  await goTo(page, 'C10148');
+  return page.getByTestId('detail-panel');
+}
+const heading = (panel: ReturnType<Page['getByTestId']>, title: string) =>
+  panel.getByTestId('outline-heading').filter({ hasText: new RegExp(`^${title} \\(`) });
+const way = (panel: ReturnType<Page['getByTestId']>, n: number) => panel.getByTestId('outline-way').nth(n);
+
+test('US-027: a compulsory block is untouched, started, planned-complete, then complete', async ({ page }) => {
+  let panel = await outline(page, 'c=');
+  await expect(heading(panel, 'Compulsory')).toHaveAttribute('data-status', 'none');
+
+  panel = await outline(page, `c=${COMPULSORY[0]}`);
+  await expect(heading(panel, 'Compulsory')).toHaveAttribute('data-status', 'started');
+
+  panel = await outline(page, `c=${COMPULSORY.slice(0, 3).join('.')}&p=${COMPULSORY.slice(3).join('.')}`);
+  await expect(heading(panel, 'Compulsory')).toHaveAttribute('data-status', 'planned');
+  await expect(heading(panel, 'Compulsory')).toContainText('✓');
+
+  panel = await outline(page, `c=${COMPULSORY.join('.')}`);
+  const h = heading(panel, 'Compulsory');
+  await expect(h).toHaveAttribute('data-status', 'complete');
+  await expect(h).toContainText('✓');
+  // Green, not the untouched grey.
+  expect(await h.evaluate((el) => getComputedStyle(el).color)).toBe('rgb(69, 209, 107)');
+});
+
+test('US-027 / US-022: the Options ways each get their own line, fill in as sub-majors are chosen, planned and done, and count 48/48', async ({ page }) => {
+  let panel = await outline(page, 'c=');
+  await expect(panel.getByTestId('outline-way')).toHaveText([/^one major \(48cp\)/, /^two sub-majors/, /^one sub-major \(24cp\) and four electives/, /^one transdisciplinary elective/]);
+  for (let i = 0; i < 4; i++) await expect(way(panel, i)).toHaveAttribute('data-status', 'none');
+
+  // Chosen, nothing done: the sub-major ways start, and the chosen sub-major line is yellow.
+  panel = await outline(page, 'm=SMJ08198.SMJ10156');
+  await expect(way(panel, 1)).toHaveAttribute('data-status', 'started');
+  await expect(way(panel, 0)).toHaveAttribute('data-status', 'none');
+  await expect(panel.locator('[data-testid="outline-program"][data-code="SMJ08198"]').first()).toHaveAttribute('data-status', 'started');
+
+  // One done, one planned: blue with a tick, for the way and for Options.
+  panel = await outline(page, `m=SMJ08198.SMJ10156&c=${ADV.join('.')}&p=${INN.join('.')}`);
+  await expect(way(panel, 1)).toHaveAttribute('data-status', 'planned');
+  await expect(heading(panel, 'Options').last()).toHaveAttribute('data-status', 'planned');
+
+  // Both done: green with a tick, and the progress panel agrees at 48/48.
+  panel = await outline(page, `m=SMJ08198.SMJ10156&c=${[...ADV, ...INN].join('.')}`);
+  await expect(way(panel, 1)).toHaveAttribute('data-status', 'complete');
+  await expect(way(panel, 1)).toContainText('✓');
+  await expect(heading(panel, 'Options').last()).toHaveAttribute('data-status', 'complete');
+  await expect(panel.locator('[data-testid="outline-program"][data-code="SMJ08198"]').first()).toHaveAttribute('data-status', 'complete');
+  await expect(page.getByTestId('progress-panel').getByRole('button', { name: /^Options\s*48\/48cp/ })).toBeVisible();
+});

@@ -297,6 +297,51 @@ Stories are in [`UserStories.md`](UserStories.md).
 - Files: `core/engine.ts`, `core/engine.test.ts`, `web/src/Panels.tsx`, `web/src/styles.css`,
   `e2e/prerequisites.spec.ts`.
 
+### US-022 counting numbered ways and "one of the following" (25 Sep 2026)
+- `progress()` is now a wrapper over `measure()` in `core/engine.ts`, which `programProgress()` shares.
+  A container described as "... one of the following ..." counts its best child, not the sum. A
+  container whose text lists numbered ways (`parseWays`: "1. one major (48cp); 2. two sub-majors
+  (2 x 24cp); ...") is read into parts (majors, sub-majors, transdisciplinary streams, elective cp)
+  and counts its best way; each way's done / planned is kept on `Progress.ways`. A way the parser
+  cannot read is kept, marked not understood, and not counted.
+- Before and after on real data (all four degrees, five plans each, 243 progress rows): only the
+  "two sub-majors" plans changed. Bachelor of IT Options 24/48 -> 48/48; Bachelor of Business Options
+  24/48 -> 42/48 (Advertising and Advanced Advertising share a subject, which counts once).
+- Normaliser: a structure's root container took its id from an object (`[object Object]` on every
+  program); it now uses `structure_cl_id`. All 278 container ids on the map are unique (tested).
+- Tests: `core/progress.test.ts` (both real options texts parsed exactly, two sub-majors, electives
+  way, planned on top of the best way, best child of a choice, statuses); mutation check gained
+  choose-one, ways and way-chosen mutations (23 of 23 caught). The fixture's Sub-Majors heading is
+  worth one sub-major, as in the handbook; with 24cp it did not tell the two counts apart.
+- Files: `core/engine.ts`, `core/progress.test.ts`, `scraper/src/normalize.ts`,
+  `scraper/test/normalize.test.ts`, `scripts/verify-tests-fail.sh`, `web/public/trees/uts-2027.json`.
+
+### US-009 planned subjects blue (25 Sep 2026)
+- `stateLook.planned` is fill `#16295c`, ring `#4c8dff` (was green); CSS `--planned`, `--planned-deep`
+  replace `--green` for the Plan it button, planned numbers and progress bars. "Available now" keeps
+  its dark fill and pale `#86b6ff` ring. E2E checks the drawn fill and ring of a planned copy.
+- Files: `web/src/theme.ts`, `web/src/styles.css`, `e2e/multidegree.spec.ts`.
+
+### US-026 Finished circles glow
+- The store derives `finish` (a `Status` per degree and program, from `progress` / `programProgress`)
+  with the plan, so repaints do not recompute it. The canvas draws three soft rings outside a finished
+  circle: `canvas.complete` green or `canvas.plannedGlow` blue; the chosen-program gold outline stays.
+  `window.__dst.finished()` exposes what was drawn, for tests.
+- E2E: Innovation and Entrepreneurship (SMJ10156) complete glows green, half done plus half planned
+  glows blue, half done alone does not glow.
+- Files: `web/src/store.ts`, `web/src/TreeCanvas.tsx`, `web/src/theme.ts`, `e2e/multidegree.spec.ts`.
+
+### US-027 Degree outline shows progress
+- `DegreeOutline` / `OutlineSection` in `web/src/Panels.tsx` replace the plain outline in the degree
+  panel: headings, program lines and way lines take `st-complete` (green, tick), `st-planned` (blue,
+  tick), `st-started` (yellow) from `progressStatus`. A chosen program is at least started; an unchosen
+  one shows only complete or planned (from `finish`). Way text is split onto its own numbered lines.
+  Program panels keep the plain outline.
+- E2E (`e2e/outline.spec.ts`): the Bachelor of IT Compulsory block through none, started, planned and
+  complete (and its computed colour); the Options ways through none, chosen, planned and complete,
+  with the progress panel showing Options 48/48.
+- Files: `web/src/Panels.tsx`, `web/src/styles.css`, `core/engine.ts`, `e2e/outline.spec.ts`.
+
 ### Rendering on demand (supports US-004, US-007)
 - Pixi redrew every frame even when idle, saturating the main thread: under 4 parallel test browsers
   a reload took ~6.9 s just to start, which was the intermittent CI failure in the US-007 share-link

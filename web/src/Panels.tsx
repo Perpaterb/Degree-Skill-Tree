@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { missingFor, prerequisiteGap, programsUnder, progress, unlockedBy, type NodeState, type PrerequisiteGap, type Progress } from '../../core/engine';
+import {
+  missingFor,
+  prerequisiteGap,
+  programsUnder,
+  progress,
+  progressStatus,
+  unlockedBy,
+  type NodeState,
+  type PrerequisiteGap,
+  type Progress,
+  type Status,
+} from '../../core/engine';
 import type { Degree, MapDoc, Program, Rule, Subject } from '../../core/model';
 import { track } from './analytics';
 import { useApp } from './store';
@@ -375,7 +386,7 @@ function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
           ) : null}
         </section>
       ) : null}
-      <StructureView container={degree.structure} />
+      <DegreeOutline degree={degree} map={map} />
       <p>
         <a href={degree.url} target="_blank" rel="noreferrer">
           Official handbook page ↗
@@ -386,21 +397,94 @@ function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
 }
 
 function StructureView({ container }: { container: Program['structure'] }) {
+  return <OutlineSection container={container} />;
+}
+
+/** A tick after a line that is met (green) or met once the plan is done (blue). */
+function Tick({ status }: { status: Status }) {
+  return status === 'complete' || status === 'planned' ? <span className="tick"> ✓</span> : null;
+}
+
+/** Progress per container of the degree, keyed by container id, and per chosen program, keyed by code. */
+interface OutlineProgress {
+  byId: Map<string, Progress>;
+  byProgram: Map<string, Progress>;
+  /** Status of every program on its own (drives the circle glows too). */
+  finish: Map<string, Status>;
+}
+
+/** The degree's structure, coloured by progress: green done, blue done once planned, yellow started (US-027). */
+function DegreeOutline({ degree, map }: { degree: Degree; map: MapDoc }) {
+  const plan = useApp((s) => s.plan);
+  const finish = useApp((s) => s.finish);
+  const prog = useMemo(() => {
+    const root = progress(map, degree.code, plan);
+    const byId = new Map<string, Progress>();
+    const byProgram = new Map<string, Progress>();
+    const walk = (n: Progress) => {
+      if (n.program) byProgram.set(n.program, n);
+      else byId.set(n.id, n);
+      n.children.forEach(walk);
+    };
+    walk(root);
+    return { byId, byProgram, finish };
+  }, [map, degree.code, plan, finish]);
+  return <OutlineSection container={degree.structure} prog={prog} />;
+}
+
+function OutlineSection({ container, prog }: { container: Program['structure']; prog?: OutlineProgress }) {
+  const node = prog?.byId.get(container.id);
+  const status = node ? progressStatus(node) : 'none';
+  const ways = node?.ways ?? [];
+  const intro = ways.length ? container.description.slice(0, container.description.search(/\b1\.\s/)).trim() : container.description;
+  const programStatus = (code: string): Status => {
+    const chosen = prog?.byProgram.get(code);
+    // A chosen program is at least started (yellow), even before any of it is done.
+    if (chosen) return progressStatus({ ...chosen, chosen: true });
+    const alone = prog?.finish.get(code);
+    return alone === 'complete' || alone === 'planned' ? alone : 'none';
+  };
   return (
     <section>
       {container.title !== 'Structure' ? (
-        <h3>
-          {container.title} {container.creditPoints ? <span className="muted">({container.creditPoints}cp)</span> : null}
+        <h3 className={`st-${status}`} data-testid="outline-heading" data-status={status}>
+          {container.title} {container.creditPoints ? <span className="cp">({container.creditPoints}cp)</span> : null}
+          <Tick status={status} />
         </h3>
       ) : null}
-      {container.description ? <p className="muted">{container.description}</p> : null}
+      {intro ? <p className="muted">{intro}</p> : null}
+      {ways.length ? (
+        <ol className="ways">
+          {ways.map((w) => {
+            const ws = w.understood ? progressStatus(w) : 'none';
+            return (
+              <li key={w.text} className={`st-${ws}`} data-testid="outline-way" data-status={ws}>
+                {w.text}
+                <Tick status={ws} />
+              </li>
+            );
+          })}
+        </ol>
+      ) : null}
       <ul className="plain">
-        {container.items.map((i) => (
-          <li key={i.code}>{i.kind === 'subject' ? <SubjectLink code={i.code} /> : <ProgramLink code={i.code} />}</li>
-        ))}
+        {container.items.map((i) => {
+          if (i.kind === 'subject')
+            return (
+              <li key={i.code}>
+                <SubjectLink code={i.code} />
+              </li>
+            );
+          const ps = programStatus(i.code);
+          return (
+            <li key={i.code} className={`st-${ps}`} data-testid="outline-program" data-code={i.code} data-status={ps}>
+              <ProgramLink code={i.code} />
+              <Tick status={ps} />
+            </li>
+          );
+        })}
       </ul>
       {container.children.map((c) => (
-        <StructureView key={c.id} container={c} />
+        <OutlineSection key={c.id} container={c} prog={prog} />
       ))}
     </section>
   );

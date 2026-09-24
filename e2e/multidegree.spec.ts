@@ -164,3 +164,27 @@ test('US-020: hover ends as soon as the pointer leaves the enlarged subject, not
   await page.mouse.move(b.x + at.x + edge + 4, b.y + at.y, { steps: 4 });
   await expect.poll(() => page.evaluate(() => window.__dst!.highlighted().length)).toBe(0);
 });
+
+test('US-026: a finished circle glows green, one the plan finishes glows blue, a half-done one does not', async ({ page }) => {
+  // Innovation and Entrepreneurship (SMJ10156) is exactly four 6cp subjects: 81547, 81529, 48080, 81546.
+  const finished = () => page.evaluate(() => window.__dst!.finished());
+  await openTree(page, 't=uts-2027&c=81547.81529.48080.81546');
+  await expect.poll(async () => (await finished()).SMJ10156).toBe('complete');
+
+  await openTree(page, 't=uts-2027&c=81547.81529&p=48080.81546');
+  await expect.poll(async () => (await finished()).SMJ10156).toBe('planned');
+
+  await openTree(page, 't=uts-2027&c=81547.81529');
+  await page.waitForTimeout(300);
+  expect((await finished()).SMJ10156).toBeUndefined();
+});
+
+test('US-009: planned subjects are drawn blue, distinct from the pale blue of available ones', async ({ page }) => {
+  await openTree(page, 't=uts-2027&p=41039');
+  const planned = await page.evaluate(() => window.__dst!.look(window.__dst!.copies('41039')[0])!);
+  expect(planned).toMatchObject({ fill: 0x16295c, ring: 0x4c8dff });
+  // 31265 has no prerequisites, so it is available now.
+  const available = await page.evaluate(() => window.__dst!.look(window.__dst!.copies('31265')[0])!);
+  expect(available.fill).not.toBe(planned.fill);
+  expect(available.ring).not.toBe(planned.ring);
+});

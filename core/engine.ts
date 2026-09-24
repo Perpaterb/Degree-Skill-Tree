@@ -211,20 +211,92 @@ export interface Progress {
   children: Progress[];
   /** Programs and subjects this requirement names directly, for highlighting on the map. */
   refs: string[];
+  /** Set on the node of a chosen program: its code. */
+  program?: string;
+  /** Numbered ways to fill this requirement, when the handbook text lists them (e.g. "1. one major (48cp) ..."). */
+  ways?: WayProgress[];
+}
+
+export interface WayProgress {
+  text: string;
+  /** False when the text could not be read as majors, sub-majors and electives; such a way is shown but not counted. */
+  understood: boolean;
+  required: number;
+  done: number;
+  planned: number;
+  /** A program this way needs (a major, a sub-major, a stream) has been chosen. */
+  chosen: boolean;
+}
+
+/** How far a requirement (or a way) has got: met by completed subjects, met once planned ones are done, started, or untouched. */
+export type Status = 'complete' | 'planned' | 'started' | 'none';
+
+export function progressStatus(p: { required: number; done: number; planned: number; children?: Progress[]; chosen?: boolean }): Status {
+  if (p.required > 0 && p.done >= p.required) return 'complete';
+  if (p.required > 0 && p.done + p.planned >= p.required) return 'planned';
+  if (p.done + p.planned > 0 || p.chosen || hasChosen(p.children ?? [])) return 'started';
+  return 'none';
+}
+
+/** Whether a chosen program sits anywhere below. */
+const hasChosen = (children: Progress[]): boolean => children.some((c) => !!c.program || hasChosen(c.children));
+
+const WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8 };
+
+interface WayPart {
+  what: 'major' | 'sub_major' | 'stream' | 'electives';
+  count: number;
+  cp: number;
 }
 
 /**
- * Credit points towards each structure container of one degree. Subjects are claimed by the
- * first container (in structure order) that lists them, so nothing counts twice; free-elective
- * containers take whatever is left over.
+ * Split a requirement's text into its numbered ways ("... four ways: 1. one major (48cp); 2. two
+ * sub-majors (2 x 24cp); ...") and read each as parts: so many majors, sub-majors, transdisciplinary
+ * elective streams and elective credit points. Returns [] when the text lists no numbered ways.
  */
-export function progress(map: MapDoc, degreeCode: string, plan: Plan): Progress {
-  const degree = map.degrees[degreeCode];
+export function parseWays(description: string): { text: string; parts: WayPart[] | null }[] {
+  const at = description.search(/\b1\.\s/);
+  if (at < 0) return [];
+  const pieces = description
+    .slice(at)
+    .split(/(?:^|\s)\d\.\s+/)
+    .map((t) => t.trim().replace(/[;.]$/, '').trim())
+    .filter(Boolean);
+  return pieces.map((text) => {
+    const parts: WayPart[] = [];
+    for (const piece of text.split(/\s+(?:and|plus)\s+/i)) {
+      const m = piece.match(/^(\w+)\s+(transdisciplinary electives?|electives?|sub-majors?|majors?)\s*\((.*?)\)/i) ?? piece.match(/^()(electives?)\s*\((.*?)\)/i);
+      if (!m) return { text, parts: null };
+      const count = m[1] ? (WORDS[m[1].toLowerCase()] ?? Number(m[1])) : 1;
+      const kind = m[2].toLowerCase();
+      const paren = m[3];
+      const times = paren.match(/(\d+)\s*x\s*(\d+)\s*cp/i);
+      const each = paren.match(/(\d+)\s*cp for each/i);
+      const cp = times ? Number(times[1]) * Number(times[2]) : each ? count * Number(each[1]) : Number(paren.match(/(\d+)\s*cp/i)?.[1] ?? NaN);
+      if (!count || !Number.isFinite(cp)) return { text, parts: null };
+      const what = kind.startsWith('transdisciplinary') ? 'stream' : kind.startsWith('elective') ? 'electives' : kind.startsWith('sub') ? 'sub_major' : 'major';
+      parts.push({ what, count, cp });
+    }
+    return { text, parts };
+  });
+}
+
+/** "Select one of the following ..." : only the best single child counts, not their sum. */
+const chooseOne = (description: string) => /\bone of the following\b/i.test(description);
+
+/**
+ * Credit points towards each structure container of a degree or program. Subjects are claimed by
+ * the first container (in structure order) that lists them, so nothing counts twice; free-elective
+ * containers take whatever is left over. A container of "one of the following" counts its best
+ * child; one with numbered ways counts its best way.
+ */
+function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
   const completed = new Set(plan.completed);
   const planned = new Set(plan.planned.filter((c) => !completed.has(c)));
   const chosen = new Set(plan.programs);
   const claimed = new Set<string>();
   const free: Progress[] = [];
+  const isFree = new Set<Progress>();
   const cp = (c: string) => map.subjects[c]?.creditPoints ?? 0;
 
   function walk(container: Container, idPrefix = ''): Progress {
@@ -240,6 +312,7 @@ export function progress(map: MapDoc, degreeCode: string, plan: Plan): Progress 
     };
     if (container.kind === 'free') {
       free.push(node);
+      isFree.add(node);
       return node;
     }
     for (const item of container.items) {
@@ -254,6 +327,7 @@ export function progress(map: MapDoc, degreeCode: string, plan: Plan): Progress 
         sub.title = program.title;
         sub.required = program.creditPoints || sub.required;
         sub.refs = [item.code];
+        sub.program = item.code;
         node.children.push(sub);
       }
     }
@@ -261,7 +335,7 @@ export function progress(map: MapDoc, degreeCode: string, plan: Plan): Progress 
     return node;
   }
 
-  const root = walk(degree.structure);
+  const root = walk(structure);
   for (const node of free) {
     for (const c of [...completed].filter((c) => !claimed.has(c))) {
       if (node.done >= node.required) break;
@@ -275,18 +349,83 @@ export function progress(map: MapDoc, degreeCode: string, plan: Plan): Progress 
     }
   }
 
-  // Roll up: each node counts its children, capped at its own requirement.
+  const below = (n: Progress, test: (d: Progress) => boolean, out: Progress[] = []): Progress[] => {
+    for (const c of n.children) {
+      if (test(c)) out.push(c);
+      else below(c, test, out);
+    }
+    return out;
+  };
+  const kindOf = (d: Progress) => (d.program ? map.programs[d.program]?.kind : undefined);
+
+  // Roll up bottom-up: children are summed (or the best one taken), capped at the requirement.
   const roll = (n: Progress): void => {
     n.children.forEach(roll);
-    n.done += n.children.reduce((t, c) => t + c.done, 0);
-    n.planned += n.children.reduce((t, c) => t + c.planned, 0);
-    if (n.required > 0) {
-      n.done = Math.min(n.done, n.required);
-      n.planned = Math.min(n.planned, n.required - n.done);
+    const dp = (c: { done: number; planned: number }) => c.done + c.planned;
+    let done = n.done;
+    let reach = n.done + n.planned;
+    if (chooseOne(n.description) && n.children.length) {
+      done += Math.max(...n.children.map((c) => c.done));
+      reach += Math.max(...n.children.map(dp));
+    } else {
+      done += n.children.reduce((t, c) => t + c.done, 0);
+      reach += n.children.reduce((t, c) => t + dp(c), 0);
     }
+    const ways = parseWays(n.description);
+    if (ways.length) {
+      n.ways = ways.map(({ text, parts }) => {
+        if (!parts) return { text, understood: false, required: 0, done: 0, planned: 0, chosen: false };
+        let wDone = 0;
+        let wReach = 0;
+        let chosenHere = false;
+        for (const part of parts) {
+          const pool = part.what === 'electives' ? below(n, (d) => isFree.has(d)) : below(n, (d) => kindOf(d) === part.what);
+          if (part.what !== 'electives' && pool.length) chosenHere = true;
+          // Programs: the best `count` of them. Electives: all the free credit points under this requirement.
+          const take = (score: (d: Progress) => number) =>
+            part.what === 'electives'
+              ? pool.reduce((t, d) => t + score(d), 0)
+              : pool.map(score).sort((a, b) => b - a).slice(0, part.count).reduce((t, v) => t + v, 0);
+          wDone += Math.min(part.cp, take((d) => d.done));
+          wReach += Math.min(part.cp, take(dp));
+        }
+        const required = parts.reduce((t, p) => t + p.cp, 0);
+        return { text, understood: true, required, done: wDone, planned: wReach - wDone, chosen: chosenHere };
+      });
+      const counted = n.ways.filter((w) => w.understood);
+      if (counted.length) {
+        done = n.done + Math.max(...counted.map((w) => w.done));
+        reach = n.done + n.planned + Math.max(...counted.map((w) => w.done + w.planned));
+      }
+    }
+    if (n.required > 0) {
+      done = Math.min(done, n.required);
+      reach = Math.min(reach, n.required);
+    }
+    n.done = done;
+    n.planned = Math.max(0, reach - done);
   };
   roll(root);
+  return root;
+}
+
+/** Progress towards one degree, for the progress panel and the degree outline (US-022, US-027). */
+export function progress(map: MapDoc, degreeCode: string, plan: Plan): Progress {
+  const degree = map.degrees[degreeCode];
+  const root = measure(map, degree.structure, plan);
   root.title = degree.title;
+  return root;
+}
+
+/** Progress towards one program on its own, whether or not it is chosen (US-026). */
+export function programProgress(map: MapDoc, code: string, plan: Plan): Progress {
+  const program = map.programs[code];
+  const root = measure(map, program.structure, plan);
+  root.title = program.title;
+  root.required = program.creditPoints || root.required;
+  root.done = Math.min(root.done, root.required);
+  root.planned = Math.min(root.planned, root.required - root.done);
+  root.program = code;
   return root;
 }
 

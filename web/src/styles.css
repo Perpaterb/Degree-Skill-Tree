@@ -6,7 +6,9 @@
   --muted: #8490a6;
   --gold: #f2c75c;
   --gold-deep: #5c4414;
-  --green: #4fd1a5;
+  --planned: #4c8dff;
+  --planned-deep: #16295c;
+  --complete: #45d16b;
   --blue: #86b6ff;
   --danger: #c0504d;
   --serif: Georgia, 'Times New Roman', serif;
@@ -255,9 +257,9 @@ a {
 }
 
 .actions button.on.plan {
-  background: #12382f;
-  border-color: var(--green);
-  color: var(--green);
+  background: var(--planned-deep);
+  border-color: var(--planned);
+  color: var(--planned);
 }
 
 .actions button:disabled {
@@ -393,7 +395,7 @@ a {
 }
 
 .planned-num {
-  color: var(--green);
+  color: var(--planned);
 }
 
 .bar {
@@ -410,7 +412,7 @@ a {
 }
 
 .bar-planned {
-  background: var(--green);
+  background: var(--planned);
 }
 
 .not-counting {
@@ -540,4 +542,36 @@ a {
 .modal-actions button.warn {
   border-color: var(--gold);
   color: var(--gold);
+}
+
+/* Degree outline progress (US-027): green done, blue done once planned, yellow started. */
+.st-complete,
+.st-complete .link,
+.detail h3.st-complete {
+  color: var(--complete);
+}
+
+.st-planned,
+.st-planned .link,
+.detail h3.st-planned {
+  color: var(--planned);
+}
+
+.st-started,
+.st-started .link,
+.detail h3.st-started {
+  color: var(--gold);
+}
+
+.tick {
+  font-weight: 700;
+}
+
+.ways {
+  margin: 4px 0 8px;
+  padding-left: 22px;
+}
+
+.ways li {
+  margin: 2px 0;
 }

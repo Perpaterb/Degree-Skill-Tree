@@ -79,7 +79,8 @@ function toContainer(n: Json, refs: Referenced): Container {
     }
   }
   return {
-    id: String(n.cl_id ?? ''),
+    // A structure's root carries its id as an object ({ value, cl_id, key }); containers as a string.
+    id: String(typeof n.cl_id === 'object' && n.cl_id ? (n.structure_cl_id ?? n.cl_id.cl_id ?? '') : (n.cl_id ?? '')),
     title: clean(n.title) || 'Structure',
     description: stripCode(clean(n.description)),
     creditPoints: num(n.credit_points),

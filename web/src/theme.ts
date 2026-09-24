@@ -23,6 +23,9 @@ export const canvas = {
   needed: 0xf2c75c,
   wasted: 0xe0555a,
   grey: 0x3a3d44,
+  /** Circle glows (US-026): finished by completed subjects, or by the plan. */
+  complete: 0x45d16b,
+  plannedGlow: 0x4c8dff,
 };
 
 /** One hue per degree, in map order. */
@@ -45,7 +48,7 @@ export interface NodeLook {
 
 export const stateLook: Record<NodeState, NodeLook> = {
   completed: { fill: 0x5c4414, ring: 0xf2c75c, ringWidth: 5, alpha: 1, glow: 0xf2c75c },
-  planned: { fill: 0x12382f, ring: 0x4fd1a5, ringWidth: 4, alpha: 1 },
+  planned: { fill: 0x16295c, ring: 0x4c8dff, ringWidth: 4, alpha: 1 },
   available: { fill: 0x14233d, ring: 0x86b6ff, ringWidth: 4, alpha: 1, glow: 0x86b6ff },
   reachable: { fill: 0x121a2a, ring: 0x4d6a99, ringWidth: 3, alpha: 1 },
   locked: { fill: 0x15181f, ring: 0x3d4452, ringWidth: 2, alpha: 1 },

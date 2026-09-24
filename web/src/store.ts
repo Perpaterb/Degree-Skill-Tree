@@ -1,5 +1,18 @@
 import { create } from 'zustand';
-import { compatibility, computeStates, decodePlan, emptyPlan, encodePlan, type Fit, type NodeState, type Plan } from '../../core/engine';
+import {
+  compatibility,
+  computeStates,
+  decodePlan,
+  emptyPlan,
+  encodePlan,
+  programProgress,
+  progress,
+  progressStatus,
+  type Fit,
+  type NodeState,
+  type Plan,
+  type Status,
+} from '../../core/engine';
 import { layoutMap, type Layout } from '../../core/layout';
 import type { MapDoc } from '../../core/model';
 import { track } from './analytics';
@@ -20,6 +33,8 @@ interface AppState {
   plan: Plan;
   states: Map<string, NodeState>;
   fits: Map<string, Fit>;
+  /** How far each degree and program circle has got, for its glow (US-026). */
+  finish: Map<string, Status>;
   /** The subject, program or degree shown in the detail panel. */
   selected: string | null;
   hovered: string | null;
@@ -89,7 +104,11 @@ function matchesFor(map: MapDoc, q: string): string[] {
 
 function derive(map: MapDoc, plan: Plan) {
   const fits = new Map(Object.keys(map.degrees).map((d) => [d, compatibility(map, d, plan)]));
-  return { states: computeStates(map, plan), fits };
+  const finish = new Map<string, Status>([
+    ...Object.keys(map.degrees).map((d) => [d, progressStatus(progress(map, d, plan))] as const),
+    ...Object.keys(map.programs).map((p) => [p, progressStatus(programProgress(map, p, plan))] as const),
+  ]);
+  return { states: computeStates(map, plan), fits, finish };
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -99,6 +118,7 @@ export const useApp = create<AppState>((set, get) => ({
   plan: emptyPlan(),
   states: new Map(),
   fits: new Map(),
+  finish: new Map(),
   selected: null,
   hovered: null,
   hoveredCircle: null,

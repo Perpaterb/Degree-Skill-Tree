@@ -53,6 +53,8 @@ interface Scene {
   glowing: string[];
   /** Subject copies drawn with the hover or selection ring in the last paint. */
   highlighted: string[];
+  /** Circles drawn with a finished glow in the last paint (US-026). */
+  finished: Record<string, 'complete' | 'planned'>;
   /** Ask for one redraw on the next frame. */
   invalidate(): void;
 }
@@ -67,6 +69,7 @@ declare global {
       look(id: string): CopyLook | null;
       copies(code: string): string[];
       zoom(): number;
+      finished(): Record<string, 'complete' | 'planned'>;
     };
   }
 }
@@ -208,7 +211,7 @@ export function TreeCanvas() {
         viewport.cursor = over ? 'pointer' : 'grab';
       });
 
-      scene.current = { app, viewport, edges, nodes, circles, layout, map, hue, glowing: [], highlighted: [], invalidate };
+      scene.current = { app, viewport, edges, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, invalidate };
       // The camera moves on its own during inertia and fly-to animations, so each of these redraws.
       for (const ev of ['moved', 'zoomed', 'moved-end', 'zoomed-end'] as const) viewport.on(ev, invalidate);
       fit(viewport, layout);
@@ -239,6 +242,7 @@ export function TreeCanvas() {
         highlighted: () => scene.current?.highlighted ?? [],
         look: (id) => scene.current?.nodes.get(id)?.drawn ?? null,
         zoom: () => scene.current?.viewport.scale.x ?? 1,
+        finished: () => scene.current?.finished ?? {},
         copies: (code) => [...(scene.current?.nodes.values() ?? [])].filter((v) => v.node.code === code).map((v) => v.node.id),
       };
 
@@ -276,6 +280,7 @@ export function TreeCanvas() {
         if (!scene.current) return;
         if (
           s.states !== prev.states ||
+          s.finish !== prev.finish ||
           s.hovered !== prev.hovered ||
           s.hoveredCircle !== prev.hoveredCircle ||
           s.glow !== prev.glow ||
@@ -371,7 +376,7 @@ function tracePath(g: Graphics, path: PathCmd[]) {
 /** Everything that depends on plan, hover, selection, glow or search. */
 function paint(s: Scene) {
   s.invalidate();
-  const { states, hovered, hoveredCircle, glow, selected, matches, plan, fits } = useApp.getState();
+  const { states, hovered, hoveredCircle, glow, selected, matches, plan, fits, finish } = useApp.getState();
   const { map, layout } = s;
   const completed = new Set(plan.completed);
   const chosen = new Set(plan.programs);
@@ -404,9 +409,18 @@ function paint(s: Scene) {
     !dimming || id === focus || path.has(id) || unlocks.has(id) || matchSet.has(id) || (hovered && !matchSet.size && completed.has(id));
 
   s.glowing = [];
+  s.finished = {};
   for (const v of s.circles) {
     const { circle, shape, title } = v;
     const g = shape.clear();
+    // Finished circles glow outside their outline: green when completed, blue when the plan finishes them (US-026).
+    const done = finish.get(circle.id);
+    const halo = done === 'complete' ? canvas.complete : done === 'planned' ? canvas.plannedGlow : null;
+    if (halo !== null) {
+      const band = circle.kind === 'degree' ? 26 : 12;
+      for (let i = 3; i >= 1; i--) g.circle(circle.x, circle.y, circle.r + (band * i) / 2).stroke({ color: halo, width: band, alpha: 0.18 + 0.16 * (3 - i) });
+      s.finished[circle.id] = done as 'complete' | 'planned';
+    }
     const glowing = glowSet.has(circle.id) || hoveredCircle === circle.id || matchSet.has(circle.id);
     if (glowing) s.glowing.push(circle.id);
     if (circle.kind === 'degree') {
