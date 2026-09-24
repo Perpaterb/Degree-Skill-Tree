@@ -34,3 +34,28 @@ Stories are in [`UserStories.md`](UserStories.md).
 - Tests use four real saved pages as fixtures. Verified the tests can fail: making OR parse as AND
   turns 4 of 10 tests red.
 - Files: `scraper/src/access.ts`, `scraper/test/access.test.ts`, `scraper/test/fixtures/ac_*.html`.
+
+### US-003 Normalise into the generic model
+- Generic model in `core/model.ts`: `TreeDoc` (one degree), `Program`, `Subject`, `Container`
+  ("complete N cp from these children and items"; `kind: 'free'` for free electives), `Rule`
+  (and/or over subject, course, credit-point and text conditions) and `StudyPlan`.
+- `scraper/src/normalize.ts` builds a `TreeDoc` from a pulled slice: resolves requisite refs into
+  self-contained rules (`toRule`), follows programs recursively, adds one hop of requisite subjects,
+  and keeps anything the handbook year lacks as `legacy: true` with the title the referrer used.
+- `npm run scrape -- normalize <COURSE>` writes `web/public/trees/<id>.json` and `index.json`.
+  C10148 (2027): 28 programs, 259 subjects, 42 legacy; ~500 KB.
+- Tests read the committed tree (data checks, no network) and run `toRule` against a real fixture.
+- Files: `core/model.ts`, `scraper/src/normalize.ts`, `scraper/src/cli.ts`, `scraper/test/normalize.test.ts`,
+  `web/public/trees/uts-2027-C10148.json`, `web/public/trees/index.json`, `tsconfig.json`.
+
+### Core engine (supports US-007, US-008, US-009)
+- `core/engine.ts`: `ruleMet`, `computeStates` (completed / planned / available / reachable / locked /
+  excluded / legacy), `missingFor` (cheapest subject set to unlock a node; OR branches by fewest extra
+  cp, legacy subjects avoided), `unlockedBy`, `progress` (credit points per container, each subject
+  claimed once in structure order, free electives take leftovers), `encodePlan` / `decodePlan`.
+- Assumptions, documented in code: course conditions are met by the tree's own degree; credit-point
+  conditions are checked against credit points held; free-text conditions count as met and are shown.
+- `scripts/verify-tests-fail.sh` (`npm run test:verify-fails`) plants 7 known bugs one at a time and
+  requires red for each. First run exposed that double counting was untested; fixed by listing a core
+  subject in the test major. Result 24 Sep 2026: 7/7 caught.
+- Files: `core/engine.ts`, `core/engine.test.ts`, `scripts/verify-tests-fail.sh`, `package.json`.

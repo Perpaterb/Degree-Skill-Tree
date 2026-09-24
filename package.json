@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "scrape": "tsx scraper/src/cli.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:verify-fails": "./scripts/verify-tests-fail.sh"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

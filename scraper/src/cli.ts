@@ -3,6 +3,7 @@ import pLimit from 'p-limit';
 import { fetchAccessConditions } from './access.js';
 import { BlockedError } from './http.js';
 import { fetchItem, listItems, type ContentType, type ListedItem } from './handbook.js';
+import { buildTree } from './normalize.js';
 
 const YEAR = process.env.HANDBOOK_YEAR ?? '2026';
 const RAW = `data/raw/${YEAR}`;
@@ -172,8 +173,35 @@ async function report() {
   if (failures) process.exitCode = 1;
 }
 
+const TREES = 'web/public/trees';
+
+/** Normalise pulled slices into the generic tree model the app reads. */
+async function normalize() {
+  const codes = process.argv.slice(3);
+  if (!codes.length) throw new Error('usage: npm run scrape -- normalize <COURSE_CODE>...');
+  await mkdir(TREES, { recursive: true });
+  const indexPath = `${TREES}/index.json`;
+  const index: { id: string; title: string; code: string; year: string; institution: string }[] = JSON.parse(
+    await readFile(indexPath, 'utf8').catch(() => '[]'),
+  );
+  for (const code of codes) {
+    const tree = await buildTree(RAW, YEAR, code);
+    await writeFile(`${TREES}/${tree.id}.json`, JSON.stringify(tree) + '\n');
+    const entry = { id: tree.id, title: tree.degree.title, code, year: YEAR, institution: tree.institution };
+    const at = index.findIndex((e) => e.id === tree.id);
+    if (at >= 0) index[at] = entry;
+    else index.push(entry);
+    const legacy = Object.values(tree.subjects).filter((s) => s.legacy).length;
+    console.log(
+      `${tree.id}: ${Object.keys(tree.programs).length} programs, ${Object.keys(tree.subjects).length} subjects (${legacy} legacy)`,
+    );
+  }
+  await writeFile(indexPath, JSON.stringify(index, null, 1) + '\n');
+}
+
 const commands: Record<string, () => Promise<unknown>> = {
   slice,
+  normalize,
   report,
   list,
   pages,

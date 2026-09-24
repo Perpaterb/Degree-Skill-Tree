@@ -31,10 +31,10 @@ As the project owner, I want every in-scope subject's requisites and anti-requis
 ### US-003 Normalise into the generic model
 As a developer, I want the UTS data in the institution-agnostic format so the app never reads
 CourseLoop shapes directly.
-- [ ] Subjects, programs (major/sub-major/stream), degrees and structure containers in the generic model
-- [ ] Structure rules keep their "select N cp" semantics and AND/OR connectors
-- [ ] Study plans kept as suggested sequences
-- [ ] Round-trip test: C10148 normalised structure totals 144cp and matches the handbook groups
+- [x] Subjects, programs (major/sub-major/stream), degrees and structure containers in the generic model
+- [x] Structure rules keep their "select N cp" semantics (the source's AND/OR connector is always AND in practice; containers are modelled as "complete N cp from these")
+- [x] Study plans kept as suggested sequences
+- [x] Round-trip test: C10148 normalised structure totals 144cp and matches the handbook groups
 
 ## Tree viewer
 
