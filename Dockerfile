@@ -13,4 +13,5 @@ RUN npm ci --no-audit --no-fund
 
 COPY --chown=node:node . .
 EXPOSE 5173
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173", "--strictPort"]
+# Run Vite directly, not through npm: npm reports a normal stop (SIGTERM) as "command failed".
+CMD ["node_modules/.bin/vite", "--host", "0.0.0.0", "--port", "5173", "--strictPort"]

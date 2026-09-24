@@ -211,3 +211,30 @@ Made 24 Sep 2026:
 Open:
 
 - Stack confirmed 24 Sep 2026: PixiJS + React. Legacy subjects shown greyed.
+
+---
+
+## 6. Long-term vision (after the MVP)
+
+Recorded 24 Sep 2026. Not in current scope; it is here so today's choices do not close it off.
+
+- **Every level of education, every institution.** Beyond university degrees: high school and
+  college pathways, in institutions around the world. Domains held: degreeskilltree.com,
+  universityskilltree.com, highschoolskilltree.com, collegeskilltree.com.
+- **Pathway questions students actually ask.** For example: am I better off doing Unit 2 maths
+  instead of Unit 1 if I want to get into a particular uni subject, or reach a particular UAI/ATAR?
+- **Tracking from real marks.** A student enters the marks they are getting now in each subject;
+  the tree shows how they are tracking towards their goal and what to work on.
+- **Data.** A massive collection effort, started small and grown institution by institution.
+- **Revenue.** Targeted advertising on the public site, and an institution-only (white-label)
+  version that schools and universities embed on their own sites.
+
+What this means for the MVP:
+
+- Keep `core/model.ts` institution- and level-agnostic: nothing in core may assume "UTS" or
+  "university". High school subjects, units and results must fit the same tree/rule model.
+- Rules will need a new kind of condition, on marks and scores (e.g. "a Band 5 in Maths Advanced"),
+  not just "completed"; the `Rule` union is where that goes.
+- The planned Firebase admin model (per-institution trees published as links) is the seed of the
+  white-label product.
+

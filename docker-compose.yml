@@ -8,6 +8,7 @@ name: degree-skill-tree
 services:
   web:
     build: .
+    init: true # forwards stop signals to the dev server
     ports:
       - '5173:5173'
     volumes:
