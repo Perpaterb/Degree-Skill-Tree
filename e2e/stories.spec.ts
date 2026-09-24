@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { clickCentre, goTo, openTree, waitReady } from './helpers';
+import { chooseDegree, clickCentre, goTo, openTree, waitReady } from './helpers';
 
 // Every test name starts with its story ID; scripts/story-coverage.mjs reads them.
 
-test('US-004: the Bachelor of IT tree renders on a canvas with the degree hub and clusters', async ({ page }) => {
+test('US-004: the map renders on a canvas', async ({ page }) => {
   await openTree(page);
-  await expect(page.locator('.brand-sub')).toContainText('Bachelor of Information Technology');
+  await expect(page.locator('.brand-sub')).toContainText('UTS 2027');
   const canvas = page.locator('[data-testid="tree-canvas"] canvas');
   const box = (await canvas.boundingBox())!;
   expect(box.width).toBeGreaterThan(800);
@@ -124,6 +124,7 @@ test('US-008: a locked subject says what is missing, and a subject lists what it
 
 test('US-009: choosing a major and completing its subjects shows progress to the degree', async ({ page }) => {
   await openTree(page);
+  await chooseDegree(page, 'C10148');
   await goTo(page, 'MAJ03444');
   const panel = page.getByTestId('detail-panel');
   await panel.getByRole('button', { name: 'Choose this major' }).click();

@@ -1,15 +1,21 @@
 // The institution-agnostic tree model. Importers (e.g. the UTS handbook
 // adapter) write this shape; the app only ever reads this shape.
 
-export interface TreeDoc {
-  schema: 1;
-  id: string; // e.g. "uts-2027-C10148"
+/**
+ * One institution's map for one handbook year: several degrees sharing one pool of
+ * programs and subjects. A subject or program offered by two degrees exists once.
+ */
+export interface MapDoc {
+  schema: 2;
+  id: string; // e.g. "uts-2027"
   institution: string;
   year: string;
   source: { name: string; url: string; fetchedAt: string };
-  degree: Degree;
+  degrees: Record<string, Degree>;
   programs: Record<string, Program>;
   subjects: Record<string, Subject>;
+  /** Precomputed positions (see core/layout.ts). Absent means the app computes them. */
+  layout?: import('./layout.js').Layout;
 }
 
 export interface Degree {

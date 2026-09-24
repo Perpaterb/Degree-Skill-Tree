@@ -1,9 +1,25 @@
 [
  {
-  "id": "uts-2027-C10148",
-  "title": "Bachelor of Information Technology",
-  "code": "C10148",
+  "id": "uts-2027",
+  "institution": "UTS",
   "year": "2027",
-  "institution": "UTS"
+  "degrees": [
+   {
+    "code": "C10148",
+    "title": "Bachelor of Information Technology"
+   },
+   {
+    "code": "C10476",
+    "title": "Bachelor of Computing Science"
+   },
+   {
+    "code": "C10471",
+    "title": "Bachelor of Cybersecurity"
+   },
+   {
+    "code": "C10026",
+    "title": "Bachelor of Business"
+   }
+  ]
  }
 ]

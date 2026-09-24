@@ -17,7 +17,23 @@ export const canvas = {
   label: 0xd7dde8,
   labelDim: 0x6b7385,
   chosen: 0xe2b857,
+  programRing: 0x6a7590,
+  programFill: 0x8f9bb3,
+  glow: 0x57e0ff,
+  needed: 0xf2c75c,
+  wasted: 0xe0555a,
+  grey: 0x3a3d44,
 };
+
+/** One hue per degree, in map order. */
+export const degreeHues = [0xf2c75c, 0x57e0ff, 0xff7a8a, 0x8fe07a, 0xc59bff, 0xffa65c];
+
+/** Blend two colours; t = 0 gives a, 1 gives b. */
+export function mix(a: number, b: number, t: number): number {
+  const ch = (c: number, s: number) => (c >> s) & 255;
+  const m = (s: number) => Math.round(ch(a, s) + (ch(b, s) - ch(a, s)) * t) << s;
+  return m(16) | m(8) | m(0);
+}
 
 export interface NodeLook {
   fill: number;

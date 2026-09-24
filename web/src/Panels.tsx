@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { missingFor, progress, unlockedBy, type NodeState, type Progress } from '../../core/engine';
-import type { Program, Rule, Subject, TreeDoc } from '../../core/model';
+import { missingFor, programsUnder, progress, unlockedBy, type NodeState, type Progress } from '../../core/engine';
+import type { Degree, MapDoc, Program, Rule, Subject } from '../../core/model';
 import { track } from './analytics';
 import { useApp } from './store';
 import { cssColor, stateLabel, stateLook } from './theme';
@@ -11,11 +11,11 @@ function Dot({ state }: { state: NodeState | undefined }) {
 }
 
 function SubjectLink({ code }: { code: string }) {
-  const tree = useApp((s) => s.tree)!;
+  const map = useApp((s) => s.map)!;
   const state = useApp((s) => s.states.get(code));
   const select = useApp((s) => s.select);
-  const s = tree.subjects[code];
-  if (!s) return <span className="muted">{code} (not in this tree)</span>;
+  const s = map.subjects[code];
+  if (!s) return <span className="muted">{code} (not on this map)</span>;
   return (
     <button className="link" onClick={() => select(code, true)}>
       <Dot state={state} />
@@ -72,12 +72,12 @@ function Html({ html }: { html: string }) {
   );
 }
 
-function SubjectDetail({ subject, tree }: { subject: Subject; tree: TreeDoc }) {
+function SubjectDetail({ subject, map }: { subject: Subject; map: MapDoc }) {
   const state = useApp((s) => s.states.get(subject.code));
   const plan = useApp((s) => s.plan);
   const mark = useApp((s) => s.mark);
-  const missing = useMemo(() => missingFor(tree, subject.code, new Set(plan.completed)), [tree, subject.code, plan.completed]);
-  const unlocks = useMemo(() => unlockedBy(tree, subject.code), [tree, subject.code]);
+  const missing = useMemo(() => missingFor(map, subject.code, new Set(plan.completed), plan.degree), [map, subject.code, plan.completed]);
+  const unlocks = useMemo(() => unlockedBy(map, subject.code), [map, subject.code]);
 
   return (
     <>
@@ -92,7 +92,7 @@ function SubjectDetail({ subject, tree }: { subject: Subject; tree: TreeDoc }) {
       </div>
       {subject.legacy ? (
         <p className="note">
-          This subject is named by the degree or by a requisite, but has no page in the {tree.year} handbook. It may have been retired or
+          This subject is named by the degree or by a requisite, but has no page in the {map.year} handbook. It may have been retired or
           replaced. Completing it in an earlier year can still count towards requisites.
         </p>
       ) : null}
@@ -141,7 +141,7 @@ function SubjectDetail({ subject, tree }: { subject: Subject; tree: TreeDoc }) {
           <h3>Cannot be taken with</h3>
           <ul className="plain">
             {subject.antiRequisites.map((c) => (
-              <li key={c}>{tree.subjects[c] ? <SubjectLink code={c} /> : <span className="muted">{c}</span>}</li>
+              <li key={c}>{map.subjects[c] ? <SubjectLink code={c} /> : <span className="muted">{c}</span>}</li>
             ))}
           </ul>
         </section>
@@ -203,11 +203,20 @@ function SubjectDetail({ subject, tree }: { subject: Subject; tree: TreeDoc }) {
   );
 }
 
-function ProgramDetail({ program, tree }: { program: Program; tree: TreeDoc }) {
+/** Degrees on the map that offer a program anywhere in their structure. */
+function degreesOffering(map: MapDoc, code: string): Degree[] {
+  return Object.values(map.degrees).filter((d) => programsUnder(map, d.structure).has(code));
+}
+
+function ProgramDetail({ program, map }: { program: Program; map: MapDoc }) {
   const chosen = useApp((s) => s.plan.programs.includes(program.code));
+  const degree = useApp((s) => s.plan.degree);
   const toggle = useApp((s) => s.toggleProgram);
+  const selectDegree = useApp((s) => s.selectDegree);
   const kind = { major: 'Major', sub_major: 'Sub-major', stream: 'Stream', other: 'Program' }[program.kind];
   const list = (c: Program['structure']): string[] => [...c.items.filter((i) => i.kind === 'subject').map((i) => i.code), ...c.children.flatMap(list)];
+  const offering = degreesOffering(map, program.code);
+  const offered = !!degree && offering.some((d) => d.code === degree);
   return (
     <>
       <div className="kicker">{kind}</div>
@@ -215,12 +224,28 @@ function ProgramDetail({ program, tree }: { program: Program; tree: TreeDoc }) {
       <div className="meta">
         {program.code} {program.creditPoints ? `· ${program.creditPoints}cp` : ''}
       </div>
-      {program.legacy ? <p className="note">Named by this degree but not published in the {tree.year} handbook.</p> : null}
-      <div className="actions">
-        <button className={chosen ? 'on' : ''} onClick={() => toggle(program.code)} disabled={program.legacy}>
-          {chosen ? `✓ Chosen` : `Choose this ${kind.toLowerCase()}`}
-        </button>
-      </div>
+      {program.legacy ? <p className="note">Named by a degree but not published in the {map.year} handbook.</p> : null}
+      {offered || chosen ? (
+        <div className="actions">
+          <button className={chosen ? 'on' : ''} onClick={() => toggle(program.code)} disabled={program.legacy}>
+            {chosen ? `✓ Chosen` : `Choose this ${kind.toLowerCase()}`}
+          </button>
+        </div>
+      ) : (
+        <div className="note">
+          {degree ? `${map.degrees[degree].title} does not offer this ${kind.toLowerCase()}. ` : ''}
+          Select a degree that offers it to choose it:
+          <ul className="plain">
+            {offering.map((d) => (
+              <li key={d.code}>
+                <button className="link" onClick={() => selectDegree(d.code)}>
+                  ◯ {d.title}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <StructureView container={program.structure} />
       {list(program.structure).length === 0 ? null : (
         <p>
@@ -229,6 +254,54 @@ function ProgramDetail({ program, tree }: { program: Program; tree: TreeDoc }) {
           </a>
         </p>
       )}
+    </>
+  );
+}
+
+function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
+  const selectedDegree = useApp((s) => s.plan.degree);
+  const fit = useApp((s) => s.fits.get(degree.code));
+  const selectDegree = useApp((s) => s.selectDegree);
+  const isSel = selectedDegree === degree.code;
+  return (
+    <>
+      <div className="kicker">Degree</div>
+      <h2>{degree.title}</h2>
+      <div className="meta">
+        {degree.code} · {degree.creditPoints}cp · {degree.faculty}
+      </div>
+      <div className="actions">
+        <button className={isSel ? 'on' : ''} onClick={() => selectDegree(isSel ? null : degree.code)}>
+          {isSel ? '✓ Working towards this (clear)' : 'Work towards this degree'}
+        </button>
+      </div>
+      {fit && fit.completedCp > 0 ? (
+        <section data-testid="degree-fit">
+          <h3>Your completed subjects</h3>
+          <p>
+            {fit.countingCp} of your {fit.completedCp}cp would count towards this degree.
+            {fit.impossible ? ' It can no longer be completed as things stand.' : ''}
+          </p>
+          {fit.wasted.length ? (
+            <>
+              <p className="muted">In the way:</p>
+              <ul className="plain">
+                {fit.wasted.map((w) => (
+                  <li key={w.code}>
+                    <SubjectLink code={w.code} /> <span className="muted">: {w.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </section>
+      ) : null}
+      <StructureView container={degree.structure} />
+      <p>
+        <a href={degree.url} target="_blank" rel="noreferrer">
+          Official handbook page ↗
+        </a>
+      </p>
     </>
   );
 }
@@ -255,9 +328,9 @@ function StructureView({ container }: { container: Program['structure'] }) {
 }
 
 function ProgramLink({ code }: { code: string }) {
-  const tree = useApp((s) => s.tree)!;
+  const map = useApp((s) => s.map)!;
   const select = useApp((s) => s.select);
-  const p = tree.programs[code];
+  const p = map.programs[code];
   return (
     <button className="link" onClick={() => select(code, true)}>
       ◆ {p?.title ?? code}
@@ -266,40 +339,40 @@ function ProgramLink({ code }: { code: string }) {
 }
 
 export function DetailPanel() {
-  const tree = useApp((s) => s.tree);
+  const map = useApp((s) => s.map);
   const selected = useApp((s) => s.selected);
   const select = useApp((s) => s.select);
-  if (!tree || !selected) return null;
-  const subject = tree.subjects[selected];
-  const program = tree.programs[selected];
-  const isDegree = selected === tree.degree.code;
+  if (!map || !selected) return null;
+  const subject = map.subjects[selected];
+  const program = map.programs[selected];
+  const degree = map.degrees[selected];
   return (
     <aside className="panel detail" data-testid="detail-panel">
       <button className="close" onClick={() => select(null)} aria-label="Close">
         ×
       </button>
-      {subject ? <SubjectDetail subject={subject} tree={tree} /> : null}
-      {program ? <ProgramDetail program={program} tree={tree} /> : null}
-      {isDegree ? (
-        <>
-          <div className="kicker">Degree</div>
-          <h2>{tree.degree.title}</h2>
-          <div className="meta">
-            {tree.degree.code} · {tree.degree.creditPoints}cp · {tree.degree.faculty}
-          </div>
-          <StructureView container={tree.degree.structure} />
-        </>
-      ) : null}
+      {subject ? <SubjectDetail subject={subject} map={map} /> : null}
+      {program ? <ProgramDetail program={program} map={map} /> : null}
+      {degree ? <DegreeDetail degree={degree} map={map} /> : null}
     </aside>
   );
 }
 
 function ProgressRow({ p, depth }: { p: Progress; depth: number }) {
   const [open, setOpen] = useState(depth < 1);
+  const setGlow = useApp((s) => s.setGlow);
   const pct = (n: number) => (p.required ? Math.min(100, (n / p.required) * 100) : 0);
   return (
     <li>
-      <button className="progress-row" onClick={() => setOpen(!open)} disabled={!p.children.length}>
+      <button
+        className="progress-row"
+        onClick={() => setOpen(!open)}
+        onMouseEnter={() => setGlow(p.refs)}
+        onMouseLeave={() => setGlow([])}
+        onFocus={() => setGlow(p.refs)}
+        onBlur={() => setGlow([])}
+        aria-disabled={!p.children.length}
+      >
         <span className="progress-title">{p.title}</span>
         <span className="progress-num">
           {p.done}
@@ -322,15 +395,17 @@ function ProgressRow({ p, depth }: { p: Progress; depth: number }) {
 }
 
 export function ProgressPanel() {
-  const tree = useApp((s) => s.tree);
+  const map = useApp((s) => s.map);
   const plan = useApp((s) => s.plan);
+  const selectDegree = useApp((s) => s.selectDegree);
   const [open, setOpen] = useState(true);
-  const root = useMemo(() => (tree ? progress(tree, plan) : null), [tree, plan]);
-  if (!tree || !root) return null;
+  const root = useMemo(() => (map && plan.degree ? progress(map, plan.degree, plan) : null), [map, plan]);
+  // Only shown while a degree is selected (US-022).
+  if (!map || !root || !plan.degree) return null;
   return (
     <aside className={`panel progress ${open ? '' : 'collapsed'}`} data-testid="progress-panel">
       <button className="panel-toggle" onClick={() => setOpen(!open)}>
-        {open ? '▾' : '▸'} Degree progress{' '}
+        {open ? '▾' : '▸'} {root.title}{' '}
         <b data-testid="progress-total">
           {root.done}/{root.required}cp
         </b>
@@ -342,7 +417,12 @@ export function ProgressPanel() {
               <ProgressRow key={c.id} p={c} depth={0} />
             ))}
           </ul>
-          {plan.programs.length === 0 ? <p className="muted small">Choose a major: click a large ◆ node on the map.</p> : null}
+          {plan.programs.filter((p) => degreesOffering(map, p).some((d) => d.code === plan.degree)).length === 0 ? (
+            <p className="muted small">Choose a major: hover "Major" above to see them, then click one of the glowing circles.</p>
+          ) : null}
+          <button className="link small" onClick={() => selectDegree(null)}>
+            Clear degree
+          </button>
         </>
       ) : null}
     </aside>
@@ -350,8 +430,9 @@ export function ProgressPanel() {
 }
 
 export function TopBar() {
-  const tree = useApp((s) => s.tree);
-  const index = useApp((s) => s.index);
+  const map = useApp((s) => s.map);
+  const plan = useApp((s) => s.plan);
+  const selectDegree = useApp((s) => s.selectDegree);
   const search = useApp((s) => s.search);
   const matches = useApp((s) => s.matches);
   const setSearch = useApp((s) => s.setSearch);
@@ -377,18 +458,29 @@ export function TopBar() {
         <span className="brand-mark">◈</span>
         <div>
           <div className="brand-name">Degree Skill Tree</div>
-          {tree ? (
+          {map ? (
             <div className="brand-sub">
-              {tree.institution} {tree.year} · {tree.degree.title}
+              {map.institution} {map.year} · {Object.keys(map.degrees).length} degrees
             </div>
           ) : null}
         </div>
       </div>
-      {index.length > 1 ? (
-        <select value={tree?.id} onChange={(e) => (location.hash = `t=${e.target.value}`)} aria-label="Degree">
-          {index.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.title} ({t.year})
+      {map ? (
+        <select
+          value={plan.degree ?? ''}
+          onChange={(e) => {
+            selectDegree(e.target.value || null);
+            if (e.target.value) select(e.target.value, true);
+          }}
+          aria-label="Degree"
+          data-testid="degree-picker"
+        >
+          <option value="">Any degree (explore)</option>
+          {Object.values(map.degrees)
+            .sort((a, b) => a.title.localeCompare(b.title))
+            .map((d) => (
+            <option key={d.code} value={d.code}>
+              {d.title}
             </option>
           ))}
         </select>
@@ -423,7 +515,7 @@ export function TopBar() {
         <button onClick={share}>{copied ? 'Link copied' : 'Share plan'}</button>
         <button
           onClick={() => {
-            if (confirm('Clear everything you have marked on this tree?')) reset();
+            if (confirm('Clear everything you have marked on this map?')) reset();
           }}
         >
           Reset

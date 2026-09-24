@@ -12,7 +12,7 @@ export async function openTree(page: Page, hashOrUrl = '') {
 
 /** Wait until the page that is already loading has fetched, laid out and drawn the tree. */
 export async function waitReady(page: Page) {
-  await expect(page.getByTestId('progress-total')).toBeVisible({ timeout: LOAD_TIMEOUT });
+  await expect(page.locator('.brand-sub')).toContainText('degrees', { timeout: LOAD_TIMEOUT });
   // Wait for the canvas to exist and draw a few frames.
   await expect(page.locator('[data-testid="tree-canvas"] canvas')).toBeVisible({ timeout: LOAD_TIMEOUT });
   await page.waitForFunction(() => Number(document.body.dataset.fps ?? 0) > 0, undefined, { timeout: LOAD_TIMEOUT });
@@ -31,4 +31,19 @@ export async function goTo(page: Page, code: string) {
 export async function clickCentre(page: Page) {
   const b = (await page.getByTestId('tree-canvas').boundingBox())!;
   await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+}
+
+/** Pick a degree from the top bar (the same as clicking its circle), then close the panel it opens. */
+export async function chooseDegree(page: Page, code: string) {
+  await page.getByTestId('degree-picker').selectOption(code);
+  await expect(page.getByTestId('progress-panel')).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+}
+
+/** Click a circle through the real canvas, at a spot that belongs to it and nothing smaller. */
+export async function clickCircle(page: Page, id: string) {
+  const point = await page.evaluate((c) => window.__dst?.pointFor(c) ?? null, id);
+  if (!point) throw new Error(`no clickable point on screen for circle ${id}`);
+  const b = (await page.getByTestId('tree-canvas').boundingBox())!;
+  await page.mouse.click(b.x + point.x, b.y + point.y);
 }

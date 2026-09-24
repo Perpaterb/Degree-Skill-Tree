@@ -6,9 +6,10 @@ import type {
   Program,
   ProgramKind,
   Rule,
+  Degree,
+  MapDoc,
   StudyPlan,
   Subject,
-  TreeDoc,
 } from '../../core/model.js';
 import { parseAccessConditions, type RequisiteBlock, type RuleNode } from './access.js';
 import { HANDBOOK } from './handbook.js';
@@ -167,12 +168,24 @@ function legacySubject(code: string, title: string, year: string): Subject {
   };
 }
 
-/** Build one degree's tree from a slice already pulled into `rawDir`. */
-export async function buildTree(rawDir: string, year: string, courseCode: string): Promise<TreeDoc> {
-  const course = await readJson(`${rawDir}/course/${year}/${courseCode}.json`);
-  if (!course) throw new Error(`course ${courseCode} not in ${rawDir}`);
+/** Build one map from degrees already pulled into `rawDir`. Shared programs and subjects exist once. */
+export async function buildMap(rawDir: string, year: string, courseCodes: string[]): Promise<MapDoc> {
   const refs: Referenced = { subjects: new Map(), programs: new Map() };
-  const structure = toContainer(course.curriculumStructure ?? {}, refs);
+  const degrees: Record<string, Degree> = {};
+  for (const courseCode of courseCodes) {
+    const course = await readJson(`${rawDir}/course/${year}/${courseCode}.json`);
+    if (!course) throw new Error(`course ${courseCode} not in ${rawDir}`);
+    degrees[courseCode] = {
+      code: courseCode,
+      title: clean(course.title),
+      creditPoints: num(course.credit_points),
+      level: clean(course.study_level_ref),
+      faculty: clean(course.parent_academic_org),
+      url: `${HANDBOOK}/course/${year}/${courseCode}`,
+      structure: toContainer(course.curriculumStructure ?? {}, refs),
+      studyPlans: studyPlans(course.study_plans),
+    };
+  }
 
   // Programs, recursively (a stream can name further programs).
   const programs: Record<string, Program> = {};
@@ -203,7 +216,7 @@ export async function buildTree(rawDir: string, year: string, courseCode: string
     for (const c of refs.programs.keys()) if (!before.has(c)) pending.push(c);
   }
 
-  // Subjects named by the structure, then one hop of requisite subjects.
+  // Subjects named by any structure, then one hop of requisite subjects.
   const subjects: Record<string, Subject> = {};
   const accessFor = async (code: string) => {
     const html = await readFile(`${rawDir}/access/${code}.html`, 'utf8').catch(() => null);
@@ -215,8 +228,7 @@ export async function buildTree(rawDir: string, year: string, courseCode: string
     subjects[code] = raw ? toSubject(code, raw, await accessFor(code), year) : legacySubject(code, fallbackTitle, year);
   };
   for (const [code, title] of refs.subjects) await addSubject(code, title);
-  const inStructure = Object.keys(subjects);
-  for (const code of inStructure) {
+  for (const code of [...refs.subjects.keys()]) {
     const access = await accessFor(code);
     for (const item of access?.requisites?.items ?? []) {
       if (item.kind === 'subject') await addSubject(item.code, item.title);
@@ -224,21 +236,12 @@ export async function buildTree(rawDir: string, year: string, courseCode: string
   }
 
   return {
-    schema: 1,
-    id: `uts-${year}-${courseCode}`,
+    schema: 2,
+    id: `uts-${year}`,
     institution: 'UTS',
     year,
-    source: { name: 'UTS Handbook', url: `${HANDBOOK}/course/${year}/${courseCode}`, fetchedAt: new Date().toISOString().slice(0, 10) },
-    degree: {
-      code: courseCode,
-      title: clean(course.title),
-      creditPoints: num(course.credit_points),
-      level: clean(course.study_level_ref),
-      faculty: clean(course.parent_academic_org),
-      url: `${HANDBOOK}/course/${year}/${courseCode}`,
-      structure,
-      studyPlans: studyPlans(course.study_plans),
-    },
+    source: { name: 'UTS Handbook', url: HANDBOOK, fetchedAt: new Date().toISOString().slice(0, 10) },
+    degrees,
     programs,
     subjects,
   };

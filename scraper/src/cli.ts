@@ -3,7 +3,8 @@ import pLimit from 'p-limit';
 import { fetchAccessConditions } from './access.js';
 import { BlockedError } from './http.js';
 import { fetchItem, listItems, type ContentType, type ListedItem } from './handbook.js';
-import { buildTree } from './normalize.js';
+import { buildMap } from './normalize.js';
+import { foreignInside, layoutMap } from '../../core/layout.js';
 
 const YEAR = process.env.HANDBOOK_YEAR ?? '2026';
 const RAW = `data/raw/${YEAR}`;
@@ -125,7 +126,7 @@ async function slice() {
   };
   const inScope = [...subjects];
   console.log(`${inScope.length} subjects in scope`);
-  await runAll('slice-subjects', inScope, fetchSubject);
+  await runAll(`slice-${courses.join('+')}-subjects`, inScope, fetchSubject);
 
   // One hop out: subjects named in requisites that the course structure does not list.
   const hop = new Set<string>();
@@ -134,7 +135,7 @@ async function slice() {
     for (const item of ac?.requisites?.items ?? []) if (item.kind === 'subject' && !subjects.has(item.code)) hop.add(item.code);
   }
   console.log(`${hop.size} extra requisite subjects`);
-  await runAll('slice-requisites', [...hop], fetchSubject);
+  await runAll(`slice-${courses.join('+')}-requisites`, [...hop], fetchSubject);
 
   const manifest = { year: YEAR, courses, items: [...seen].sort(), requisiteSubjects: [...hop].sort(), missing };
   await writeFile(`${RAW}/slice-${courses.join('+')}.json`, JSON.stringify(manifest, null, 1));
@@ -153,8 +154,8 @@ async function report() {
   const failed = async (label: string): Promise<{ thing: string; error: string }[]> =>
     JSON.parse(await readFile(`${RAW}/failures-${label}.json`, 'utf8').catch(() => '[]'));
   const byKind = (k: string) => m.items.filter((i) => i.startsWith(`${k}/`)).length;
-  const subjectFailures = await failed('slice-subjects');
-  const hopFailures = await failed('slice-requisites');
+  const subjectFailures = await failed(`slice-${name}-subjects`);
+  const hopFailures = await failed(`slice-${name}-requisites`);
   const summary = {
     year: YEAR,
     course: name,
@@ -174,29 +175,22 @@ async function report() {
 }
 
 const TREES = 'web/public/trees';
-
-/** Normalise pulled slices into the generic tree model the app reads. */
+/** Normalise pulled degrees into one map (plus its precomputed layout) that the app reads. */
 async function normalize() {
   const codes = process.argv.slice(3);
   if (!codes.length) throw new Error('usage: npm run scrape -- normalize <COURSE_CODE>...');
+  const map = await buildMap(RAW, YEAR, codes);
+  const started = Date.now();
+  map.layout = layoutMap(map);
+  const foreign = foreignInside(map.layout).length;
   await mkdir(TREES, { recursive: true });
-  const indexPath = `${TREES}/index.json`;
-  const index: { id: string; title: string; code: string; year: string; institution: string }[] = JSON.parse(
-    await readFile(indexPath, 'utf8').catch(() => '[]'),
+  await writeFile(`${TREES}/${map.id}.json`, JSON.stringify(map) + '\n');
+  const index = [{ id: map.id, institution: map.institution, year: YEAR, degrees: codes.map((c) => ({ code: c, title: map.degrees[c].title })) }];
+  await writeFile(`${TREES}/index.json`, JSON.stringify(index, null, 1) + '\n');
+  const legacy = Object.values(map.subjects).filter((s) => s.legacy).length;
+  console.log(
+    `${map.id}: ${codes.length} degrees, ${Object.keys(map.programs).length} programs, ${Object.keys(map.subjects).length} subjects (${legacy} legacy); layout ${Date.now() - started}ms, ${foreign} subject-in-foreign-circle cases`,
   );
-  for (const code of codes) {
-    const tree = await buildTree(RAW, YEAR, code);
-    await writeFile(`${TREES}/${tree.id}.json`, JSON.stringify(tree) + '\n');
-    const entry = { id: tree.id, title: tree.degree.title, code, year: YEAR, institution: tree.institution };
-    const at = index.findIndex((e) => e.id === tree.id);
-    if (at >= 0) index[at] = entry;
-    else index.push(entry);
-    const legacy = Object.values(tree.subjects).filter((s) => s.legacy).length;
-    console.log(
-      `${tree.id}: ${Object.keys(tree.programs).length} programs, ${Object.keys(tree.subjects).length} subjects (${legacy} legacy)`,
-    );
-  }
-  await writeFile(indexPath, JSON.stringify(index, null, 1) + '\n');
 }
 
 const commands: Record<string, () => Promise<unknown>> = {

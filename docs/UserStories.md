@@ -7,7 +7,9 @@ Source of truth for scope and progress. Technical notes per story are in
 Status key: `[x]` done and verified, `[ ]` not done. Partial work is noted inline.
 
 Approved 24 Sep 2026. Adjusted the same day for the hosting decision (GitHub Pages, no logins, no
-personal data): US-007, US-011, US-012, US-014 changed; US-017 and US-018 added.
+personal data): US-007, US-011, US-012, US-014 changed; US-017 and US-018 added. Later the same day:
+US-019 to US-023 added (several degrees on one map, circles as the selectable units); US-004 and
+US-009 changed to match.
 
 ---
 
@@ -41,7 +43,7 @@ CourseLoop shapes directly.
 ### US-004 Explore a degree as a skill tree
 As a student, I want to pan and zoom a PoE-style map of my degree so I can see the whole shape of it.
 - [x] Smooth pan (drag) and zoom (wheel/pinch): a scripted Playwright pan/zoom over the largest course loaded holds a median of at least 55fps (in-app frame counter) on the dev machine. *24 Sep 2026, C10148 on Intel Iris Xe: median 59.9fps, p95 59.9fps (`npm run test:perf`).*
-- [x] Degree hub, major/sub-major clusters and subject nodes laid out automatically
+- [x] Degrees, majors, sub-majors and streams laid out automatically as circles enclosing their subjects (see US-020). *Changed 24 Sep 2026: was "degree hub and major clusters", which was built and verified; the circle model replaces it.*
 - [x] Requisite links drawn between subjects; level of detail changes with zoom (subject codes hide when zoomed out; cluster titles grow)
 - [ ] Works on a phone-width screen with touch. *Partial: phone-width layout (bottom sheet, no horizontal scroll) verified by E2E on a Pixel 7 profile; touch pan/pinch is enabled but not yet verified on a real device.*
 
@@ -74,7 +76,7 @@ As a student, I want hovering a node to show the chain needed to reach it and wh
 
 ### US-009 Plan a path to my degree
 As a student, I want to choose a major and plan future subjects and see progress to graduation.
-- [x] Choose major/sub-majors/electives the course allows (free electives are filled automatically from anything left over)
+- [x] Choose major/sub-majors/electives the course allows by clicking their circles (click the circle, then Choose in its panel; free electives are filled automatically from anything left over). *Changed 24 Sep 2026: choosing via the ◆ node panel was built and verified; choosing moves to circles (US-020, US-022).*
 - [x] Mark subjects as planned; progress per structure container ("Core: 30/48cp") and overall (x/144cp)
 - [ ] Warn when a plan breaks a rule (anti-requisite, over-selecting an option group, requisite not met by the time it is planned)
 - [ ] Optional session-by-session view using offerings
@@ -83,6 +85,39 @@ As a student, I want to choose a major and plan future subjects and see progress
 As a student, I want to see what my remaining plan will cost.
 - [ ] Cost per subject and total for completed / planned / remaining, by student type (domestic CSP, international)
 - [ ] Costs come from admin-maintained rate tables and are labelled as estimates with their year
+
+## Multi-degree map
+
+### US-019 Several degrees on one map
+As a student, I want several degrees on one map so I can see where my subjects could take me.
+- [x] Bachelor of Computing Science (C10476), Bachelor of Cybersecurity (C10471) and Bachelor of Business (C10026), 2027 handbook, pulled slowly alongside the Bachelor of IT (C10148)
+- [x] One map holds all four degrees; a subject or program shared between degrees exists once
+- [x] One plan covers the whole map; links made before this change (`#t=uts-2027-C10148&...`) still open with their plan
+
+### US-020 Degrees and majors as enclosing circles
+As a student, I want each degree, major, sub-major and stream drawn as a circle around everything in it, so I can see what belongs where.
+- [x] Every subject lies inside every circle whose structure lists it; every program circle lies inside the circle of each degree that offers it
+- [x] Circles at the same level may overlap; a subject shared by two majors sits in their overlap
+- [x] No centre node for programs: the circle itself is the selectable thing; hovering a circle makes it glow
+- [x] Clicking empty space selects the smallest circle under the pointer (ties: nearest centre); clicking within 10px inside an outline selects that outline's circle, so circles fully covered by smaller ones stay selectable; clicking a subject still selects the subject. *Rim rule added 24 Sep 2026: without it, 4 real circles could not be selected at all.*
+
+### US-021 Select a degree and work backwards
+As a student, I want to pick the degree I am aiming for and see what it needs.
+- [x] Clicking a degree circle selects it; it stays selected until another degree is selected or the selection is cleared
+- [ ] The selected degree's remaining requirements stand out: its subjects I still need are highlighted, and the other degrees' outlines dim (their compatibility shading from US-023 stays visible). *Partial: implemented (gold rings on still-needed compulsory subjects, other degrees dimmed); checked by screenshot only, no automated check.*
+- [x] The selected degree is part of the shareable link and survives a reload
+- [x] Majors and sub-majors are chosen by clicking their circles while their degree is selected (the panel offers Choose only when the selected degree offers the program)
+
+### US-022 Progress panel for the selected degree
+As a student, I want progress shown for the degree I have selected, and to see which parts of the map each requirement means.
+- [x] The progress panel appears only while a degree is selected
+- [x] Hovering a row makes the circles or subjects it refers to glow (e.g. hovering "Majors" under the Bachelor of IT glows the major circles)
+
+### US-023 See which degrees are still open
+As a student, I want to see, from what I have completed, which degrees I can still go for.
+- [ ] With subjects completed, each degree circle's fill greys in proportion to the completed credit points that cannot count toward it (over its free-elective allowance, or clashing with one of its compulsory subjects); fully grey only when it can no longer be completed. Shown whether or not a degree is selected. *Partial: the fit (counting cp, grey fraction, impossible) is unit and E2E tested; the canvas shading itself is checked by screenshot only. Open question on the anti-requisite rule, see TechFromUserStories US-023.*
+- [x] With no degree selected, degrees that are still open stay selectable (greyed ones too)
+- [x] Selecting a greyed degree highlights the completed subjects that stand in its way and says why each one does not count (listed in its panel; red rings on the map)
 
 ## Admin CMS
 

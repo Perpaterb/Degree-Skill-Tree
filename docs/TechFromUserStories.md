@@ -140,3 +140,69 @@ Stories are in [`UserStories.md`](UserStories.md).
   uid 1000; `tools` runs any npm script. `@playwright/test` is pinned to exactly 1.63.0 to match the image.
 - Files: `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `vite.config.ts`, `package.json`,
   `package-lock.json`, `README.md`.
+
+### US-019 Several degrees on one map
+- Model: `TreeDoc` (one degree) became `MapDoc` (schema 2): `degrees`, shared `programs` and
+  `subjects`, and an optional precomputed `layout`. `buildMap` in `scraper/src/normalize.ts` merges
+  any number of pulled degrees; `normalize` writes `web/public/trees/uts-2027.json` (930 KB) and an
+  index listing the degrees.
+- Pulled 24 Sep 2026 at 1 request / 3 s, no blocks: C10476 (16 areas, 148 subjects), C10471
+  (9, 119), C10026 (43, 235). Map: 4 degrees, 70 programs, 399 subjects (57 legacy). Reports in
+  `data/reports/coverage-2027-*.json`.
+- Scraper fixes found on the way: a rename broke the CLI mid-pull (two degrees finished, Business
+  never started); per-course failure files replaced one shared file that each slice overwrote.
+- Old links: `resolveMapId` turns `uts-2027-C10148` into map `uts-2027` with that degree selected.
+- Files: `core/model.ts`, `scraper/src/normalize.ts`, `scraper/src/cli.ts`, `web/src/store.ts`,
+  `web/src/App.tsx`, `scraper/test/normalize.test.ts`, `e2e/multidegree.spec.ts`.
+
+### US-020 Degrees and majors as enclosing circles
+- `core/layout.ts` rewritten as an Euler-diagram layout: a deterministic force simulation pulls each
+  subject toward every group it belongs to (programs strongly, degrees weakly), anchors only subjects
+  exclusive to one degree to that degree's region (anchoring shared ones stretched every group they
+  were in), pushes apart programs that share nothing, and resolves collisions. Circles are minimal
+  enclosing circles (Welzl): programs around their subjects and nested programs, degrees around their
+  subjects and program circles, so containment holds by construction. Twin programs (identical
+  circles) are grown apart by 24 units. Runs at build time (~1 s) and is stored in the map.
+- Quality measure `foreignInside` (subjects inside a circle that does not list them) has a regression
+  budget in `core/layout.test.ts`: 2069 on the first four-degree layout, 2087 after separating twins.
+- Picking: `circleAt` (smallest containing circle, ties by nearest centre; within a 10 px rim band,
+  the nearest outline wins). Pixi's own draw-order hit test was dropped: equal radii hid whole
+  circles. A unit test proves every circle on the real map has a spot that resolves to it.
+- Hover: Pixi listens for pointer moves on the whole document, so hover over DOM panels leaked to
+  the canvas underneath; hover now only counts when the native target is the canvas, and clears
+  on pointer leave.
+- Files: `core/layout.ts`, `core/layout.test.ts`, `web/src/TreeCanvas.tsx`, `web/src/theme.ts`.
+
+### US-021 Select a degree and work backwards
+- `Plan.degree` (URL `d=`), `selectDegree` in the store; course conditions are evaluated against the
+  selected degree (any degree on the map when none is selected). Top-bar picker (alphabetical) and
+  degree circles both select. Selected degree: other degrees dim; still-needed compulsory subjects of
+  the degree and chosen programs get gold rings; subjects outside it fade.
+- Program panel offers Choose only when the selected degree offers the program, otherwise lists the
+  degrees that do.
+- Files: `core/engine.ts`, `web/src/store.ts`, `web/src/Panels.tsx`, `web/src/TreeCanvas.tsx`.
+
+### US-022 Progress panel for the selected degree
+- `progress(map, degree, plan)`; each row carries `refs` (programs and subjects it names). The panel
+  renders only with a degree; hovering or focusing a row sets `glow`, which the canvas draws in cyan.
+- Files: `core/engine.ts`, `web/src/Panels.tsx`, `web/src/store.ts`, `web/src/TreeCanvas.tsx`.
+
+### US-023 See which degrees are still open
+- `compatibility(map, degree, plan)`: a completed subject counts if the degree (or any program it
+  offers) lists it, else while free-elective room remains; impossible if it is an anti-requisite of a
+  compulsory subject. Ignores option-group caps inside programs, so it can overstate, never understate.
+  Grey = wasted cp / completed cp (1 when impossible). Degree panel lists what is in the way and why.
+- Real-data check: six compulsory Business subjects count 36/36 toward Business and 18/36 toward
+  Computing Science and Cybersecurity (18 cp of free electives each).
+- **Open question:** anti-requisites often mark equivalent subjects that faculties accept in place of
+  each other (e.g. 48023 is an anti-requisite of 41039, which Computing Science requires). The
+  approved "impossible" rule therefore marks degrees impossible that are, in practice, usually fine.
+- Files: `core/engine.ts`, `core/engine.test.ts`, `web/src/Panels.tsx`, `web/src/TreeCanvas.tsx`, `e2e/multidegree.spec.ts`.
+
+### Rendering on demand (supports US-004, US-007)
+- Pixi redrew every frame even when idle, saturating the main thread: under 4 parallel test browsers
+  a reload took ~6.9 s just to start, which was the intermittent CI failure in the US-007 share-link
+  test (7 of 8 repeats failed locally). The canvas now redraws only after a change or while the camera
+  moves. Same load: reload ~1.8 s, 8 of 8 repeats pass, full E2E suite 1.6 min (was 2.3). Real-GPU
+  pan/zoom still median 59.9 fps.
+- Files: `web/src/TreeCanvas.tsx`.

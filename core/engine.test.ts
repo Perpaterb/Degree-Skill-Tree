@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compatibility,
   computeStates,
   decodePlan,
   emptyPlan,
@@ -11,7 +12,7 @@ import {
   unlockedBy,
   type Plan,
 } from './engine.js';
-import type { Container, Subject, TreeDoc } from './model.js';
+import type { Container, Degree, MapDoc, Subject } from './model.js';
 
 function subject(code: string, extra: Partial<Subject> = {}): Subject {
   return {
@@ -45,27 +46,33 @@ const box = (id: string, creditPoints: number, items: Container['items'], childr
 
 const s = (code: string) => ({ kind: 'subject' as const, code });
 
-// A: no requisites. B needs A. C needs (A AND B). D needs (B OR L) where L is legacy.
-// E needs 12cp and course X1. F is an anti-requisite of A. M is a major containing A (also core), G and C.
-const tree: TreeDoc = {
-  schema: 1,
+// Degree X1: core {A, B}, major M {A, G, C}, 12cp free electives.
+// Degree X2: core {F} (compulsory), no free electives.
+// A: no requisites. B needs A. C needs (A AND B). D needs (L OR B) where L is legacy.
+// E needs 12cp and enrolment in X1. F is an anti-requisite of A.
+const degree = (code: string, structure: Container): Degree => ({
+  code,
+  title: `Bachelor of ${code}`,
+  creditPoints: structure.creditPoints,
+  level: 'Undergraduate',
+  faculty: '',
+  url: '',
+  studyPlans: [],
+  structure,
+});
+
+const tree: MapDoc = {
+  schema: 2,
   id: 't',
   institution: 'Test',
   year: '2027',
   source: { name: '', url: '', fetchedAt: '' },
-  degree: {
-    code: 'X1',
-    title: 'Bachelor of Test',
-    creditPoints: 36,
-    level: 'Undergraduate',
-    faculty: '',
-    url: '',
-    studyPlans: [],
-    structure: box('root', 36, [], [
-      box('core', 12, [s('A'), s('B')]),
-      box('major', 12, [{ kind: 'program', code: 'M' }]),
-      box('free', 12, [], [], 'free'),
-    ]),
+  degrees: {
+    X1: degree(
+      'X1',
+      box('root', 36, [], [box('core', 12, [s('A'), s('B')]), box('major', 12, [{ kind: 'program', code: 'M' }]), box('free', 12, [], [], 'free')]),
+    ),
+    X2: degree('X2', box('root2', 6, [], [box('core2', 6, [s('F')])])),
   },
   programs: {
     M: { code: 'M', title: 'Major M', kind: 'major', creditPoints: 12, url: '', structure: box('m', 12, [s('A'), s('G'), s('C')]) },
@@ -78,6 +85,7 @@ const tree: TreeDoc = {
     E: subject('E', { requisite: { op: 'and', args: [{ creditPoints: 12, scope: 'x' }, { course: 'X1', title: '' }] } }),
     F: subject('F'),
     G: subject('G'),
+    H: subject('H'),
     L: subject('L', { legacy: true, creditPoints: 0 }),
   },
 };
@@ -92,6 +100,13 @@ describe('ruleMet', () => {
     expect(ruleMet(tree.subjects.E.requisite, makeCtx(tree, ['A']))).toBe(false);
     expect(ruleMet(tree.subjects.E.requisite, makeCtx(tree, ['A', 'G']))).toBe(true);
     expect(ruleMet({ course: 'OTHER', title: '' }, makeCtx(tree, []))).toBe(false);
+  });
+
+  it('meets a course condition with any degree on the map until a degree is selected, then only that one', () => {
+    const rule = { course: 'X1', title: '' };
+    expect(ruleMet(rule, makeCtx(tree, [], null))).toBe(true);
+    expect(ruleMet(rule, makeCtx(tree, [], 'X1'))).toBe(true);
+    expect(ruleMet(rule, makeCtx(tree, [], 'X2'))).toBe(false);
   });
 });
 
@@ -142,7 +157,7 @@ describe('unlockedBy', () => {
 
 describe('progress', () => {
   it('counts core, the chosen major, and puts leftovers in free electives without double counting', () => {
-    const p = progress(tree, plan({ completed: ['A', 'B', 'G', 'F'], planned: ['C'], programs: ['M'] }));
+    const p = progress(tree, 'X1', plan({ completed: ['A', 'B', 'G', 'F'], planned: ['C'], programs: ['M'] }));
     const [core, major, free] = p.children;
     expect([core.done, core.planned]).toEqual([12, 0]);
     expect([major.done, major.planned]).toEqual([6, 6]);
@@ -150,17 +165,56 @@ describe('progress', () => {
     expect([p.done, p.planned, p.required]).toEqual([24, 6, 36]);
   });
 
+  it('records what each requirement names, for highlighting', () => {
+    const p = progress(tree, 'X1', plan({}));
+    expect(p.children[1].refs).toEqual(['M']);
+    expect(p.children[0].refs).toEqual(['A', 'B']);
+  });
+
   it('does not count a major that has not been chosen', () => {
-    const p = progress(tree, plan({ completed: ['G'] }));
+    const p = progress(tree, 'X1', plan({ completed: ['G'] }));
     expect(p.children[1].done).toBe(0);
     expect(p.children[2].done).toBe(6); // G falls to free electives instead
   });
 });
 
+describe('compatibility (US-023)', () => {
+  it('counts everything when completed subjects all belong to the degree', () => {
+    const f = compatibility(tree, 'X1', plan({ completed: ['A', 'G'] }));
+    expect([f.countingCp, f.completedCp, f.grey, f.impossible]).toEqual([12, 12, 0, false]);
+  });
+
+  it('lets free electives absorb outside subjects, then greys in proportion to the rest', () => {
+    // D, E, H are not in X1's structure: 12cp of free electives take two, the third is wasted.
+    const f = compatibility(tree, 'X1', plan({ completed: ['A', 'D', 'E', 'H'] }));
+    expect(f.countingCp).toBe(18);
+    expect(f.wasted.map((w) => w.code)).toEqual(['H']);
+    expect(f.grey).toBeCloseTo(6 / 24);
+  });
+
+  it('wastes everything outside a degree with no free electives', () => {
+    const f = compatibility(tree, 'X2', plan({ completed: ['G'] }));
+    expect(f.wasted).toEqual([{ code: 'G', reason: 'not part of this degree, which has no free electives' }]);
+    expect(f.grey).toBe(1);
+  });
+
+  it('is impossible when a completed subject rules out a compulsory one', () => {
+    // A is an anti-requisite of F, which X2 requires.
+    const f = compatibility(tree, 'X2', plan({ completed: ['A'] }));
+    expect(f.impossible).toBe(true);
+    expect(f.grey).toBe(1);
+    expect(f.wasted[0].reason).toContain('F');
+  });
+
+  it('is untouched when nothing is completed', () => {
+    expect(compatibility(tree, 'X2', plan({})).grey).toBe(0);
+  });
+});
+
 describe('plan URL encoding', () => {
   it('round-trips', () => {
-    const p = plan({ completed: ['31251', '31268'], planned: ['41039'], programs: ['MAJ03444'] });
-    expect(encodePlan(p)).toBe('c=31251.31268&p=41039&m=MAJ03444');
+    const p = plan({ completed: ['31251', '31268'], planned: ['41039'], programs: ['MAJ03444'], degree: 'C10148' });
+    expect(encodePlan(p)).toBe('d=C10148&c=31251.31268&p=41039&m=MAJ03444');
     expect(decodePlan('#' + encodePlan(p))).toEqual(p);
   });
 

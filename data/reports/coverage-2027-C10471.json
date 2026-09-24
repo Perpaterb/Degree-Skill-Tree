@@ -1,0 +1,33 @@
+{
+  "year": "2027",
+  "course": "C10471",
+  "inScope": {
+    "courses": 1,
+    "areasOfStudy": 9,
+    "subjects": 119
+  },
+  "requisiteOnlySubjects": 28,
+  "failed": {
+    "coursesOrAreas": [
+      "aos/SMJ10196: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width\"/><link rel=\"icon\" href=\"/theme/uts/uts-favicon.ico\"/><title>Handbook - 404 Page</title><link rel=\"c"
+    ],
+    "subjects": [
+      "97509: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "97510: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>"
+    ],
+    "requisiteSubjects": [
+      "37171: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31270: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48720: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48410: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48450: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48033: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "976001: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "97110: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31267: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48440: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31244: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31281: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>"
+    ]
+  }
+}

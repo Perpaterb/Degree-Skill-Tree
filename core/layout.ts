@@ -1,22 +1,30 @@
-import { ruleSubjects } from './engine.js';
-import type { Container, Rule, TreeDoc } from './model.js';
+import { programsUnder, subjectsUnder } from './engine.js';
+import type { MapDoc, Rule } from './model.js';
 
-export type LayoutNodeKind = 'degree' | 'program' | 'subject';
+// Euler-diagram layout: degrees and programs are circles enclosing their subjects. Circles at
+// the same level overlap where they share subjects. Deterministic: same map in, same layout out.
 
 export interface LayoutNode {
-  id: string; // subject/program code, or the degree code
-  kind: LayoutNodeKind;
+  id: string; // subject code
   x: number;
   y: number;
   r: number;
-  cluster: string;
+}
+
+export interface LayoutCircle {
+  id: string; // degree or program code
+  kind: 'degree' | 'program';
+  title: string;
+  x: number;
+  y: number;
+  r: number;
+  /** Every subject the structure lists (programs include nested programs). */
+  members: string[];
 }
 
 export type EdgeKind =
   | 'req' // must-have requisite
-  | 'alt' // one of several alternatives (under an OR)
-  | 'member' // program centre to its entry subjects
-  | 'trunk'; // degree hub to a program
+  | 'alt'; // one of several alternatives (under an OR)
 
 export interface LayoutEdge {
   from: string;
@@ -24,91 +32,38 @@ export interface LayoutEdge {
   kind: EdgeKind;
 }
 
-export interface LayoutCluster {
-  id: string;
-  title: string;
-  x: number;
-  y: number;
-  radius: number;
-  ring: number;
-}
-
 export interface Layout {
   nodes: Record<string, LayoutNode>;
+  /** Largest first, so drawing in order puts smaller circles on top. */
+  circles: LayoutCircle[];
   edges: LayoutEdge[];
-  clusters: LayoutCluster[];
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
-const SUBJECT_R = 22;
-const PROGRAM_R = 40;
-const DEGREE_R = 64;
-const NODE_GAP = 26; // along an orbit
-const ORBIT_GAP = 78; // between orbits
-const CLUSTER_GAP = 120;
+export const SUBJECT_R = 22;
+const GAP = 16; // between subject rims
+const SPACING = SUBJECT_R * 2 + GAP;
+const PROGRAM_PAD = 26; // circle rim beyond its outermost subject
+const DEGREE_PAD = 60; // degree rim beyond its outermost program circle
+const TWIN_GAP = 24; // between the outlines of programs that would otherwise coincide
+export const TUNING = { iterations: 600, pull: 0.5 };
 
-/** Programs listed directly under a container, in order, with the ring they belong on. */
-function programsIn(c: Container, ring: number, out: { code: string; ring: number }[] = []) {
-  for (const i of c.items) if (i.kind === 'program') out.push({ code: i.code, ring });
-  for (const ch of c.children) programsIn(ch, ring, out);
-  return out;
+/** Stable pseudo-random number in [0, 1) from a string. */
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 100000) / 100000;
 }
 
-function subjectsIn(c: Container, out: string[] = []): string[] {
-  for (const i of c.items) if (i.kind === 'subject' && !out.includes(i.code)) out.push(i.code);
-  for (const ch of c.children) subjectsIn(ch, out);
-  return out;
-}
-
-/** Requisite depth: 0 for no in-tree requisites, else 1 + the deepest current requisite. */
-function depths(tree: TreeDoc): Map<string, number> {
-  const memo = new Map<string, number>();
-  const visit = (code: string, stack: Set<string>): number => {
-    if (memo.has(code)) return memo.get(code)!;
-    if (stack.has(code)) return 0;
-    stack.add(code);
-    const reqs = ruleSubjects(tree.subjects[code]?.requisite ?? null).filter((c) => tree.subjects[c] && !tree.subjects[c].legacy);
-    const d = reqs.length ? 1 + Math.max(...reqs.map((c) => visit(c, stack))) : 0;
-    stack.delete(code);
-    memo.set(code, d);
-    return d;
-  };
-  for (const code of Object.keys(tree.subjects)) visit(code, new Set());
-  return memo;
-}
-
-/** Place codes on concentric orbits around (cx, cy), inner orbit first. Returns the outer radius used. */
-function placeOrbits(
-  codes: string[],
-  depth: Map<string, number>,
-  cx: number,
-  cy: number,
-  innerR: number,
-  angle0: number,
-  place: (code: string, x: number, y: number) => void,
-): number {
-  const byDepth = new Map<number, string[]>();
-  for (const c of codes) {
-    const d = depth.get(c) ?? 0;
-    byDepth.set(d, [...(byDepth.get(d) ?? []), c]);
-  }
-  let r = innerR;
-  let outer = innerR;
-  for (const d of [...byDepth.keys()].sort((a, b) => a - b)) {
-    let pending = byDepth.get(d)!.sort();
-    while (pending.length) {
-      const capacity = Math.max(1, Math.floor((2 * Math.PI * r) / (SUBJECT_R * 2 + NODE_GAP)));
-      const ring = pending.slice(0, capacity);
-      pending = pending.slice(capacity);
-      ring.forEach((code, i) => {
-        const a = angle0 + (2 * Math.PI * i) / ring.length;
-        place(code, cx + r * Math.cos(a), cy + r * Math.sin(a));
-      });
-      outer = r;
-      r += ORBIT_GAP;
-    }
-  }
-  return outer + SUBJECT_R;
+interface Group {
+  id: string;
+  kind: 'degree' | 'program';
+  members: string[];
+  weight: number;
+  cx: number;
+  cy: number;
+  /** Rough radius from member count, for pushing unrelated groups apart. */
+  estR: number;
 }
 
 function ruleEdges(to: string, rule: Rule | null, inOr: boolean, out: LayoutEdge[]) {
@@ -121,125 +76,335 @@ function ruleEdges(to: string, rule: Rule | null, inOr: boolean, out: LayoutEdge
   }
 }
 
+export function layoutMap(map: MapDoc): Layout {
+  const degreeCodes = Object.keys(map.degrees).sort();
+  const subjectCodes = Object.keys(map.subjects).sort();
 
-/**
- * Which cluster each subject is drawn in. Structure subjects belong to the degree core or the
- * first program (inner rings first) that lists them. Subjects that are only requisites join the
- * cluster where most of the subjects needing them live, so their links stay local.
- */
-function clusterMembers(tree: TreeDoc, rings: Map<number, string[]>): Map<string, string[]> {
-  const owner = new Map<string, string>();
-  const deg = tree.degree.code;
-  for (const s of subjectsIn(tree.degree.structure)) owner.set(s, deg);
-  for (const ring of [...rings.keys()].sort((a, b) => a - b)) {
-    for (const p of rings.get(ring)!) for (const s of subjectsIn(tree.programs[p].structure)) if (!owner.has(s)) owner.set(s, p);
+  // Groups and memberships.
+  const groups: Group[] = [];
+  const groupsOf = new Map<string, Group[]>(subjectCodes.map((c) => [c, []]));
+  const programDegrees = new Map<string, string[]>();
+  for (const d of degreeCodes) {
+    const members = [...subjectsUnder(map, map.degrees[d].structure)].filter((c) => map.subjects[c]).sort();
+    groups.push({ id: d, kind: 'degree', members, weight: 0.25, cx: 0, cy: 0, estR: 0 });
+    for (const p of programsUnder(map, map.degrees[d].structure)) programDegrees.set(p, [...(programDegrees.get(p) ?? []), d]);
   }
-  const dependents = new Map<string, string[]>();
-  for (const s of Object.values(tree.subjects)) {
-    for (const req of ruleSubjects(s.requisite)) dependents.set(req, [...(dependents.get(req) ?? []), s.code]);
+  for (const p of Object.keys(map.programs).sort()) {
+    const members = [...subjectsUnder(map, map.programs[p].structure)].filter((c) => map.subjects[c]).sort();
+    groups.push({ id: p, kind: 'program', members, weight: 1, cx: 0, cy: 0, estR: 0 });
   }
-  // Requisite chains can be several subjects long; repeat until nothing new can be assigned.
-  for (let changed = true; changed; ) {
-    changed = false;
-    for (const code of Object.keys(tree.subjects).sort()) {
-      if (owner.has(code)) continue;
-      const votes = new Map<string, number>();
-      for (const d of dependents.get(code) ?? []) {
-        const o = owner.get(d);
-        if (o) votes.set(o, (votes.get(o) ?? 0) + 1);
-      }
-      if (!votes.size) continue;
-      const best = [...votes.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
-      owner.set(code, best);
-      changed = true;
+  for (const g of groups) {
+    g.estR = Math.sqrt(g.members.length) * SPACING * 0.62 + PROGRAM_PAD;
+    for (const m of g.members) groupsOf.get(m)!.push(g);
+  }
+  const byId = new Map(groups.map((g) => [g.id, g]));
+
+  // Degree anchors on a ring, so each degree has a home region.
+  const ringR = 900 + 450 * degreeCodes.length;
+  const anchor = new Map(
+    degreeCodes.map((d, i) => {
+      const a = -Math.PI / 2 + (2 * Math.PI * i) / degreeCodes.length;
+      return [d, { x: degreeCodes.length > 1 ? ringR * Math.cos(a) : 0, y: degreeCodes.length > 1 ? ringR * Math.sin(a) : 0 }];
+    }),
+  );
+
+  // Requisite links, and who is linked to whom (for subjects that belong to no group).
+  const edges: LayoutEdge[] = [];
+  for (const s of Object.values(map.subjects)) ruleEdges(s.code, s.requisite, false, edges);
+  const linked = edges.filter((e) => map.subjects[e.from] && map.subjects[e.to] && e.from !== e.to);
+  const neighbours = new Map<string, string[]>(subjectCodes.map((c) => [c, []]));
+  for (const e of linked) {
+    neighbours.get(e.from)!.push(e.to);
+    neighbours.get(e.to)!.push(e.from);
+  }
+
+  // Initial positions: around the anchors of the degrees a subject belongs to.
+  const pos = new Map<string, { x: number; y: number }>();
+  const degreesOf = (c: string) => groupsOf.get(c)!.filter((g) => g.kind === 'degree').map((g) => g.id);
+  const place = (c: string, ds: string[]) => {
+    const ax = ds.length ? ds.reduce((t, d) => t + anchor.get(d)!.x, 0) / ds.length : 0;
+    const ay = ds.length ? ds.reduce((t, d) => t + anchor.get(d)!.y, 0) / ds.length : 0;
+    const a = hash(c) * Math.PI * 2;
+    const r = 200 + hash(c + '#') * 600;
+    pos.set(c, { x: ax + r * Math.cos(a), y: ay + r * Math.sin(a) });
+  };
+  for (const c of subjectCodes) if (degreesOf(c).length) place(c, degreesOf(c));
+  // Loose subjects (requisites only) start near the degrees of their neighbours.
+  for (let pass = 0; pass < 4; pass++) {
+    for (const c of subjectCodes) {
+      if (pos.has(c)) continue;
+      const near = neighbours.get(c)!.filter((n) => pos.has(n));
+      if (!near.length && pass < 3) continue;
+      place(c, [...new Set(near.flatMap(degreesOf))]);
     }
   }
-  // Anything still unowned (no route to the degree at all) goes to the core.
-  for (const code of Object.keys(tree.subjects)) if (!owner.has(code)) owner.set(code, deg);
-  const out = new Map<string, string[]>();
-  for (const [code, cluster] of owner) out.set(cluster, [...(out.get(cluster) ?? []), code]);
+
+  const centre = (g: Group) => {
+    if (!g.members.length) return;
+    let x = 0;
+    let y = 0;
+    for (const m of g.members) (x += pos.get(m)!.x), (y += pos.get(m)!.y);
+    g.cx = x / g.members.length;
+    g.cy = y / g.members.length;
+  };
+
+  // Program pairs that share nothing should not overlap.
+  const programGroups = groups.filter((g) => g.kind === 'program' && g.members.length);
+  const disjoint: [Group, Group][] = [];
+  for (let i = 0; i < programGroups.length; i++) {
+    const a = new Set(programGroups[i].members);
+    for (let j = i + 1; j < programGroups.length; j++) {
+      if (!programGroups[j].members.some((m) => a.has(m))) disjoint.push([programGroups[i], programGroups[j]]);
+    }
+  }
+
+  for (let it = 0; it < TUNING.iterations; it++) {
+    const alpha = 1 - it / TUNING.iterations;
+    groups.forEach(centre);
+
+    // Pull each subject towards every group it belongs to.
+    for (const c of subjectCodes) {
+      const p = pos.get(c)!;
+      const gs = groupsOf.get(c)!;
+      if (gs.length) {
+        let fx = 0;
+        let fy = 0;
+        let w = 0;
+        for (const g of gs) (fx += (g.cx - p.x) * g.weight), (fy += (g.cy - p.y) * g.weight), (w += g.weight);
+        p.x += (fx / w) * TUNING.pull * alpha;
+        p.y += (fy / w) * TUNING.pull * alpha;
+      } else {
+        // Loose subjects follow the subjects they are linked to.
+        const ns = neighbours.get(c)!;
+        if (ns.length) {
+          let x = 0;
+          let y = 0;
+          for (const n of ns) (x += pos.get(n)!.x), (y += pos.get(n)!.y);
+          p.x += (x / ns.length - p.x) * 0.1 * alpha;
+          p.y += (y / ns.length - p.y) * 0.1 * alpha;
+        }
+      }
+    }
+
+    // Keep each degree near its anchor.
+    for (const d of degreeCodes) {
+      const g = byId.get(d)!;
+      if (!g.members.length) continue;
+      const a = anchor.get(d)!;
+      const dx = (a.x - g.cx) * 0.05 * alpha;
+      const dy = (a.y - g.cy) * 0.05 * alpha;
+      // Only subjects exclusive to this degree are anchored: shared ones must be free to sit
+      // between degrees, or every group they belong to gets stretched.
+      for (const m of g.members) {
+        if (degreesOf(m).length !== 1) continue;
+        const p = pos.get(m)!;
+        p.x += dx;
+        p.y += dy;
+      }
+    }
+
+    // Push apart programs that share no subjects.
+    for (const [a, b] of disjoint) {
+      const dx = b.cx - a.cx;
+      const dy = b.cy - a.cy;
+      const d = Math.hypot(dx, dy) || 1;
+      const overlap = a.estR + b.estR + GAP - d;
+      if (overlap <= 0) continue;
+      const push = overlap * 0.25 * (0.3 + alpha);
+      const ux = dx / d;
+      const uy = dy / d;
+      for (const m of a.members) {
+        if (groupsOf.get(m)!.includes(b)) continue;
+        const p = pos.get(m)!;
+        p.x -= (ux * push) / 2;
+        p.y -= (uy * push) / 2;
+      }
+      for (const m of b.members) {
+        if (groupsOf.get(m)!.includes(a)) continue;
+        const p = pos.get(m)!;
+        p.x += (ux * push) / 2;
+        p.y += (uy * push) / 2;
+      }
+    }
+
+    collide(subjectCodes, pos);
+  }
+  // Settle any remaining overlaps without further pulling.
+  for (let k = 0; k < 30; k++) if (!collide(subjectCodes, pos)) break;
+
+  // Circles: programs enclose their subjects (and nested programs); degrees also enclose their programs.
+  const nodes: Record<string, LayoutNode> = {};
+  for (const c of subjectCodes) nodes[c] = { id: c, x: round(pos.get(c)!.x), y: round(pos.get(c)!.y), r: SUBJECT_R };
+  const circles: LayoutCircle[] = [];
+  const programCircle = new Map<string, LayoutCircle>();
+  // Fewest members first, so a parent program can enclose its children.
+  const programOrder = Object.keys(map.programs).sort((a, b) => byId.get(a)!.members.length - byId.get(b)!.members.length || a.localeCompare(b));
+  for (const p of programOrder) {
+    const g = byId.get(p)!;
+    const children = [...programsUnder(map, map.programs[p].structure)].map((c) => programCircle.get(c)).filter(Boolean) as LayoutCircle[];
+    let circle: Circle;
+    if (g.members.length) {
+      circle = enclose([...g.members.map((m) => ({ x: nodes[m].x, y: nodes[m].y, r: SUBJECT_R + PROGRAM_PAD })), ...children.map((c) => ({ x: c.x, y: c.y, r: c.r + 14 }))]);
+    } else {
+      // Nothing published for this program (legacy): a small marker in its degree's region.
+      const ds = programDegrees.get(p) ?? degreeCodes.slice(0, 1);
+      const cs = ds.map((d) => byId.get(d)!);
+      const a = hash(p) * Math.PI * 2;
+      circle = { x: cs.reduce((t, g) => t + g.cx, 0) / cs.length + 120 * Math.cos(a), y: cs.reduce((t, g) => t + g.cy, 0) / cs.length + 120 * Math.sin(a), r: 70 };
+    }
+    // Two programs can enclose exactly the same area; grow this one so both outlines show.
+    for (const other of programCircle.values()) {
+      if (Math.hypot(other.x - circle.x, other.y - circle.y) < 4 && Math.abs(other.r - circle.r) < TWIN_GAP) circle.r = other.r + TWIN_GAP;
+    }
+    const lc: LayoutCircle = { id: p, kind: 'program', title: map.programs[p].title, x: round(circle.x), y: round(circle.y), r: Math.ceil(circle.r), members: g.members };
+    programCircle.set(p, lc);
+    circles.push(lc);
+  }
+  for (const d of degreeCodes) {
+    const g = byId.get(d)!;
+    const progs = [...programsUnder(map, map.degrees[d].structure)].map((p) => programCircle.get(p)!).filter(Boolean);
+    const c = enclose([
+      ...g.members.map((m) => ({ x: nodes[m].x, y: nodes[m].y, r: SUBJECT_R + PROGRAM_PAD })),
+      ...progs.map((p) => ({ x: p.x, y: p.y, r: p.r + DEGREE_PAD })),
+    ]);
+    circles.push({ id: d, kind: 'degree', title: map.degrees[d].title, x: round(c.x), y: round(c.y), r: Math.ceil(c.r), members: g.members });
+  }
+  circles.sort((a, b) => b.r - a.r || a.id.localeCompare(b.id));
+
+  const unique = new Map(linked.map((e) => [`${e.from}>${e.to}`, e]));
+  const all = [...circles, ...Object.values(nodes)];
+  const bounds = {
+    minX: Math.min(...all.map((c) => c.x - c.r)) - 40,
+    minY: Math.min(...all.map((c) => c.y - c.r)) - 120,
+    maxX: Math.max(...all.map((c) => c.x + c.r)) + 40,
+    maxY: Math.max(...all.map((c) => c.y + c.r)) + 40,
+  };
+  return { nodes, circles, edges: [...unique.values()], bounds };
+}
+
+const round = (n: number) => Math.round(n * 10) / 10;
+
+/** Push overlapping subjects apart. Returns whether anything moved. */
+function collide(codes: string[], pos: Map<string, { x: number; y: number }>): boolean {
+  const cell = SPACING;
+  const grid = new Map<string, string[]>();
+  for (const c of codes) {
+    const p = pos.get(c)!;
+    const k = `${Math.floor(p.x / cell)},${Math.floor(p.y / cell)}`;
+    const list = grid.get(k);
+    if (list) list.push(c);
+    else grid.set(k, [c]);
+  }
+  let moved = false;
+  for (const c of codes) {
+    const a = pos.get(c)!;
+    const gx = Math.floor(a.x / cell);
+    const gy = Math.floor(a.y / cell);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const o of grid.get(`${gx + dx},${gy + dy}`) ?? []) {
+          if (o <= c) continue;
+          const b = pos.get(o)!;
+          let vx = b.x - a.x;
+          let vy = b.y - a.y;
+          let d = Math.hypot(vx, vy);
+          if (d >= SPACING) continue;
+          if (d < 0.01) {
+            const ang = hash(c + o) * Math.PI * 2;
+            (vx = Math.cos(ang)), (vy = Math.sin(ang)), (d = 1);
+          }
+          const push = (SPACING - d) / 2;
+          a.x -= (vx / d) * push;
+          a.y -= (vy / d) * push;
+          b.x += (vx / d) * push;
+          b.y += (vy / d) * push;
+          moved = true;
+        }
+      }
+    }
+  }
+  return moved;
+}
+
+type Circle = { x: number; y: number; r: number };
+
+/** Smallest circle enclosing a set of circles (Welzl on rim samples, then grown to cover each exactly). */
+export function enclose(cs: Circle[]): Circle {
+  if (!cs.length) return { x: 0, y: 0, r: 0 };
+  const pts: { x: number; y: number }[] = [];
+  for (const c of cs) for (let i = 0; i < 16; i++) pts.push({ x: c.x + c.r * Math.cos((i * Math.PI) / 8), y: c.y + c.r * Math.sin((i * Math.PI) / 8) });
+  // A deterministic shuffle keeps Welzl's expected-linear behaviour without randomness.
+  pts.sort((a, b) => hash(`${a.x},${a.y}`) - hash(`${b.x},${b.y}`));
+  const best = minDisk(pts);
+  // Sampling can miss a sliver of a rim; grow to cover every circle exactly.
+  for (const c of cs) best.r = Math.max(best.r, Math.hypot(c.x - best.x, c.y - best.y) + c.r);
+  return best;
+}
+
+function minDisk(P: { x: number; y: number }[]): Circle {
+  let c: Circle = { x: P[0].x, y: P[0].y, r: 0 };
+  const inside = (p: { x: number; y: number }, k: Circle) => Math.hypot(p.x - k.x, p.y - k.y) <= k.r + 1e-7;
+  for (let i = 1; i < P.length; i++) {
+    if (inside(P[i], c)) continue;
+    c = { x: P[i].x, y: P[i].y, r: 0 };
+    for (let j = 0; j < i; j++) {
+      if (inside(P[j], c)) continue;
+      c = { x: (P[i].x + P[j].x) / 2, y: (P[i].y + P[j].y) / 2, r: Math.hypot(P[i].x - P[j].x, P[i].y - P[j].y) / 2 };
+      for (let k = 0; k < j; k++) if (!inside(P[k], c)) c = circumcircle(P[i], P[j], P[k]);
+    }
+  }
+  return c;
+}
+
+function circumcircle(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }): Circle {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+  if (Math.abs(d) < 1e-9) {
+    // Collinear: the widest pair decides.
+    const pairs: [typeof a, typeof a][] = [
+      [a, b],
+      [a, c],
+      [b, c],
+    ];
+    const [p, q] = pairs.sort((u, v) => Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y) - Math.hypot(u[0].x - u[1].x, u[0].y - u[1].y))[0];
+    return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, r: Math.hypot(p.x - q.x, p.y - q.y) / 2 };
+  }
+  const a2 = a.x * a.x + a.y * a.y;
+  const b2 = b.x * b.x + b.y * b.y;
+  const c2 = c.x * c.x + c.y * c.y;
+  const x = (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d;
+  const y = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d;
+  return { x, y, r: Math.hypot(a.x - x, a.y - y) };
+}
+
+/**
+ * The circle a click at world (x, y) means. Near an outline (within `rim` world units inside
+ * it), the outline's circle wins, nearest outline first: that is how a circle completely covered
+ * by smaller ones stays selectable. Elsewhere, the smallest circle containing the point; on a
+ * tie, the nearest centre.
+ */
+export function circleAt(layout: Layout, x: number, y: number, rim = 0): LayoutCircle | null {
+  let onRim: LayoutCircle | null = null;
+  let rimGap = Infinity;
+  let best: LayoutCircle | null = null;
+  let bestD = Infinity;
+  for (const c of layout.circles) {
+    const d = Math.hypot(x - c.x, y - c.y);
+    if (d > c.r) continue;
+    if (c.r - d <= rim && c.r - d < rimGap) (onRim = c), (rimGap = c.r - d);
+    if (!best || c.r < best.r || (c.r === best.r && d < bestD)) (best = c), (bestD = d);
+  }
+  return onRim ?? best;
+}
+
+/** Quality measure: subjects that sit inside a circle which does not list them. */
+export function foreignInside(layout: Layout): { circle: string; subject: string }[] {
+  const out: { circle: string; subject: string }[] = [];
+  for (const c of layout.circles) {
+    const members = new Set(c.members);
+    for (const n of Object.values(layout.nodes)) {
+      if (!members.has(n.id) && Math.hypot(n.x - c.x, n.y - c.y) < c.r - n.r) out.push({ circle: c.id, subject: n.id });
+    }
+  }
   return out;
 }
 
-export function layoutTree(tree: TreeDoc): Layout {
-  const depth = depths(tree);
-  const nodes: Record<string, LayoutNode> = {};
-  const clusters: LayoutCluster[] = [];
-  const edges: LayoutEdge[] = [];
-  const placed = new Set<string>();
-  const add = (id: string, kind: LayoutNodeKind, x: number, y: number, cluster: string) => {
-    const r = kind === 'degree' ? DEGREE_R : kind === 'program' ? PROGRAM_R : SUBJECT_R;
-    nodes[id] = { id, kind, x, y, r, cluster };
-    if (kind === 'subject') placed.add(id);
-  };
-
-  const deg = tree.degree;
-  add(deg.code, 'degree', 0, 0, deg.code);
-  // Programs: the degree's named majors on ring 1, anything reached through options on ring 2,
-  // and programs nested inside programs one ring further out.
-  const order: { code: string; ring: number }[] = [];
-  deg.structure.children.forEach((child, i) => {
-    const direct = child.items.some((it) => it.kind === 'program') && child.title.toLowerCase().startsWith('major');
-    programsIn(child, direct || i === 0 ? 1 : 2, order);
-  });
-  const seen = new Set<string>();
-  const rings = new Map<number, string[]>();
-  for (let i = 0; i < order.length; i++) {
-    const { code, ring } = order[i];
-    if (seen.has(code) || !tree.programs[code]) continue;
-    seen.add(code);
-    rings.set(ring, [...(rings.get(ring) ?? []), code]);
-    for (const nested of programsIn(tree.programs[code].structure, ring + 1)) order.push(nested);
-  }
-
-  const members = clusterMembers(tree, rings);
-
-  // Core: subjects listed directly in the degree structure orbit the hub.
-  const coreR = placeOrbits(members.get(deg.code)!, depth, 0, 0, DEGREE_R + 90, -Math.PI / 2, (c, x, y) => add(c, 'subject', x, y, deg.code));
-  clusters.push({ id: deg.code, title: deg.title, x: 0, y: 0, radius: coreR, ring: 0 });
-
-  let ringInner = coreR + CLUSTER_GAP;
-  for (const ring of [...rings.keys()].sort((a, b) => a - b)) {
-    const codes = rings.get(ring)!;
-    const own = new Map(codes.map((c) => [c, members.get(c) ?? []]));
-    // Size each cluster with a dry run of the real placement (a new orbit starts per depth).
-    const radii = codes.map((c) => placeOrbits(own.get(c)!, depth, 0, 0, PROGRAM_R + 60, 0, () => {}));
-    const maxR = Math.max(...radii);
-    const circumference = radii.reduce((t, r) => t + 2 * r + CLUSTER_GAP, 0);
-    const ringR = Math.max(ringInner + maxR, circumference / (2 * Math.PI));
-    let angle = -Math.PI / 2;
-    codes.forEach((code, i) => {
-      const span = (2 * radii[i] + CLUSTER_GAP) / ringR;
-      const a = angle + span / 2;
-      angle += span;
-      const cx = ringR * Math.cos(a);
-      const cy = ringR * Math.sin(a);
-      add(code, 'program', cx, cy, code);
-      edges.push({ from: deg.code, to: code, kind: ring === 1 ? 'trunk' : 'member' });
-      placeOrbits(own.get(code)!, depth, cx, cy, PROGRAM_R + 60, a + Math.PI, (s, x, y) => add(s, 'subject', x, y, code));
-      clusters.push({ id: code, title: tree.programs[code].title, x: cx, y: cy, radius: radii[i], ring });
-    });
-    ringInner = ringR + maxR + CLUSTER_GAP;
-  }
-
-  // Requisite links, plus membership spokes from a program to its entry subjects.
-  for (const s of Object.values(tree.subjects)) ruleEdges(s.code, s.requisite, false, edges);
-  for (const cl of clusters) {
-    if (cl.id === deg.code) continue;
-    for (const n of Object.values(nodes)) {
-      if (n.cluster === cl.id && n.kind === 'subject' && (depth.get(n.id) ?? 0) === 0) edges.push({ from: cl.id, to: n.id, kind: 'member' });
-    }
-  }
-  const valid = edges.filter((e) => nodes[e.from] && nodes[e.to] && e.from !== e.to);
-  const unique = new Map(valid.map((e) => [`${e.from}>${e.to}`, e]));
-
-  // Bounds cover every halo plus the title drawn above each cluster.
-  const TITLE_SPACE = 150;
-  const bounds = {
-    minX: Math.min(...clusters.map((c) => c.x - c.radius - 30)),
-    minY: Math.min(...clusters.map((c) => c.y - c.radius - TITLE_SPACE)),
-    maxX: Math.max(...clusters.map((c) => c.x + c.radius + 30)),
-    maxY: Math.max(...clusters.map((c) => c.y + c.radius + 30)),
-  };
-  return { nodes, edges: [...unique.values()], clusters, bounds };
-}
