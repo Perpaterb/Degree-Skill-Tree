@@ -277,6 +277,26 @@ Stories are in [`UserStories.md`](UserStories.md).
   from the stamp saved at the last install.
 - Files: `Dockerfile`, `scripts/dev-entrypoint.sh`.
 
+### US-025 Warn before marking completed without prerequisites
+- `prerequisiteGap(map, code, completed, enrolled)` in `core/engine.ts`: null when the requisite rule
+  is met by completed subjects alone (planned ones do not count), else `missingFor`'s subjects and
+  notes plus `alternatives` (the rule has an OR). It tests the rule directly, not the node state,
+  because a planned subject's state is "planned" whatever its prerequisites.
+- `missingFor` no longer lists a credit-point condition that is already met (it did, which would have
+  put a false "at least 72cp completed" in the dialog and in "To unlock").
+- `PrerequisiteWarning` in `web/src/Panels.tsx`: the Mark completed button calls it when there is a
+  gap. Close, Escape and a click on the backdrop close it; "Mark as completed anyway" marks. Rendered
+  through a portal on `document.body`: inside the panel, the panel's `backdrop-filter` confines a
+  fixed-position backdrop to the panel, and a click beside the dialog reached the map (caught by the
+  E2E test).
+- Tests: unit tests for `prerequisiteGap` and the met credit-point note; `e2e/prerequisites.spec.ts`
+  walks the flow (planned prerequisites still warn, Close/Escape/outside change nothing, Mark anyway
+  survives a reload, un-marking never asks, no warning when prerequisites are met or absent). The
+  main E2E test was seen to fail with the warning disabled. Dialog checked by screenshot at desktop
+  and phone widths.
+- Files: `core/engine.ts`, `core/engine.test.ts`, `web/src/Panels.tsx`, `web/src/styles.css`,
+  `e2e/prerequisites.spec.ts`.
+
 ### Rendering on demand (supports US-004, US-007)
 - Pixi redrew every frame even when idle, saturating the main thread: under 4 parallel test browsers
   a reload took ~6.9 s just to start, which was the intermittent CI failure in the US-007 share-link

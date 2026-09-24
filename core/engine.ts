@@ -96,6 +96,7 @@ export interface Missing {
  */
 export function missingFor(map: MapDoc, code: string, have: Set<string>, enrolled: string | null = null): Missing {
   const memo = new Map<string, Missing | null>();
+  const haveCp = makeCtx(map, have).haveCp;
 
   const merge = (parts: Missing[]): Missing => {
     const subjects: string[] = [];
@@ -121,7 +122,8 @@ export function missingFor(map: MapDoc, code: string, have: Set<string>, enrolle
     }
     if ('subject' in rule) return forSubject(rule.subject, stack);
     if ('course' in rule) return (enrolled ? rule.course === enrolled : !!map.degrees[rule.course]) ? merge([]) : null;
-    if ('creditPoints' in rule) return merge([{ subjects: [], creditPoints: 0, notes: [`at least ${rule.creditPoints}cp completed`] }]);
+    if ('creditPoints' in rule)
+      return merge(haveCp >= rule.creditPoints ? [] : [{ subjects: [], creditPoints: 0, notes: [`at least ${rule.creditPoints}cp completed`] }]);
     return merge([{ subjects: [], creditPoints: 0, notes: [rule.text] }]);
   }
 
@@ -139,6 +141,23 @@ export function missingFor(map: MapDoc, code: string, have: Set<string>, enrolle
 
   const target = map.subjects[code];
   return forRule(target?.requisite ?? null, [code]) ?? { subjects: [], creditPoints: 0, notes: ['no route found on this map'] };
+}
+
+export interface PrerequisiteGap extends Missing {
+  /** The rule offers alternatives, so other combinations than `subjects` would also work. */
+  alternatives: boolean;
+}
+
+/**
+ * What must be completed before `code` counts as having its prerequisites (US-025), or null when
+ * the completed subjects already meet its requisite rule. Planned subjects do not count.
+ */
+export function prerequisiteGap(map: MapDoc, code: string, completed: Iterable<string>, enrolled: string | null = null): PrerequisiteGap | null {
+  const subject = map.subjects[code];
+  const have = new Set(completed);
+  if (!subject || ruleMet(subject.requisite, makeCtx(map, have, enrolled))) return null;
+  const hasOr = (rule: Rule | null): boolean => !!rule && 'op' in rule && ((rule.op === 'or' && rule.args.length > 1) || rule.args.some(hasOr));
+  return { ...missingFor(map, code, have, enrolled), alternatives: hasOr(subject.requisite) };
 }
 
 /** Subjects whose requisite rule mentions `code` anywhere. */

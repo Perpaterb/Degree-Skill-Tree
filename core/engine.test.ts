@@ -7,6 +7,7 @@ import {
   encodePlan,
   makeCtx,
   missingFor,
+  prerequisiteGap,
   progress,
   ruleMet,
   unlockedBy,
@@ -146,6 +147,30 @@ describe('missingFor', () => {
 
   it('is empty once requisites are held', () => {
     expect(missingFor(tree, 'C', new Set(['A', 'B'])).subjects).toEqual([]);
+  });
+
+  it('leaves out a credit-point condition that is already met', () => {
+    expect(missingFor(tree, 'E', new Set(['A', 'B'])).notes).toEqual([]);
+  });
+});
+
+describe('prerequisiteGap (US-025)', () => {
+  it('is null when the completed subjects meet the rule, or there is no rule', () => {
+    expect(prerequisiteGap(tree, 'C', ['A', 'B'])).toBeNull();
+    expect(prerequisiteGap(tree, 'A', [])).toBeNull();
+  });
+
+  it('lists what must be completed first, deepest first', () => {
+    expect(prerequisiteGap(tree, 'C', [])).toMatchObject({ subjects: ['A', 'B'], alternatives: false });
+    expect(prerequisiteGap(tree, 'C', ['A'])).toMatchObject({ subjects: ['B'] });
+  });
+
+  it('says when other combinations would also work', () => {
+    expect(prerequisiteGap(tree, 'D', [])).toMatchObject({ subjects: ['A', 'B'], alternatives: true });
+  });
+
+  it('reports a credit-point condition that is not met as a note', () => {
+    expect(prerequisiteGap(tree, 'E', [])).toMatchObject({ subjects: [], notes: ['at least 12cp completed'] });
   });
 });
 

@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { missingFor, programsUnder, progress, unlockedBy, type NodeState, type Progress } from '../../core/engine';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { missingFor, prerequisiteGap, programsUnder, progress, unlockedBy, type NodeState, type PrerequisiteGap, type Progress } from '../../core/engine';
 import type { Degree, MapDoc, Program, Rule, Subject } from '../../core/model';
 import { track } from './analytics';
 import { useApp } from './store';
@@ -72,12 +73,79 @@ function Html({ html }: { html: string }) {
   );
 }
 
+/** Asks before marking a subject completed when its prerequisites are not completed (US-025). */
+function PrerequisiteWarning({ subject, gap, onClose, onConfirm }: { subject: Subject; gap: PrerequisiteGap; onClose(): void; onConfirm(): void }) {
+  const map = useApp((s) => s.map)!;
+  const states = useApp((s) => s.states);
+  const close = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    close.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  // Rendered on the page itself: inside the panel, its backdrop would only cover the panel, and a
+  // click beside the dialog would reach the map.
+  return createPortal(
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="prereq-title"
+        data-testid="prereq-warning"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 id="prereq-title">Prerequisites not completed</h2>
+        <p>
+          <b>{subject.code}</b> {subject.title} needs these completed first:
+        </p>
+        {gap.subjects.length ? (
+          <ol className="chain" data-testid="prereq-missing">
+            {gap.subjects.map((c) => (
+              <li key={c}>
+                <Dot state={states.get(c)} />
+                <b>{c}</b> {map.subjects[c]?.title ?? '(not on this map)'}
+              </li>
+            ))}
+          </ol>
+        ) : null}
+        {gap.notes.map((n) => (
+          <p key={n} className="muted">
+            {gap.subjects.length ? 'Also: ' : ''}
+            {n}
+          </p>
+        ))}
+        {gap.alternatives ? <p className="muted small">Other combinations would also work; see Requisites in the subject panel.</p> : null}
+        <div className="modal-actions">
+          <button ref={close} onClick={onClose}>
+            Close
+          </button>
+          <button className="warn" onClick={onConfirm}>
+            Mark as completed anyway
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function SubjectDetail({ subject, map }: { subject: Subject; map: MapDoc }) {
   const state = useApp((s) => s.states.get(subject.code));
   const plan = useApp((s) => s.plan);
   const mark = useApp((s) => s.mark);
   const missing = useMemo(() => missingFor(map, subject.code, new Set(plan.completed), plan.degree), [map, subject.code, plan.completed]);
   const unlocks = useMemo(() => unlockedBy(map, subject.code), [map, subject.code]);
+  const [warning, setWarning] = useState<PrerequisiteGap | null>(null);
+  // A different subject in the panel never inherits the warning.
+  useEffect(() => setWarning(null), [subject.code]);
+  const markCompleted = () => {
+    if (state === 'completed') return mark(subject.code, 'none');
+    const gap = prerequisiteGap(map, subject.code, plan.completed, plan.degree);
+    if (gap) setWarning(gap);
+    else mark(subject.code, 'completed');
+  };
 
   return (
     <>
@@ -97,13 +165,24 @@ function SubjectDetail({ subject, map }: { subject: Subject; map: MapDoc }) {
         </p>
       ) : null}
       <div className="actions">
-        <button className={state === 'completed' ? 'on' : ''} onClick={() => mark(subject.code, state === 'completed' ? 'none' : 'completed')}>
+        <button className={state === 'completed' ? 'on' : ''} onClick={markCompleted}>
           {state === 'completed' ? '✓ Completed' : 'Mark completed'}
         </button>
         <button className={state === 'planned' ? 'on plan' : ''} onClick={() => mark(subject.code, state === 'planned' ? 'none' : 'planned')}>
           {state === 'planned' ? '✓ Planned' : 'Plan it'}
         </button>
       </div>
+      {warning ? (
+        <PrerequisiteWarning
+          subject={subject}
+          gap={warning}
+          onClose={() => setWarning(null)}
+          onConfirm={() => {
+            setWarning(null);
+            mark(subject.code, 'completed');
+          }}
+        />
+      ) : null}
 
       {state === 'locked' || state === 'reachable' ? (
         <section>

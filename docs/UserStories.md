@@ -10,7 +10,8 @@ Approved 24 Sep 2026. Adjusted the same day for the hosting decision (GitHub Pag
 personal data): US-007, US-011, US-012, US-014 changed; US-017 and US-018 added. Later the same day:
 US-019 to US-023 added (several degrees on one map, circles as the selectable units); US-004 and
 US-009 changed to match. Later again: circles stop overlapping (linked copies instead), rings by
-depth, US-024 railway-style links added, and a "does not count" list added to US-022.
+depth, US-024 railway-style links added, and a "does not count" list added to US-022. 25 Sep 2026:
+US-025 added (warn before marking completed without prerequisites); US-007 noted to match.
 
 ---
 
@@ -64,7 +65,7 @@ As a student, I want to type a code or keyword and see matching nodes light up.
 
 ### US-007 Mark what I have done
 As a student, I want to mark subjects completed so the tree shows what is open to me now.
-- [x] Click to toggle completed; completed nodes and links render as "allocated". *Toggled from the detail panel (click the node, then Mark completed). Gold rendering checked by screenshot, not by an automated assertion.*
+- [x] Click to toggle completed; completed nodes and links render as "allocated". *From 25 Sep 2026, a subject whose prerequisites are not met asks first (US-025).* *Toggled from the detail panel (click the node, then Mark completed). Gold rendering checked by screenshot, not by an automated assertion.*
 - [x] Every other node recomputes available / locked / excluded from its requisite rule, including credit-point conditions
 - [x] Plan kept in the browser (`localStorage`) with no account, and restorable after a reload
 - [x] Plan encoded in a shareable URL that reproduces it exactly on another device (verified in a separate browser profile)
@@ -127,6 +128,14 @@ As a student, I want requisite links drawn like a railway map, so I can follow t
 - [x] Links are curved paths made of radial and ring-following segments with rounded corners, not straight lines across the map
 - [x] Where two links cross, they cross at between 45 and 135 degrees; links never run on top of each other. *Met 25 Sep 2026: 0 crossings under 45 degrees, 0 pairs running together, 0 links over a subject, asserted exactly in `core/layout.test.ts`.*
 - [x] A link joins copies in the same circle; a subject's prerequisite that is not in that circle appears there as an entry copy, drawn distinctly, so links never have to leave their circle
+
+### US-025 Warn before marking a subject completed without its prerequisites
+As a student, I want a warning if I mark a subject completed before its prerequisites, so I notice gaps in my record. I can still mark it anyway, for example for credit from elsewhere or a waiver.
+- [x] Clicking "Mark completed" on a subject whose prerequisites are not met by my completed subjects opens a pop-up instead of marking it straight away. Subjects that are only planned do not count as completed.
+- [x] The pop-up lists what needs to be completed first: the missing subjects (the route needing the fewest credit points when the rule offers alternatives, the same list as "To unlock"), any conditions that are not subjects (e.g. "at least 72cp completed"), and a note when other combinations would also work.
+- [x] Two buttons: "Close" changes nothing (Escape and clicking outside also close it); "Mark as completed anyway" marks it exactly as before.
+- [x] No pop-up when the prerequisites are met, when the subject has no prerequisites, or when un-marking a completed subject. "Plan it" never warns. Anti-requisite clashes are out of scope.
+- [x] An E2E test walks the flow through the real UI: pop-up on a locked subject lists what is missing; Close changes nothing; Mark anyway marks it and the mark survives a reload.
 
 ## Admin CMS
 
