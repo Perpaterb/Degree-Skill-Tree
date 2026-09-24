@@ -4,7 +4,8 @@ import { fetchAccessConditions } from './access.js';
 import { BlockedError } from './http.js';
 import { fetchItem, listItems, type ContentType, type ListedItem } from './handbook.js';
 import { buildMap } from './normalize.js';
-import { foreignInside, layoutMap } from '../../core/layout.js';
+import { layoutMap } from '../../core/layout.js';
+import { linkQuality } from '../../core/linkQuality.js';
 
 const YEAR = process.env.HANDBOOK_YEAR ?? '2026';
 const RAW = `data/raw/${YEAR}`;
@@ -182,14 +183,19 @@ async function normalize() {
   const map = await buildMap(RAW, YEAR, codes);
   const started = Date.now();
   map.layout = layoutMap(map);
-  const foreign = foreignInside(map.layout).length;
+  const copies = Object.keys(map.layout.nodes).length;
+  const entries = Object.values(map.layout.nodes).filter((n) => n.entry).length;
   await mkdir(TREES, { recursive: true });
   await writeFile(`${TREES}/${map.id}.json`, JSON.stringify(map) + '\n');
   const index = [{ id: map.id, institution: map.institution, year: YEAR, degrees: codes.map((c) => ({ code: c, title: map.degrees[c].title })) }];
   await writeFile(`${TREES}/index.json`, JSON.stringify(index, null, 1) + '\n');
   const legacy = Object.values(map.subjects).filter((s) => s.legacy).length;
+  const q = linkQuality(map.layout);
   console.log(
-    `${map.id}: ${codes.length} degrees, ${Object.keys(map.programs).length} programs, ${Object.keys(map.subjects).length} subjects (${legacy} legacy); layout ${Date.now() - started}ms, ${foreign} subject-in-foreign-circle cases`,
+    `links: ${q.crossings} crossings (${q.shallowCrossings} under 45°, median ${q.medianCrossingAngle.toFixed(1)}°), ${q.runningTogether} pairs running together, ${q.throughSubjects} passing over a subject`,
+  );
+  console.log(
+    `${map.id}: ${codes.length} degrees, ${Object.keys(map.programs).length} programs, ${Object.keys(map.subjects).length} subjects (${legacy} legacy); layout ${Date.now() - started}ms, ${copies} subject copies (${entries} entry), ${map.layout.edges.length} links`,
   );
 }
 

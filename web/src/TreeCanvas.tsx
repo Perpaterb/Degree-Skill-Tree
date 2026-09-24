@@ -2,7 +2,7 @@ import { Application, Container, Graphics, Text } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { useEffect, useRef } from 'react';
 import { compulsorySubjects, missingFor, subjectsUnder, unlockedBy } from '../../core/engine';
-import { circleAt, type Layout, type LayoutCircle, type LayoutNode } from '../../core/layout';
+import { circleAt, type Layout, type LayoutCircle, type LayoutNode, type PathCmd } from '../../core/layout';
 import type { MapDoc } from '../../core/model';
 import { useApp } from './store';
 import { canvas, degreeHues, mix, stateLook } from './theme';
@@ -35,6 +35,8 @@ interface Scene {
   hue: Map<string, number>;
   /** Circles drawn glowing in the last paint. */
   glowing: string[];
+  /** Subject copies drawn with the hover or selection ring in the last paint. */
+  highlighted: string[];
   /** Ask for one redraw on the next frame. */
   invalidate(): void;
 }
@@ -42,7 +44,7 @@ interface Scene {
 declare global {
   interface Window {
     /** Read-only helpers for tests: where on screen a node or circle can be clicked. */
-    __dst?: { pointFor(id: string): { x: number; y: number } | null; glowing(): string[] };
+    __dst?: { pointFor(id: string): { x: number; y: number } | null; glowing(): string[]; highlighted(): string[] };
   }
 }
 
@@ -141,18 +143,18 @@ export function TreeCanvas() {
         root.cursor = 'pointer';
         const shape = new Graphics();
         const label = new Text({
-          text: node.id,
+          text: node.code,
           style: { fill: canvas.label, fontSize: 13, fontFamily: 'system-ui, sans-serif', fontWeight: '600', align: 'center' },
           resolution: 3,
         });
         label.anchor.set(0.5);
         root.addChild(shape, label);
-        root.on('pointerover', (e) => overCanvas(e) && useApp.getState().hover(node.id));
+        root.on('pointerover', (e) => overCanvas(e) && useApp.getState().hover(node.code));
         root.on('pointerout', () => useApp.getState().hover(null));
         // Circles are siblings of subjects, not parents, so a press on a subject never reaches a circle.
         root.on('pointerdown', (e) => (downAt = { x: e.global.x, y: e.global.y }));
         root.on('pointertap', (e) => {
-          if (isClick(e)) useApp.getState().select(node.id);
+          if (isClick(e)) useApp.getState().select(node.code);
         });
         nodeLayer.addChild(root);
         nodes.set(node.id, { node, root, shape, label });
@@ -175,7 +177,7 @@ export function TreeCanvas() {
         viewport.cursor = over ? 'pointer' : 'grab';
       });
 
-      scene.current = { app, viewport, edges, nodes, circles, layout, map, hue, glowing: [], invalidate };
+      scene.current = { app, viewport, edges, nodes, circles, layout, map, hue, glowing: [], highlighted: [], invalidate };
       // The camera moves on its own during inertia and fly-to animations, so each of these redraws.
       for (const ev of ['moved', 'zoomed', 'moved-end', 'zoomed-end'] as const) viewport.on(ev, invalidate);
       fit(viewport, layout);
@@ -197,12 +199,13 @@ export function TreeCanvas() {
         pointFor(id) {
           const s = scene.current;
           if (!s) return null;
-          const n = s.layout.nodes[id];
+          const n = copyFor(s, id);
           if (n) return s.viewport.toScreen(n.x, n.y);
           const c = s.layout.circles.find((k) => k.id === id);
           return c ? clickPointForCircle(s, c) : null;
         },
         glowing: () => scene.current?.glowing ?? [],
+        highlighted: () => scene.current?.highlighted ?? [],
       };
 
       // In-app frame counter (US-004): ticks per second, published every half second. With
@@ -255,6 +258,21 @@ export function TreeCanvas() {
   return <div ref={host} className="tree-canvas" data-testid="tree-canvas" />;
 }
 
+/** Which copy of a subject to fly to: one inside the selected degree if possible, preferring listed over entry copies. */
+function copyFor(s: Scene, code: string): LayoutNode | null {
+  const copies = Object.values(s.layout.nodes).filter((n) => n.code === code);
+  if (!copies.length) return null;
+  const degree = useApp.getState().plan.degree;
+  const inDegree = (n: LayoutNode) => !!degree && within(s.layout, n.circle, degree);
+  return [...copies].sort((a, b) => Number(inDegree(b)) - Number(inDegree(a)) || Number(!!a.entry) - Number(!!b.entry))[0];
+}
+
+/** Whether circle `id` is `ancestor` or sits (at any depth) inside it. */
+function within(layout: Layout, id: string, ancestor: string): boolean {
+  for (let c: string | null = id; c; c = layout.circles.find((k) => k.id === c)?.parent ?? null) if (c === ancestor) return true;
+  return false;
+}
+
 function fit(viewport: Viewport, layout: Layout) {
   const { minX, minY, maxX, maxY } = layout.bounds;
   viewport.fit(true, maxX - minX, maxY - minY);
@@ -262,7 +280,7 @@ function fit(viewport: Viewport, layout: Layout) {
 }
 
 function flyTo(s: Scene, id: string) {
-  const n = s.layout.nodes[id];
+  const n = copyFor(s, id);
   if (n) {
     s.viewport.animate({ position: { x: n.x, y: n.y }, scale: Math.max(s.viewport.scale.x, 0.9), time: 650, ease: 'easeInOutSine' });
     return;
@@ -300,6 +318,15 @@ function applyLod(s: Scene) {
     // Program titles only once you are close enough to read them; degree titles always.
     v.title.visible = v.circle.kind === 'degree' || scale > 0.12;
     v.title.scale.set(v.circle.kind === 'degree' ? Math.max(1, 0.12 / scale) : 1);
+  }
+}
+
+function tracePath(g: Graphics, path: PathCmd[]) {
+  for (const c of path) {
+    if (c[0] === 'M') g.moveTo(c[1], c[2]);
+    else if (c[0] === 'L') g.lineTo(c[1], c[2]);
+    else if (c[0] === 'Q') g.quadraticCurveTo(c[1], c[2], c[3], c[4]);
+    else g.arc(c[1], c[2], c[3], c[4], c[5], c[6]);
   }
 }
 
@@ -370,55 +397,68 @@ function paint(s: Scene) {
     if (circle.id === selected) g.circle(circle.x, circle.y, circle.r + 10).stroke({ color: 0xffffff, width: 3, alpha: 0.8 });
   }
 
+  // Copies inside the selected degree's circle (at any depth) stay bright; the rest fade.
+  const inside = new Map<string, boolean>();
+  const insideSel = (circleId: string) => {
+    if (!degree) return true;
+    if (!inside.has(circleId)) inside.set(circleId, within(layout, circleId, degree.code));
+    return inside.get(circleId)!;
+  };
+
+  s.highlighted = [];
   for (const v of s.nodes.values()) {
     const { node, shape, root } = v;
+    const code = node.code;
     const g = shape.clear();
-    const state = states.get(node.id) ?? 'locked';
+    const state = states.get(code) ?? 'locked';
     const look = stateLook[state];
-    if (look.glow) g.circle(0, 0, node.r + 7).fill({ color: look.glow, alpha: 0.16 });
-    if (matchSet.has(node.id) || glowSet.has(node.id)) g.circle(0, 0, node.r + 10).stroke({ color: canvas.glow, width: 3, alpha: 0.9 });
-    if (path.has(node.id)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgePath, width: 3 });
-    if (unlocks.has(node.id)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgeUnlock, width: 3 });
-    if (needed.has(node.id)) g.circle(0, 0, node.r + 5).stroke({ color: canvas.needed, width: 2, alpha: 0.85 });
-    if (wasted.has(node.id)) g.circle(0, 0, node.r + 8).stroke({ color: canvas.wasted, width: 4 });
-    g.circle(0, 0, node.r).fill(look.fill).stroke({ color: look.ring, width: look.ringWidth });
+    if (look.glow && !node.entry) g.circle(0, 0, node.r + 7).fill({ color: look.glow, alpha: 0.16 });
+    if (matchSet.has(code) || glowSet.has(code)) g.circle(0, 0, node.r + 10).stroke({ color: canvas.glow, width: 3, alpha: 0.9 });
+    if (path.has(code)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgePath, width: 3 });
+    if (unlocks.has(code)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgeUnlock, width: 3 });
+    if (needed.has(code) && insideSel(node.circle)) g.circle(0, 0, node.r + 5).stroke({ color: canvas.needed, width: 2, alpha: 0.85 });
+    if (wasted.has(code)) g.circle(0, 0, node.r + 8).stroke({ color: canvas.wasted, width: 4 });
+    if (node.entry) {
+      // An entry copy: a prerequisite from outside this circle. Hollow, so it reads as a doorway.
+      g.circle(0, 0, node.r - 2).fill({ color: canvas.background, alpha: 0.9 }).stroke({ color: look.ring, width: 2, alpha: 0.8 });
+    } else {
+      g.circle(0, 0, node.r).fill(look.fill).stroke({ color: look.ring, width: look.ringWidth });
+    }
     if (state === 'excluded') {
       const k = node.r * 0.45;
       g.moveTo(-k, -k).lineTo(k, k).moveTo(k, -k).lineTo(-k, k).stroke({ color: look.ring, width: 2, alpha: 0.7 });
     }
-    if (node.id === selected) g.circle(0, 0, node.r + 14).stroke({ color: 0xffffff, width: 2, alpha: 0.9 });
-    const outside = !!inDegree && !inDegree.has(node.id) && !wasted.has(node.id) && !completed.has(node.id);
-    root.alpha = look.alpha * (lit(node.id) ? 1 : 0.22) * (outside ? 0.35 : 1);
-    v.label.style.fill = state === 'locked' || state === 'legacy' ? canvas.labelDim : canvas.label;
+    if (code === selected || code === hovered) {
+      g.circle(0, 0, node.r + 14).stroke({ color: 0xffffff, width: 2, alpha: code === selected ? 0.9 : 0.5 });
+      s.highlighted.push(node.id);
+    }
+    root.alpha = look.alpha * (lit(code) ? 1 : 0.22) * (insideSel(node.circle) || wasted.has(code) ? 1 : 0.35) * (node.entry ? 0.8 : 1);
+    v.label.style.fill = state === 'locked' || state === 'legacy' || node.entry ? canvas.labelDim : canvas.label;
   }
 
   const e = s.edges.clear();
   for (const edge of layout.edges) {
-    const a = layout.nodes[edge.from];
-    const b = layout.nodes[edge.to];
+    const from = edge.fromCode;
+    const to = edge.toCode;
     let color: number;
     let width: number;
     let alpha = 1;
-    const bothDone = completed.has(edge.from) && completed.has(edge.to);
-    const onPath = focus && (path.has(edge.from) || edge.from === focus) && (path.has(edge.to) || edge.to === focus);
-    const unlocking = focus && edge.from === focus && unlocks.has(edge.to);
+    const bothDone = completed.has(from) && completed.has(to);
+    const onPath = focus && (path.has(from) || from === focus) && (path.has(to) || to === focus);
+    const unlocking = focus && from === focus && unlocks.has(to);
     if (onPath) (color = canvas.edgePath), (width = 5);
     else if (unlocking) (color = canvas.edgeUnlock), (width = 4);
     else if (bothDone) (color = canvas.edgeDone), (width = 5);
-    else if (completed.has(edge.from) && states.get(edge.to) === 'available') (color = canvas.edgeOpen), (width = 3);
+    else if (completed.has(from) && states.get(to) === 'available') (color = canvas.edgeOpen), (width = 3);
     else {
       color = edge.kind === 'alt' ? canvas.edgeAlt : canvas.edgeBase;
       width = edge.kind === 'alt' ? 1.5 : 2.5;
-      alpha = 0.6;
+      alpha = 0.75;
     }
-    if (dimming && !(onPath || unlocking || (lit(edge.from) && lit(edge.to)))) alpha *= 0.15;
-    if (inDegree && !(inDegree.has(edge.from) && inDegree.has(edge.to)) && !onPath && !unlocking) alpha *= 0.3;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    e.moveTo(a.x + (dx / len) * a.r, a.y + (dy / len) * a.r)
-      .lineTo(b.x - (dx / len) * b.r, b.y - (dy / len) * b.r)
-      .stroke({ color, width, alpha });
+    if (dimming && !(onPath || unlocking || (lit(from) && lit(to)))) alpha *= 0.15;
+    if (!insideSel(layout.nodes[edge.from].circle) && !onPath && !unlocking) alpha *= 0.3;
+    tracePath(e, edge.path);
+    e.stroke({ color, width, alpha, cap: 'round', join: 'round' });
   }
   applyLod(s);
 }

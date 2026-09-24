@@ -18,6 +18,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
+    "@types/d3-hierarchy": "^3.1.7",
     "@types/node": "^20.19.43",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -30,6 +31,7 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
+    "d3-hierarchy": "^3.1.2",
     "pixi-viewport": "^6.0.3",
     "pixi.js": "^8.21.0",
     "react": "^19.3.0",

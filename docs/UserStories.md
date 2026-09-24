@@ -9,7 +9,8 @@ Status key: `[x]` done and verified, `[ ]` not done. Partial work is noted inlin
 Approved 24 Sep 2026. Adjusted the same day for the hosting decision (GitHub Pages, no logins, no
 personal data): US-007, US-011, US-012, US-014 changed; US-017 and US-018 added. Later the same day:
 US-019 to US-023 added (several degrees on one map, circles as the selectable units); US-004 and
-US-009 changed to match.
+US-009 changed to match. Later again: circles stop overlapping (linked copies instead), rings by
+depth, US-024 railway-style links added, and a "does not count" list added to US-022.
 
 ---
 
@@ -96,9 +97,10 @@ As a student, I want several degrees on one map so I can see where my subjects c
 
 ### US-020 Degrees and majors as enclosing circles
 As a student, I want each degree, major, sub-major and stream drawn as a circle around everything in it, so I can see what belongs where.
-- [x] Every subject lies inside every circle whose structure lists it; every program circle lies inside the circle of each degree that offers it
-- [x] Circles at the same level may overlap; a subject shared by two majors sits in their overlap
+- [x] Every circle whose structure lists a subject contains a copy of that subject; a program offered by one degree sits inside that degree's circle, and a program offered by several sits outside them all. *Changed 24 Sep 2026: circles no longer overlap (see below); the overlapping version was built and verified.*
+- [x] Circles never overlap (a circle may only contain another); a subject listed by several groups appears as a copy in each, and all copies share one state: marking, hovering or selecting any copy lights up every copy. No lines join copies. *Changed 24 Sep 2026: was "circles may overlap; a shared subject sits in the overlap", built and verified, then found too cluttered.*
 - [x] No centre node for programs: the circle itself is the selectable thing; hovering a circle makes it glow
+- [x] Inside each circle, subjects sit on rings by prerequisite depth: foundations in the middle, the most advanced on the outside
 - [x] Clicking empty space selects the smallest circle under the pointer (ties: nearest centre); clicking within 10px inside an outline selects that outline's circle, so circles fully covered by smaller ones stay selectable; clicking a subject still selects the subject. *Rim rule added 24 Sep 2026: without it, 4 real circles could not be selected at all.*
 
 ### US-021 Select a degree and work backwards
@@ -112,12 +114,19 @@ As a student, I want to pick the degree I am aiming for and see what it needs.
 As a student, I want progress shown for the degree I have selected, and to see which parts of the map each requirement means.
 - [x] The progress panel appears only while a degree is selected
 - [x] Hovering a row makes the circles or subjects it refers to glow (e.g. hovering "Majors" under the Bachelor of IT glows the major circles)
+- [x] Completed subjects that do not count toward the selected degree are listed at the bottom of the panel, with a note saying they do not count
 
 ### US-023 See which degrees are still open
 As a student, I want to see, from what I have completed, which degrees I can still go for.
 - [ ] With subjects completed, each degree circle's fill greys in proportion to the completed credit points that cannot count toward it (over its free-elective allowance, or clashing with one of its compulsory subjects); fully grey only when it can no longer be completed. Shown whether or not a degree is selected. *Partial: the fit (counting cp, grey fraction, impossible) is unit and E2E tested; the canvas shading itself is checked by screenshot only. Open question on the anti-requisite rule, see TechFromUserStories US-023.*
 - [x] With no degree selected, degrees that are still open stay selectable (greyed ones too)
 - [x] Selecting a greyed degree highlights the completed subjects that stand in its way and says why each one does not count (listed in its panel; red rings on the map)
+
+### US-024 Railway-style connections
+As a student, I want requisite links drawn like a railway map, so I can follow them without a tangle.
+- [x] Links are curved paths made of radial and ring-following segments with rounded corners, not straight lines across the map
+- [ ] Where two links cross, they cross at between 45 and 135 degrees; links never run on top of each other. *Partial (25 Sep 2026): median crossing angle over 85 degrees, but 9 crossings are under 45 degrees and 43 pairs of links still run together; held to a regression budget in `core/layout.test.ts`.*
+- [x] A link joins copies in the same circle; a subject's prerequisite that is not in that circle appears there as an entry copy, drawn distinctly, so links never have to leave their circle
 
 ## Admin CMS
 

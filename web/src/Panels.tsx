@@ -400,6 +400,7 @@ export function ProgressPanel() {
   const selectDegree = useApp((s) => s.selectDegree);
   const [open, setOpen] = useState(true);
   const root = useMemo(() => (map && plan.degree ? progress(map, plan.degree, plan) : null), [map, plan]);
+  const fit = useApp((s) => (plan.degree ? s.fits.get(plan.degree) : undefined));
   // Only shown while a degree is selected (US-022).
   if (!map || !root || !plan.degree) return null;
   return (
@@ -419,6 +420,19 @@ export function ProgressPanel() {
           </ul>
           {plan.programs.filter((p) => degreesOffering(map, p).some((d) => d.code === plan.degree)).length === 0 ? (
             <p className="muted small">Choose a major: hover "Major" above to see them, then click one of the glowing circles.</p>
+          ) : null}
+          {fit && fit.wasted.length ? (
+            <section className="not-counting" data-testid="not-counting">
+              <h4>Completed, but not counting</h4>
+              <p className="muted small">These subjects do not count towards this degree.</p>
+              <ul className="plain">
+                {fit.wasted.map((w) => (
+                  <li key={w.code} title={w.reason}>
+                    <SubjectLink code={w.code} />
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : null}
           <button className="link small" onClick={() => selectDegree(null)}>
             Clear degree

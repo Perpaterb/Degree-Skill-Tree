@@ -102,3 +102,20 @@ test('US-023: with no degree selected, a greyed degree can still be clicked and 
   await clickCircle(page, 'C10476');
   await expect(page.getByTestId('degree-picker')).toHaveValue('C10476');
 });
+
+test('US-020: selecting a subject lights up every copy of it across the map', async ({ page }) => {
+  await openTree(page);
+  // Mathematics 1 is listed by eight circles.
+  await goTo(page, '33130');
+  const lit = await page.evaluate(() => window.__dst!.highlighted());
+  expect(lit.filter((id) => id.endsWith('/33130')).length).toBeGreaterThanOrEqual(8);
+  expect(lit.every((id) => id.endsWith('/33130'))).toBe(true);
+});
+
+test('US-022: completed subjects that do not count are listed under the selected degree', async ({ page }) => {
+  await openTree(page, 't=uts-2027&c=21212.22108.24109.25400.21214.22208');
+  await chooseDegree(page, 'C10476');
+  const list = page.getByTestId('not-counting');
+  await expect(list).toContainText('These subjects do not count towards this degree');
+  for (const code of ['22208', '24109', '25400']) await expect(list).toContainText(code);
+});

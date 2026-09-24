@@ -1,14 +1,29 @@
-import { programsUnder, subjectsUnder } from './engine.js';
-import type { MapDoc, Rule } from './model.js';
+import { packEnclose, packSiblings } from 'd3-hierarchy';
+import type { Container, MapDoc, Rule } from './model.js';
 
-// Euler-diagram layout: degrees and programs are circles enclosing their subjects. Circles at
-// the same level overlap where they share subjects. Deterministic: same map in, same layout out.
+// Railway-map layout. Degrees and programs are circles that never overlap (one may only contain
+// another). A subject listed by several circles appears as a copy in each; copies share one state.
+// Inside a circle, subjects sit on rings by prerequisite depth, and requisite links are routed like
+// railway lines: out along a spoke, round a ring-following track, out along a spoke, with rounded
+// corners. Tracks never share an arc, so every crossing is spoke against track: close to 90 degrees.
+// A prerequisite missing from a circle appears inside it as an "entry" copy, so links stay local.
+// Deterministic: same map in, same layout out.
+
+export type PathCmd =
+  | ['M', number, number]
+  | ['L', number, number]
+  | ['Q', number, number, number, number] // control x, y, end x, y
+  | ['A', number, number, number, number, number, boolean]; // centre x, y, radius, from, to, anticlockwise
 
 export interface LayoutNode {
-  id: string; // subject code
+  id: string; // copy id: "<circle>/<code>"
+  code: string;
+  circle: string;
   x: number;
   y: number;
   r: number;
+  /** A prerequisite shown here only so its links stay inside the circle; not listed by it. */
+  entry?: boolean;
 }
 
 export interface LayoutCircle {
@@ -18,8 +33,12 @@ export interface LayoutCircle {
   x: number;
   y: number;
   r: number;
-  /** Every subject the structure lists (programs include nested programs). */
+  /** Subjects the structure lists directly (each has a copy inside this circle). */
   members: string[];
+  /** The circle this one sits inside, if any. */
+  parent: string | null;
+  /** For a program placed outside every degree: the degrees that offer it. */
+  sharedBy?: string[];
 }
 
 export type EdgeKind =
@@ -27,362 +46,525 @@ export type EdgeKind =
   | 'alt'; // one of several alternatives (under an OR)
 
 export interface LayoutEdge {
-  from: string;
-  to: string;
+  from: string; // copy id
+  to: string; // copy id
+  fromCode: string;
+  toCode: string;
   kind: EdgeKind;
+  path: PathCmd[];
 }
 
 export interface Layout {
   nodes: Record<string, LayoutNode>;
-  /** Largest first, so drawing in order puts smaller circles on top. */
+  /** Largest first, so drawing in order puts contained circles on top. */
   circles: LayoutCircle[];
   edges: LayoutEdge[];
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
 export const SUBJECT_R = 22;
-const GAP = 16; // between subject rims
-const SPACING = SUBJECT_R * 2 + GAP;
-const PROGRAM_PAD = 26; // circle rim beyond its outermost subject
-const DEGREE_PAD = 60; // degree rim beyond its outermost program circle
-const TWIN_GAP = 24; // between the outlines of programs that would otherwise coincide
-export const TUNING = { iterations: 600, pull: 0.5 };
+const ARC = SUBJECT_R * 2 + 24; // arc length each subject needs along its ring (room for a corridor between)
+const BASE_GAP = 26; // between the rims of neighbouring rings, before tracks
+const TRACK = 7; // between parallel tracks
+const FILLET = 9; // corner rounding
+const SPREAD = 5; // between parallel spokes leaving or entering one subject
+const PAD = 34; // circle rim beyond its contents
+const CHILD_GAP = 26; // between packed circles
+const TOP_GAP = 140; // between top-level circles
 
-/** Stable pseudo-random number in [0, 1) from a string. */
-function hash(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-  return ((h >>> 0) % 100000) / 100000;
+const TAU = Math.PI * 2;
+const norm = (a: number) => ((a % TAU) + TAU) % TAU;
+/** Signed shortest turn from a to b, in (-PI, PI]. */
+const turn = (a: number, b: number) => {
+  const d = norm(b - a);
+  return d > Math.PI ? d - TAU : d;
+};
+const round = (n: number) => Math.round(n * 10) / 10;
+/** Clamp angle a into [lo, hi], treating angles as the same modulo a full turn. */
+const clampAngle = (a: number, lo: number, hi: number) => {
+  const mid = (lo + hi) / 2;
+  const t = mid + turn(mid, a);
+  return Math.min(hi, Math.max(lo, t));
+};
+
+function directSubjects(map: MapDoc, c: Container, out = new Set<string>()): Set<string> {
+  for (const i of c.items) if (i.kind === 'subject' && map.subjects[i.code]) out.add(i.code);
+  for (const ch of c.children) directSubjects(map, ch, out);
+  return out;
 }
 
-interface Group {
-  id: string;
-  kind: 'degree' | 'program';
-  members: string[];
-  weight: number;
-  cx: number;
-  cy: number;
-  /** Rough radius from member count, for pushing unrelated groups apart. */
-  estR: number;
+function directPrograms(map: MapDoc, c: Container, out = new Set<string>()): Set<string> {
+  for (const i of c.items) if (i.kind === 'program' && map.programs[i.code]) out.add(i.code);
+  for (const ch of c.children) directPrograms(map, ch, out);
+  return out;
 }
 
-function ruleEdges(to: string, rule: Rule | null, inOr: boolean, out: LayoutEdge[]) {
+function ruleKinds(rule: Rule | null, inOr: boolean, out: Map<string, EdgeKind>) {
   if (!rule) return;
   if ('op' in rule) {
     const or = rule.op === 'or' && rule.args.length > 1;
-    for (const a of rule.args) ruleEdges(to, a, inOr || or, out);
-  } else if ('subject' in rule) {
-    out.push({ from: rule.subject, to, kind: inOr ? 'alt' : 'req' });
-  }
+    for (const a of rule.args) ruleKinds(a, inOr || or, out);
+  } else if ('subject' in rule && !out.has(rule.subject)) out.set(rule.subject, inOr ? 'alt' : 'req');
 }
+
+/** Rings of one circle, in the circle's own coordinates (centre at 0, 0). */
+interface Disc {
+  r: number;
+  nodes: { code: string; entry: boolean; x: number; y: number }[];
+  edges: { from: string; to: string; kind: EdgeKind; path: PathCmd[] }[];
+}
+
+function buildDisc(map: MapDoc, members: Set<string>): Disc {
+  // Entry copies: current prerequisites of members that the circle does not list.
+  const reqs = new Map<string, Map<string, EdgeKind>>();
+  const entries = new Set<string>();
+  for (const code of members) {
+    const kinds = new Map<string, EdgeKind>();
+    ruleKinds(map.subjects[code].requisite, false, kinds);
+    for (const r of [...kinds.keys()]) {
+      const s = map.subjects[r];
+      if (!s || r === code || (s.legacy && !members.has(r))) kinds.delete(r);
+      else if (!members.has(r)) entries.add(r);
+    }
+    reqs.set(code, kinds);
+  }
+  const all = [...members, ...entries].sort();
+  if (!all.length) return { r: SUBJECT_R * 2, nodes: [], edges: [] };
+
+  // Requisites can loop in the source data (e.g. two advanced subjects that each accept the other as an
+  // alternative). Break loops deterministically: a depth-first walk drops links back onto its own path.
+  const back = new Set<string>();
+  {
+    const state = new Map<string, 1 | 2>();
+    const walk = (c: string) => {
+      state.set(c, 1);
+      for (const r of [...(reqs.get(c)?.keys() ?? [])].sort()) {
+        if (state.get(r) === 1) back.add(`${r}>${c}`);
+        else if (!state.has(r)) walk(r);
+      }
+      state.set(c, 2);
+    };
+    for (const c of all) if (!state.has(c)) walk(c);
+  }
+  // Depth inside this circle: entries are 0; a member is one ring beyond its deepest prerequisite here.
+  const depth = new Map<string, number>();
+  const visit = (c: string): number => {
+    if (depth.has(c)) return depth.get(c)!;
+    if (entries.has(c)) return 0;
+    const ins = [...(reqs.get(c)?.keys() ?? [])].filter((r) => !back.has(`${r}>${c}`));
+    const d = ins.length ? 1 + Math.max(...ins.map(visit)) : 0;
+    depth.set(c, d);
+    return d;
+  };
+  for (const c of all) visit(c);
+  for (const c of entries) depth.set(c, 0);
+  const rings: string[][] = [];
+  for (const c of all) (rings[depth.get(c)!] ??= []).push(c);
+  for (let i = 0; i < rings.length; i++) rings[i] ??= [];
+
+  // A route is a railway line: spoke out of its source, one or two ring-following legs, spoke in.
+  // A leg runs on a track in the gap just outside ring `gap`, from one angle to another.
+  type Leg = { gap: number; from: number; to: number; track: number };
+  type Route = { from: string; to: string; kind: EdgeKind; dep: number; arr: number; legs: Leg[] };
+  const routes: Route[] = [];
+  for (const t of all) for (const [f, kind] of reqs.get(t) ?? []) routes.push({ from: f, to: t, kind, dep: 0, arr: 0, legs: [] });
+  routes.sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+
+  // Angles: ring 0 evenly; outer rings aim at their prerequisites (circular mean).
+  const angle = new Map<string, number>();
+  rings[0].forEach((c, i) => angle.set(c, (TAU * i) / Math.max(1, rings[0].length) - Math.PI / 2));
+  for (let k = 1; k < rings.length; k++) {
+    const want = rings[k].map((c) => {
+      const ins = [...(reqs.get(c)?.keys() ?? [])].filter((r) => angle.has(r));
+      const x = ins.reduce((t, r) => t + Math.cos(angle.get(r)!), 0);
+      const y = ins.reduce((t, r) => t + Math.sin(angle.get(r)!), 0);
+      return { c, a: ins.length ? norm(Math.atan2(y, x)) : 0 };
+    });
+    want.sort((p, q) => p.a - q.a || p.c.localeCompare(q.c));
+    want.forEach((w) => angle.set(w.c, w.a));
+    rings[k] = want.map((w) => w.c);
+  }
+
+  // Keep neighbours on a ring at least one slot apart, moving each as little as possible.
+  const radius: number[] = [];
+  const spread = (k: number) => {
+    const n = rings[k].length;
+    const r = radius[k];
+    if (n < 2 || r <= 0) return;
+    const min = ARC / r;
+    const order = [...rings[k]].sort((p, q) => angle.get(p)! - angle.get(q)! || p.localeCompare(q));
+    if (n * min >= TAU - 1e-6) {
+      const a0 = angle.get(order[0])!;
+      order.forEach((c, i) => angle.set(c, a0 + (TAU * i) / n));
+      rings[k] = order;
+      return;
+    }
+    // Cut the circle at its widest natural gap, so no cluster is split across the seam.
+    const want = order.map((c) => angle.get(c)!);
+    let cut = 0;
+    let widest = -1;
+    for (let i = 0; i < n; i++) {
+      const g = norm(want[(i + 1) % n] - want[i]) || TAU;
+      if (g > widest) (widest = g), (cut = (i + 1) % n);
+    }
+    const seq = [...order.slice(cut), ...order.slice(0, cut)];
+    const w = seq.map((c) => angle.get(c)!);
+    for (let i = 1; i < n; i++) while (w[i] < w[i - 1]) w[i] += TAU;
+    // A forward pass enforces spacing; a backward pass keeps the last subject a slot short of wrapping
+    // round onto the first (always possible here, since n * min < TAU); then shift back by the mean push.
+    const got = [...w];
+    for (let i = 1; i < n; i++) got[i] = Math.max(got[i], got[i - 1] + min);
+    got[n - 1] = Math.min(got[n - 1], got[0] + TAU - min);
+    for (let i = n - 2; i >= 1; i--) got[i] = Math.min(got[i], got[i + 1] - min);
+    const shiftBy = got.reduce((t, g, i) => t + (g - w[i]), 0) / n;
+    seq.forEach((c, i) => angle.set(c, norm(got[i] - shiftBy)));
+    rings[k] = seq;
+  };
+
+  // A leg needs a ring-following arc only if its turn is longer than two rounded corners.
+  const trackR = (k: number, track: number) => radius[k] + SUBJECT_R + BASE_GAP / 2 + track * TRACK;
+  const needsArc = (leg: Leg) => Math.abs(turn(leg.from, leg.to)) * trackR(leg.gap, leg.track) >= 4;
+
+  // Tracks per gap: interval scheduling, shortest arcs innermost; no two arcs on a track overlap.
+  const assignTracks = () => {
+    const byGap = new Map<number, Leg[]>();
+    for (const r of routes) for (const l of r.legs) (byGap.get(l.gap) ?? byGap.set(l.gap, []).get(l.gap)!).push(l);
+    const count = rings.map(() => 0);
+    const overlaps = (x: [number, number], y: [number, number]) => norm(y[0] - x[0]) <= x[1] + 0.03 || norm(x[0] - y[0]) <= y[1] + 0.03;
+    for (const [k, legs] of byGap) {
+      legs.sort((a, b) => Math.abs(turn(a.from, a.to)) - Math.abs(turn(b.from, b.to)) || a.from - b.from);
+      const used: [number, number][][] = [];
+      for (const l of legs) {
+        l.track = 0;
+        if (!needsArc(l)) continue;
+        const d = turn(l.from, l.to);
+        const span: [number, number] = [norm(d >= 0 ? l.from : l.from + d), Math.abs(d)];
+        let t = 0;
+        while ((used[t] ?? []).some((u) => overlaps(u, span))) t++;
+        (used[t] ??= []).push(span);
+        l.track = t;
+      }
+      count[k] = used.length;
+    }
+    return count;
+  };
+
+  // Spokes: several links leaving (or entering) one subject run side by side, ordered so they do not cross.
+  const group = (key: (r: Route) => string) => {
+    const m = new Map<string, Route[]>();
+    for (const r of routes) (m.get(key(r)) ?? m.set(key(r), []).get(key(r))!).push(r);
+    return m;
+  };
+  const fan = (list: Route[], anchor: string, other: (r: Route) => string, set: (r: Route, a: number) => void) => {
+    const a = angle.get(anchor)!;
+    const ring = radius[depth.get(anchor)!];
+    list.sort((p, q) => turn(a, angle.get(other(p))!) - turn(a, angle.get(other(q))!) || other(p).localeCompare(other(q)));
+    list.forEach((r, i) => set(r, a + (ring > 0 ? ((i - (list.length - 1) / 2) * SPREAD) / ring : 0)));
+  };
+
+  // A link that skips rings runs outward through a corridor: a gap between the subjects on every ring
+  // it crosses, as close as possible to its target, and apart from other corridors.
+  // Spokes crossing one gap (lines leaving ring k and lines arriving at ring k + 1) must not run on
+  // top of each other: subjects directly outward of one another would otherwise share angles.
+  // Space them at least SPREAD apart, keeping each within its own subject's outline.
+  const separateSpokes = () => {
+    for (let k = 0; k + 1 < rings.length; k++) {
+      const mid = (radius[k] + radius[k + 1]) / 2;
+      if (mid <= 0) continue;
+      type Spoke = { a: number; lo: number; hi: number; set: (a: number) => void };
+      const spokes: Spoke[] = [];
+      const bounds = (node: string) => {
+        const r = radius[depth.get(node)!];
+        const w = r > 0 ? (SUBJECT_R - 6) / r : Math.PI;
+        return [angle.get(node)! - w, angle.get(node)! + w];
+      };
+      for (const r of routes) {
+        if (depth.get(r.from) === k && radius[k] > 0) {
+          const [lo, hi] = bounds(r.from);
+          spokes.push({ a: r.dep, lo, hi, set: (a) => (r.dep = a) });
+        }
+        const lateral = depth.get(r.to)! <= depth.get(r.from)!;
+        if (lateral ? depth.get(r.to) === k : depth.get(r.to) === k + 1) {
+          const [lo, hi] = bounds(r.to);
+          spokes.push({ a: r.arr, lo, hi, set: (a) => (r.arr = a) });
+        }
+      }
+      if (spokes.length < 2) continue;
+      const min = (SPREAD + 1) / mid;
+      for (let pass = 0; pass < 40; pass++) {
+        spokes.sort((p, q) => norm(p.a) - norm(q.a));
+        let moved = false;
+        for (let i = 0; i < spokes.length; i++) {
+          const p = spokes[i];
+          const q = spokes[(i + 1) % spokes.length];
+          const gap = norm(q.a - p.a);
+          if (gap >= min || (spokes.length === 2 && i === 1)) continue;
+          const push = (min - gap) / 2;
+          p.a = clampAngle(p.a - push, p.lo, p.hi);
+          q.a = clampAngle(q.a + push, q.lo, q.hi);
+          moved = true;
+        }
+        if (!moved) break;
+      }
+      for (const sp of spokes) sp.set(sp.a);
+    }
+  };
+
+  const planLegs = () => {
+    for (const [c, list] of group((r) => r.from)) fan(list, c, (r) => r.to, (r, a) => (r.dep = a));
+    for (const [c, list] of group((r) => r.to)) fan(list, c, (r) => r.from, (r, a) => (r.arr = a));
+    separateSpokes();
+    const corridors = rings.map(() => [] as number[]);
+    const clear = (a: number, j: number) => {
+      const r = radius[j];
+      return (
+        rings[j].every((n) => Math.abs(turn(a, angle.get(n)!)) * r >= SUBJECT_R + 5) &&
+        corridors[j].every((c) => Math.abs(turn(a, c)) * r >= SPREAD + 1)
+      );
+    };
+    const ordered = [...routes].sort((a, b) => depth.get(b.to)! - depth.get(b.from)! - (depth.get(a.to)! - depth.get(a.from)!) || a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+    for (const r of ordered) {
+      const k = depth.get(r.from)!;
+      const t = depth.get(r.to)!;
+      if (t <= k) {
+        // A loop link (see `back`): out to a track outside the source's ring, along it, back in.
+        r.legs = [{ gap: k, from: r.dep, to: r.arr, track: 0 }];
+        continue;
+      }
+      if (t === k + 1) {
+        r.legs = radius[k] > 0 ? [{ gap: k, from: r.dep, to: r.arr, track: 0 }] : [];
+        continue;
+      }
+      let corridor = r.arr;
+      for (let step = 0; step <= 720; step++) {
+        const a = r.arr + (step % 2 ? 1 : -1) * Math.ceil(step / 2) * (Math.PI / 720);
+        let ok = true;
+        for (let j = k + 1; j < t && ok; j++) ok = clear(a, j);
+        if (ok) {
+          corridor = a;
+          break;
+        }
+      }
+      for (let j = k + 1; j < t; j++) corridors[j].push(corridor);
+      const first: Leg[] = radius[k] > 0 ? [{ gap: k, from: r.dep, to: corridor, track: 0 }] : [];
+      r.legs = [...first, { gap: t - 1, from: corridor, to: r.arr, track: 0 }];
+    }
+  };
+
+  // Radii, corridors and tracks depend on each other: settle over a few passes.
+  let tracks: number[] = rings.map(() => 0);
+  const ringGap = (k: number) => SUBJECT_R * 2 + BASE_GAP + tracks[k] * TRACK;
+  for (let pass = 0; pass < 4; pass++) {
+    for (let k = 0; k < rings.length; k++) {
+      const fit = (rings[k].length * ARC) / TAU;
+      radius[k] = k === 0 ? (rings[0].length > 1 ? Math.max(fit, SUBJECT_R * 1.6) : 0) : Math.max(fit, radius[k - 1] + ringGap(k - 1));
+      spread(k);
+    }
+    planLegs();
+    tracks = assignTracks();
+  }
+  for (let k = 1; k < rings.length; k++) radius[k] = Math.max(radius[k], radius[k - 1] + ringGap(k - 1));
+  planLegs();
+  assignTracks();
+
+  const pol = (r: number, a: number): [number, number] => [round(r * Math.cos(a)), round(r * Math.sin(a))];
+  const edges: Disc['edges'] = routes.map((rt) => {
+    const rs = radius[depth.get(rt.from)!];
+    const lateral = depth.get(rt.to)! <= depth.get(rt.from)!;
+    // Normal links arrive from inside the target's ring; loop links come back in from outside it.
+    const end = radius[depth.get(rt.to)!] + (lateral ? SUBJECT_R : -SUBJECT_R);
+    const startAngle = rs > 0 ? rt.dep : (rt.legs[0]?.from ?? rt.arr);
+    const path: PathCmd[] = [['M', ...pol(rs > 0 ? rs + SUBJECT_R : SUBJECT_R, startAngle)]];
+    for (const leg of rt.legs) {
+      const rT = trackR(leg.gap, leg.track);
+      if (!needsArc(leg)) {
+        // A tiny sideways step: a short jog on the track, so the long runs either side stay radial.
+        path.push(['L', ...pol(rT - FILLET, leg.from)], ['L', ...pol(lateral ? rT - FILLET : rT + FILLET, leg.to)]);
+        continue;
+      }
+      const d = turn(leg.from, leg.to);
+      const dir = Math.sign(d);
+      // Short turns get smaller corners, so every turn is spoke, corner, arc, corner, spoke.
+      const f = Math.min(FILLET, (Math.abs(d) * rT) / 2 - 0.5);
+      const da = f / rT;
+      const a0 = leg.from + dir * da;
+      // Derive the end from the start and the (short) turn, so the arc can never go the long way round.
+      const a1 = a0 + dir * (Math.abs(d) - 2 * da);
+      path.push(['L', ...pol(rT - f, leg.from)]);
+      path.push(['Q', ...pol(rT, leg.from), ...pol(rT, a0)]);
+      path.push(['A', 0, 0, round(rT), Math.round(a0 * 1e4) / 1e4, Math.round(a1 * 1e4) / 1e4, dir < 0]);
+      path.push(['Q', ...pol(rT, leg.to), ...pol(lateral ? rT - f : rT + f, leg.to)]);
+    }
+    path.push(["L", ...pol(end, rt.arr)]);
+    return { from: rt.from, to: rt.to, kind: rt.kind, path };
+  });
+
+  const nodes = all.map((c) => {
+    const [x, y] = pol(radius[depth.get(c)!], angle.get(c)!);
+    return { code: c, entry: entries.has(c), x, y };
+  });
+  return { r: radius[rings.length - 1] + SUBJECT_R, nodes, edges };
+}
+
+/** A circle's contents: its rings plus the circles nested inside it, packed without overlap. */
+interface Box {
+  id: string;
+  kind: 'degree' | 'program';
+  r: number;
+  disc: Disc;
+  discAt: { x: number; y: number };
+  children: { box: Box; x: number; y: number }[];
+  sharedBy?: string[];
+}
+
+type Packed = { r: number; x: number; y: number };
 
 export function layoutMap(map: MapDoc): Layout {
   const degreeCodes = Object.keys(map.degrees).sort();
-  const subjectCodes = Object.keys(map.subjects).sort();
 
-  // Groups and memberships.
-  const groups: Group[] = [];
-  const groupsOf = new Map<string, Group[]>(subjectCodes.map((c) => [c, []]));
-  const programDegrees = new Map<string, string[]>();
-  for (const d of degreeCodes) {
-    const members = [...subjectsUnder(map, map.degrees[d].structure)].filter((c) => map.subjects[c]).sort();
-    groups.push({ id: d, kind: 'degree', members, weight: 0.25, cx: 0, cy: 0, estR: 0 });
-    for (const p of programsUnder(map, map.degrees[d].structure)) programDegrees.set(p, [...(programDegrees.get(p) ?? []), d]);
-  }
-  for (const p of Object.keys(map.programs).sort()) {
-    const members = [...subjectsUnder(map, map.programs[p].structure)].filter((c) => map.subjects[c]).sort();
-    groups.push({ id: p, kind: 'program', members, weight: 1, cx: 0, cy: 0, estR: 0 });
-  }
-  for (const g of groups) {
-    g.estR = Math.sqrt(g.members.length) * SPACING * 0.62 + PROGRAM_PAD;
-    for (const m of g.members) groupsOf.get(m)!.push(g);
-  }
-  const byId = new Map(groups.map((g) => [g.id, g]));
-
-  // Degree anchors on a ring, so each degree has a home region.
-  const ringR = 900 + 450 * degreeCodes.length;
-  const anchor = new Map(
-    degreeCodes.map((d, i) => {
-      const a = -Math.PI / 2 + (2 * Math.PI * i) / degreeCodes.length;
-      return [d, { x: degreeCodes.length > 1 ? ringR * Math.cos(a) : 0, y: degreeCodes.length > 1 ? ringR * Math.sin(a) : 0 }];
-    }),
-  );
-
-  // Requisite links, and who is linked to whom (for subjects that belong to no group).
-  const edges: LayoutEdge[] = [];
-  for (const s of Object.values(map.subjects)) ruleEdges(s.code, s.requisite, false, edges);
-  const linked = edges.filter((e) => map.subjects[e.from] && map.subjects[e.to] && e.from !== e.to);
-  const neighbours = new Map<string, string[]>(subjectCodes.map((c) => [c, []]));
-  for (const e of linked) {
-    neighbours.get(e.from)!.push(e.to);
-    neighbours.get(e.to)!.push(e.from);
-  }
-
-  // Initial positions: around the anchors of the degrees a subject belongs to.
-  const pos = new Map<string, { x: number; y: number }>();
-  const degreesOf = (c: string) => groupsOf.get(c)!.filter((g) => g.kind === 'degree').map((g) => g.id);
-  const place = (c: string, ds: string[]) => {
-    const ax = ds.length ? ds.reduce((t, d) => t + anchor.get(d)!.x, 0) / ds.length : 0;
-    const ay = ds.length ? ds.reduce((t, d) => t + anchor.get(d)!.y, 0) / ds.length : 0;
-    const a = hash(c) * Math.PI * 2;
-    const r = 200 + hash(c + '#') * 600;
-    pos.set(c, { x: ax + r * Math.cos(a), y: ay + r * Math.sin(a) });
+  // Who lists each program directly. One lister: nest inside it. Several: place it at the top level.
+  const parents = new Map<string, string[]>();
+  const listers: [string, Container][] = [
+    ...degreeCodes.map((d) => [d, map.degrees[d].structure] as [string, Container]),
+    ...Object.keys(map.programs)
+      .sort()
+      .map((p) => [p, map.programs[p].structure] as [string, Container]),
+  ];
+  for (const [id, c] of listers) for (const p of directPrograms(map, c)) if (p !== id) parents.set(p, [...(parents.get(p) ?? []), id]);
+  const offeredBy = new Map<string, Set<string>>();
+  const offer = (p: string, d: string, seen: Set<string>) => {
+    if (seen.has(p)) return;
+    seen.add(p);
+    (offeredBy.get(p) ?? offeredBy.set(p, new Set()).get(p)!).add(d);
+    for (const q of directPrograms(map, map.programs[p].structure)) offer(q, d, seen);
   };
-  for (const c of subjectCodes) if (degreesOf(c).length) place(c, degreesOf(c));
-  // Loose subjects (requisites only) start near the degrees of their neighbours.
-  for (let pass = 0; pass < 4; pass++) {
-    for (const c of subjectCodes) {
-      if (pos.has(c)) continue;
-      const near = neighbours.get(c)!.filter((n) => pos.has(n));
-      if (!near.length && pass < 3) continue;
-      place(c, [...new Set(near.flatMap(degreesOf))]);
-    }
+  for (const d of degreeCodes) for (const p of directPrograms(map, map.degrees[d].structure)) offer(p, d, new Set());
+
+  const topLevel = new Set(Object.keys(map.programs).filter((p) => (parents.get(p)?.length ?? 0) !== 1));
+  const built = new Set<string>();
+
+  function build(id: string, kind: 'degree' | 'program', stack: string[]): Box {
+    built.add(id);
+    const structure = kind === 'degree' ? map.degrees[id].structure : map.programs[id].structure;
+    const disc = buildDisc(map, directSubjects(map, structure));
+    const kids = [...directPrograms(map, structure)]
+      .filter((p) => !topLevel.has(p) && !stack.includes(p) && !built.has(p))
+      .sort()
+      .map((p) => build(p, 'program', [...stack, id]));
+    const items: (Packed & { box?: Box })[] = [{ r: disc.r + CHILD_GAP / 2, x: 0, y: 0 }, ...kids.map((b) => ({ r: b.r + CHILD_GAP / 2, x: 0, y: 0, box: b }))];
+    packSiblings(items);
+    const e = packEnclose(items)!;
+    return {
+      id,
+      kind,
+      r: e.r + PAD,
+      disc,
+      discAt: { x: items[0].x - e.x, y: items[0].y - e.y },
+      children: items.slice(1).map((it) => ({ box: it.box!, x: it.x - e.x, y: it.y - e.y })),
+    };
   }
 
-  const centre = (g: Group) => {
-    if (!g.members.length) return;
-    let x = 0;
-    let y = 0;
-    for (const m of g.members) (x += pos.get(m)!.x), (y += pos.get(m)!.y);
-    g.cx = x / g.members.length;
-    g.cy = y / g.members.length;
-  };
-
-  // Program pairs that share nothing should not overlap.
-  const programGroups = groups.filter((g) => g.kind === 'program' && g.members.length);
-  const disjoint: [Group, Group][] = [];
-  for (let i = 0; i < programGroups.length; i++) {
-    const a = new Set(programGroups[i].members);
-    for (let j = i + 1; j < programGroups.length; j++) {
-      if (!programGroups[j].members.some((m) => a.has(m))) disjoint.push([programGroups[i], programGroups[j]]);
-    }
+  const tops: Box[] = degreeCodes.map((d) => build(d, 'degree', []));
+  for (const p of [...topLevel].sort()) {
+    if (built.has(p)) continue;
+    const b = build(p, 'program', []);
+    b.sharedBy = [...(offeredBy.get(p) ?? [])].sort();
+    tops.push(b);
   }
+  const placed = tops.map((b) => ({ r: b.r + TOP_GAP / 2, box: b, x: 0, y: 0 }));
+  // Degrees first and largest first, so they settle in the middle with shared programs around them.
+  placed.sort((a, b) => Number(b.box.kind === 'degree') - Number(a.box.kind === 'degree') || b.r - a.r || a.box.id.localeCompare(b.box.id));
+  packSiblings(placed);
 
-  for (let it = 0; it < TUNING.iterations; it++) {
-    const alpha = 1 - it / TUNING.iterations;
-    groups.forEach(centre);
-
-    // Pull each subject towards every group it belongs to.
-    for (const c of subjectCodes) {
-      const p = pos.get(c)!;
-      const gs = groupsOf.get(c)!;
-      if (gs.length) {
-        let fx = 0;
-        let fy = 0;
-        let w = 0;
-        for (const g of gs) (fx += (g.cx - p.x) * g.weight), (fy += (g.cy - p.y) * g.weight), (w += g.weight);
-        p.x += (fx / w) * TUNING.pull * alpha;
-        p.y += (fy / w) * TUNING.pull * alpha;
-      } else {
-        // Loose subjects follow the subjects they are linked to.
-        const ns = neighbours.get(c)!;
-        if (ns.length) {
-          let x = 0;
-          let y = 0;
-          for (const n of ns) (x += pos.get(n)!.x), (y += pos.get(n)!.y);
-          p.x += (x / ns.length - p.x) * 0.1 * alpha;
-          p.y += (y / ns.length - p.y) * 0.1 * alpha;
-        }
-      }
-    }
-
-    // Keep each degree near its anchor.
-    for (const d of degreeCodes) {
-      const g = byId.get(d)!;
-      if (!g.members.length) continue;
-      const a = anchor.get(d)!;
-      const dx = (a.x - g.cx) * 0.05 * alpha;
-      const dy = (a.y - g.cy) * 0.05 * alpha;
-      // Only subjects exclusive to this degree are anchored: shared ones must be free to sit
-      // between degrees, or every group they belong to gets stretched.
-      for (const m of g.members) {
-        if (degreesOf(m).length !== 1) continue;
-        const p = pos.get(m)!;
-        p.x += dx;
-        p.y += dy;
-      }
-    }
-
-    // Push apart programs that share no subjects.
-    for (const [a, b] of disjoint) {
-      const dx = b.cx - a.cx;
-      const dy = b.cy - a.cy;
-      const d = Math.hypot(dx, dy) || 1;
-      const overlap = a.estR + b.estR + GAP - d;
-      if (overlap <= 0) continue;
-      const push = overlap * 0.25 * (0.3 + alpha);
-      const ux = dx / d;
-      const uy = dy / d;
-      for (const m of a.members) {
-        if (groupsOf.get(m)!.includes(b)) continue;
-        const p = pos.get(m)!;
-        p.x -= (ux * push) / 2;
-        p.y -= (uy * push) / 2;
-      }
-      for (const m of b.members) {
-        if (groupsOf.get(m)!.includes(a)) continue;
-        const p = pos.get(m)!;
-        p.x += (ux * push) / 2;
-        p.y += (uy * push) / 2;
-      }
-    }
-
-    collide(subjectCodes, pos);
-  }
-  // Settle any remaining overlaps without further pulling.
-  for (let k = 0; k < 30; k++) if (!collide(subjectCodes, pos)) break;
-
-  // Circles: programs enclose their subjects (and nested programs); degrees also enclose their programs.
   const nodes: Record<string, LayoutNode> = {};
-  for (const c of subjectCodes) nodes[c] = { id: c, x: round(pos.get(c)!.x), y: round(pos.get(c)!.y), r: SUBJECT_R };
   const circles: LayoutCircle[] = [];
-  const programCircle = new Map<string, LayoutCircle>();
-  // Fewest members first, so a parent program can enclose its children.
-  const programOrder = Object.keys(map.programs).sort((a, b) => byId.get(a)!.members.length - byId.get(b)!.members.length || a.localeCompare(b));
-  for (const p of programOrder) {
-    const g = byId.get(p)!;
-    const children = [...programsUnder(map, map.programs[p].structure)].map((c) => programCircle.get(c)).filter(Boolean) as LayoutCircle[];
-    let circle: Circle;
-    if (g.members.length) {
-      circle = enclose([...g.members.map((m) => ({ x: nodes[m].x, y: nodes[m].y, r: SUBJECT_R + PROGRAM_PAD })), ...children.map((c) => ({ x: c.x, y: c.y, r: c.r + 14 }))]);
-    } else {
-      // Nothing published for this program (legacy): a small marker in its degree's region.
-      const ds = programDegrees.get(p) ?? degreeCodes.slice(0, 1);
-      const cs = ds.map((d) => byId.get(d)!);
-      const a = hash(p) * Math.PI * 2;
-      circle = { x: cs.reduce((t, g) => t + g.cx, 0) / cs.length + 120 * Math.cos(a), y: cs.reduce((t, g) => t + g.cy, 0) / cs.length + 120 * Math.sin(a), r: 70 };
+  const edges: LayoutEdge[] = [];
+  const emit = (b: Box, x: number, y: number, parent: string | null) => {
+    const structure = b.kind === 'degree' ? map.degrees[b.id].structure : map.programs[b.id].structure;
+    circles.push({
+      id: b.id,
+      kind: b.kind,
+      title: b.kind === 'degree' ? map.degrees[b.id].title : map.programs[b.id].title,
+      x: round(x),
+      y: round(y),
+      r: Math.ceil(b.r),
+      members: [...directSubjects(map, structure)].sort(),
+      parent,
+      ...(b.sharedBy ? { sharedBy: b.sharedBy } : {}),
+    });
+    const cx = x + b.discAt.x;
+    const cy = y + b.discAt.y;
+    const id = (code: string) => `${b.id}/${code}`;
+    for (const n of b.disc.nodes) {
+      nodes[id(n.code)] = { id: id(n.code), code: n.code, circle: b.id, x: round(cx + n.x), y: round(cy + n.y), r: SUBJECT_R, ...(n.entry ? { entry: true } : {}) };
     }
-    // Two programs can enclose exactly the same area; grow this one so both outlines show.
-    for (const other of programCircle.values()) {
-      if (Math.hypot(other.x - circle.x, other.y - circle.y) < 4 && Math.abs(other.r - circle.r) < TWIN_GAP) circle.r = other.r + TWIN_GAP;
+    for (const e of b.disc.edges) {
+      edges.push({ from: id(e.from), to: id(e.to), fromCode: e.from, toCode: e.to, kind: e.kind, path: e.path.map((c) => shift(c, cx, cy)) });
     }
-    const lc: LayoutCircle = { id: p, kind: 'program', title: map.programs[p].title, x: round(circle.x), y: round(circle.y), r: Math.ceil(circle.r), members: g.members };
-    programCircle.set(p, lc);
-    circles.push(lc);
-  }
-  for (const d of degreeCodes) {
-    const g = byId.get(d)!;
-    const progs = [...programsUnder(map, map.degrees[d].structure)].map((p) => programCircle.get(p)!).filter(Boolean);
-    const c = enclose([
-      ...g.members.map((m) => ({ x: nodes[m].x, y: nodes[m].y, r: SUBJECT_R + PROGRAM_PAD })),
-      ...progs.map((p) => ({ x: p.x, y: p.y, r: p.r + DEGREE_PAD })),
-    ]);
-    circles.push({ id: d, kind: 'degree', title: map.degrees[d].title, x: round(c.x), y: round(c.y), r: Math.ceil(c.r), members: g.members });
-  }
+    for (const ch of b.children) emit(ch.box, x + ch.x, y + ch.y, b.id);
+  };
+  for (const p of placed) emit(p.box, p.x, p.y, null);
   circles.sort((a, b) => b.r - a.r || a.id.localeCompare(b.id));
 
-  const unique = new Map(linked.map((e) => [`${e.from}>${e.to}`, e]));
-  const all = [...circles, ...Object.values(nodes)];
   const bounds = {
-    minX: Math.min(...all.map((c) => c.x - c.r)) - 40,
-    minY: Math.min(...all.map((c) => c.y - c.r)) - 120,
-    maxX: Math.max(...all.map((c) => c.x + c.r)) + 40,
-    maxY: Math.max(...all.map((c) => c.y + c.r)) + 40,
+    minX: Math.min(...circles.map((c) => c.x - c.r)) - 40,
+    minY: Math.min(...circles.map((c) => c.y - c.r)) - 140,
+    maxX: Math.max(...circles.map((c) => c.x + c.r)) + 40,
+    maxY: Math.max(...circles.map((c) => c.y + c.r)) + 40,
   };
-  return { nodes, circles, edges: [...unique.values()], bounds };
+  return { nodes, circles, edges, bounds };
 }
 
-const round = (n: number) => Math.round(n * 10) / 10;
-
-/** Push overlapping subjects apart. Returns whether anything moved. */
-function collide(codes: string[], pos: Map<string, { x: number; y: number }>): boolean {
-  const cell = SPACING;
-  const grid = new Map<string, string[]>();
-  for (const c of codes) {
-    const p = pos.get(c)!;
-    const k = `${Math.floor(p.x / cell)},${Math.floor(p.y / cell)}`;
-    const list = grid.get(k);
-    if (list) list.push(c);
-    else grid.set(k, [c]);
+function shift(c: PathCmd, dx: number, dy: number): PathCmd {
+  switch (c[0]) {
+    case 'M':
+    case 'L':
+      return [c[0], round(c[1] + dx), round(c[2] + dy)];
+    case 'Q':
+      return ['Q', round(c[1] + dx), round(c[2] + dy), round(c[3] + dx), round(c[4] + dy)];
+    case 'A':
+      return ['A', round(c[1] + dx), round(c[2] + dy), c[3], c[4], c[5], c[6]];
   }
-  let moved = false;
-  for (const c of codes) {
-    const a = pos.get(c)!;
-    const gx = Math.floor(a.x / cell);
-    const gy = Math.floor(a.y / cell);
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (const o of grid.get(`${gx + dx},${gy + dy}`) ?? []) {
-          if (o <= c) continue;
-          const b = pos.get(o)!;
-          let vx = b.x - a.x;
-          let vy = b.y - a.y;
-          let d = Math.hypot(vx, vy);
-          if (d >= SPACING) continue;
-          if (d < 0.01) {
-            const ang = hash(c + o) * Math.PI * 2;
-            (vx = Math.cos(ang)), (vy = Math.sin(ang)), (d = 1);
-          }
-          const push = (SPACING - d) / 2;
-          a.x -= (vx / d) * push;
-          a.y -= (vy / d) * push;
-          b.x += (vx / d) * push;
-          b.y += (vy / d) * push;
-          moved = true;
-        }
+}
+
+/** Points along a path, about `step` world units apart (for tests and geometry checks). */
+export function samplePath(path: PathCmd[], step = 6): [number, number][] {
+  const pts: [number, number][] = [];
+  let x = 0;
+  let y = 0;
+  for (const c of path) {
+    if (c[0] === 'M') {
+      [x, y] = [c[1], c[2]];
+      pts.push([x, y]);
+    } else if (c[0] === 'L') {
+      const n = Math.max(1, Math.ceil(Math.hypot(c[1] - x, c[2] - y) / step));
+      for (let i = 1; i <= n; i++) pts.push([x + ((c[1] - x) * i) / n, y + ((c[2] - y) * i) / n]);
+      [x, y] = [c[1], c[2]];
+    } else if (c[0] === 'Q') {
+      for (let i = 1; i <= 6; i++) {
+        const t = i / 6;
+        pts.push([(1 - t) ** 2 * x + 2 * (1 - t) * t * c[1] + t * t * c[3], (1 - t) ** 2 * y + 2 * (1 - t) * t * c[2] + t * t * c[4]]);
       }
+      [x, y] = [c[3], c[4]];
+    } else {
+      const [, cx, cy, r, a0, a1, ccw] = c;
+      let sweep = a1 - a0;
+      if (ccw && sweep > 0) sweep -= TAU;
+      if (!ccw && sweep < 0) sweep += TAU;
+      const n = Math.max(1, Math.ceil((Math.abs(sweep) * r) / step));
+      for (let i = 1; i <= n; i++) pts.push([cx + r * Math.cos(a0 + (sweep * i) / n), cy + r * Math.sin(a0 + (sweep * i) / n)]);
+      [x, y] = pts[pts.length - 1];
     }
   }
-  return moved;
-}
-
-type Circle = { x: number; y: number; r: number };
-
-/** Smallest circle enclosing a set of circles (Welzl on rim samples, then grown to cover each exactly). */
-export function enclose(cs: Circle[]): Circle {
-  if (!cs.length) return { x: 0, y: 0, r: 0 };
-  const pts: { x: number; y: number }[] = [];
-  for (const c of cs) for (let i = 0; i < 16; i++) pts.push({ x: c.x + c.r * Math.cos((i * Math.PI) / 8), y: c.y + c.r * Math.sin((i * Math.PI) / 8) });
-  // A deterministic shuffle keeps Welzl's expected-linear behaviour without randomness.
-  pts.sort((a, b) => hash(`${a.x},${a.y}`) - hash(`${b.x},${b.y}`));
-  const best = minDisk(pts);
-  // Sampling can miss a sliver of a rim; grow to cover every circle exactly.
-  for (const c of cs) best.r = Math.max(best.r, Math.hypot(c.x - best.x, c.y - best.y) + c.r);
-  return best;
-}
-
-function minDisk(P: { x: number; y: number }[]): Circle {
-  let c: Circle = { x: P[0].x, y: P[0].y, r: 0 };
-  const inside = (p: { x: number; y: number }, k: Circle) => Math.hypot(p.x - k.x, p.y - k.y) <= k.r + 1e-7;
-  for (let i = 1; i < P.length; i++) {
-    if (inside(P[i], c)) continue;
-    c = { x: P[i].x, y: P[i].y, r: 0 };
-    for (let j = 0; j < i; j++) {
-      if (inside(P[j], c)) continue;
-      c = { x: (P[i].x + P[j].x) / 2, y: (P[i].y + P[j].y) / 2, r: Math.hypot(P[i].x - P[j].x, P[i].y - P[j].y) / 2 };
-      for (let k = 0; k < j; k++) if (!inside(P[k], c)) c = circumcircle(P[i], P[j], P[k]);
-    }
-  }
-  return c;
-}
-
-function circumcircle(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }): Circle {
-  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
-  if (Math.abs(d) < 1e-9) {
-    // Collinear: the widest pair decides.
-    const pairs: [typeof a, typeof a][] = [
-      [a, b],
-      [a, c],
-      [b, c],
-    ];
-    const [p, q] = pairs.sort((u, v) => Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y) - Math.hypot(u[0].x - u[1].x, u[0].y - u[1].y))[0];
-    return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, r: Math.hypot(p.x - q.x, p.y - q.y) / 2 };
-  }
-  const a2 = a.x * a.x + a.y * a.y;
-  const b2 = b.x * b.x + b.y * b.y;
-  const c2 = c.x * c.x + c.y * c.y;
-  const x = (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d;
-  const y = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d;
-  return { x, y, r: Math.hypot(a.x - x, a.y - y) };
+  return pts;
 }
 
 /**
  * The circle a click at world (x, y) means. Near an outline (within `rim` world units inside
- * it), the outline's circle wins, nearest outline first: that is how a circle completely covered
- * by smaller ones stays selectable. Elsewhere, the smallest circle containing the point; on a
- * tie, the nearest centre.
+ * it), the outline's circle wins, nearest outline first. Elsewhere, the smallest circle
+ * containing the point; on a tie, the nearest centre.
  */
-export function circleAt(layout: Layout, x: number, y: number, rim = 0): LayoutCircle | null {
+export function circleAt(layout: Pick<Layout, 'circles'>, x: number, y: number, rim = 0): LayoutCircle | null {
   let onRim: LayoutCircle | null = null;
   let rimGap = Infinity;
   let best: LayoutCircle | null = null;
@@ -396,15 +578,7 @@ export function circleAt(layout: Layout, x: number, y: number, rim = 0): LayoutC
   return onRim ?? best;
 }
 
-/** Quality measure: subjects that sit inside a circle which does not list them. */
-export function foreignInside(layout: Layout): { circle: string; subject: string }[] {
-  const out: { circle: string; subject: string }[] = [];
-  for (const c of layout.circles) {
-    const members = new Set(c.members);
-    for (const n of Object.values(layout.nodes)) {
-      if (!members.has(n.id) && Math.hypot(n.x - c.x, n.y - c.y) < c.r - n.r) out.push({ circle: c.id, subject: n.id });
-    }
-  }
-  return out;
+/** Copies of a subject on the map. */
+export function copiesOf(layout: Layout, code: string): LayoutNode[] {
+  return Object.values(layout.nodes).filter((n) => n.code === code);
 }
-

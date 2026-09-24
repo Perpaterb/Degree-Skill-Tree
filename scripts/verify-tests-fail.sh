@@ -13,9 +13,11 @@ mutations=(
   "core/engine.ts|if ('course' in rule) return ctx.enrolled ? rule.course === ctx.enrolled : !!ctx.map.degrees[rule.course];|if ('course' in rule) return true;"
   "core/engine.ts|else if (room >= cp(code) && cp(code) > 0) {|else if (cp(code) > 0) {"
   "core/engine.ts|      impossible = true;|"
-  "core/layout.ts|for (const c of cs) best.r = Math.max(best.r, Math.hypot(c.x - best.x, c.y - best.y) + c.r);|"
+  "core/layout.ts|const a1 = a0 + dir * (Math.abs(d) - 2 * da);|const a1 = leg.to - dir * da;"
+  "core/layout.ts|    got[n - 1] = Math.min(got[n - 1], got[0] + TAU - min);|"
+  "core/layout.ts|      else if (!members.has(r)) entries.add(r);|"
   "core/layout.ts|if (!best || c.r < best.r || (c.r === best.r && d < bestD)) (best = c), (bestD = d);|if (!best || c.r < best.r) (best = c), (bestD = d);"
-  "core/layout.ts|out.push({ from: rule.subject, to, kind: inOr ? 'alt' : 'req' });|out.push({ from: rule.subject, to, kind: 'req' });"
+  "core/layout.ts|else if ('subject' in rule && !out.has(rule.subject)) out.set(rule.subject, inOr ? 'alt' : 'req');|else if ('subject' in rule && !out.has(rule.subject)) out.set(rule.subject, 'req');"
   "scraper/src/access.ts|const orExpr = (): RuleNode => list('or', andExpr);|const orExpr = (): RuleNode => list('and', andExpr);"
   "scraper/src/normalize.ts|return { creditPoints: item.min, scope: item.scope };|return { text: item.scope };"
 )

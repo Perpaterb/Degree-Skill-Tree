@@ -173,6 +173,18 @@ Stories are in [`UserStories.md`](UserStories.md).
   on pointer leave.
 - Files: `core/layout.ts`, `core/layout.test.ts`, `web/src/TreeCanvas.tsx`, `web/src/theme.ts`.
 
+- **Replaced 24 Sep 2026** by a railway-map layout (the overlapping Euler version was too cluttered).
+  `core/layout.ts`: circles never overlap; a program listed by one degree or program nests inside it,
+  one listed by several sits at the top level. Each circle gets its own copy of every subject it lists
+  (`LayoutNode.id` is `<circle>/<code>`, `copiesOf` finds them); copies share one state on the canvas.
+  Inside a circle, subjects sit on rings by prerequisite depth (loops in the source data broken by a
+  depth-first walk). Circles are packed with `d3-hierarchy` (new dependency). `foreignInside` is gone.
+- Canvas: selecting or hovering one copy lights every copy; copies inside the selected degree stay
+  bright, the rest fade. Unit tests cover containment, no partial overlap, no overlapping copies,
+  determinism against the stored layout; E2E test "selecting a subject lights up every copy".
+- Files: `core/layout.ts`, `core/layout.test.ts`, `web/src/TreeCanvas.tsx`, `web/public/trees/uts-2027.json`,
+  `scraper/src/cli.ts`, `package.json`, `package-lock.json`, `e2e/multidegree.spec.ts`.
+
 ### US-021 Select a degree and work backwards
 - `Plan.degree` (URL `d=`), `selectDegree` in the store; course conditions are evaluated against the
   selected degree (any degree on the map when none is selected). Top-bar picker (alphabetical) and
@@ -187,6 +199,11 @@ Stories are in [`UserStories.md`](UserStories.md).
   renders only with a degree; hovering or focusing a row sets `glow`, which the canvas draws in cyan.
 - Files: `core/engine.ts`, `web/src/Panels.tsx`, `web/src/store.ts`, `web/src/TreeCanvas.tsx`.
 
+- 25 Sep 2026: completed subjects that do not count (`compatibility(...).wasted`) are listed at the
+  bottom of the panel under "Completed, but not counting", each with its reason as a tooltip.
+  E2E: "completed subjects that do not count are listed under the selected degree".
+- Files: `web/src/Panels.tsx`, `web/src/styles.css`, `e2e/multidegree.spec.ts`.
+
 ### US-023 See which degrees are still open
 - `compatibility(map, degree, plan)`: a completed subject counts if the degree (or any program it
   offers) lists it, else while free-elective room remains; impossible if it is an anti-requisite of a
@@ -198,6 +215,27 @@ Stories are in [`UserStories.md`](UserStories.md).
   each other (e.g. 48023 is an anti-requisite of 41039, which Computing Science requires). The
   approved "impossible" rule therefore marks degrees impossible that are, in practice, usually fine.
 - Files: `core/engine.ts`, `core/engine.test.ts`, `web/src/Panels.tsx`, `web/src/TreeCanvas.tsx`, `e2e/multidegree.spec.ts`.
+
+### US-024 Railway-style connections
+- Links are routed in `core/layout.ts` as railway lines: out along a spoke, along a ring-following
+  track in the gap between rings, in along a spoke, with rounded corners (path commands M/L/A/Q).
+  Tracks are assigned by interval scheduling so no two arcs share a track; parallel spokes are spread
+  apart; links that skip rings go through corridors between subjects. A prerequisite not listed by a
+  circle appears inside it as a hollow "entry" copy, so no link leaves its circle.
+- `core/linkQuality.ts` measures crossings, crossing angles, pairs running together and links passing
+  over a subject; the build prints it and a unit test holds a regression budget (measured 25 Sep 2026:
+  median crossing over 85 degrees, 9 shallow crossings, 43 running together, 34 over a subject).
+  The "never run on top of each other" criterion is therefore only partly met.
+- Mutation check (`scripts/verify-tests-fail.sh`) gained three layout mutations (arc end, ring spacing
+  wrap, entry copies); all 15 mutations caught on 25 Sep 2026.
+- Files: `core/layout.ts`, `core/linkQuality.ts`, `core/layout.test.ts`, `web/src/TreeCanvas.tsx`,
+  `scraper/src/cli.ts`, `scripts/verify-tests-fail.sh`.
+
+### Dev container reinstalls after dependency changes (tooling, no story)
+- `node_modules` lives in a Docker volume that outlives image rebuilds, so a new dependency (d3-hierarchy)
+  was missing in the container. `scripts/dev-entrypoint.sh` reinstalls when `package-lock.json` differs
+  from the stamp saved at the last install.
+- Files: `Dockerfile`, `scripts/dev-entrypoint.sh`.
 
 ### Rendering on demand (supports US-004, US-007)
 - Pixi redrew every frame even when idle, saturating the main thread: under 4 parallel test browsers
