@@ -12,6 +12,8 @@ export default defineConfig({
   workers: process.env.CI ? 2 : 4,
   reporter: [['list']],
   use: {
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
     baseURL: external ?? 'http://localhost:4173/Degree-Skill-Tree/',
     // Functional runs use software GL (deterministic, works anywhere). The perf run uses the real GPU.
     launchOptions: process.env.PERF

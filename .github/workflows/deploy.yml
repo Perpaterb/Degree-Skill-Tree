@@ -41,6 +41,13 @@ jobs:
       - name: E2E stories against the production build
         if: inputs.tests == 'all'
         run: npx playwright test
+      - name: Keep E2E traces when something fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: test-results
+          retention-days: 7
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
