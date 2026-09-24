@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.claude/
+CLAUDE.md
+.env
+.env.*
+# Raw scrape cache: large, reproducible from the scraper
+data/raw/
+releases/
+*.log
