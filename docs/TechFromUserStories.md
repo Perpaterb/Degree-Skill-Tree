@@ -327,6 +327,18 @@ Stories are in [`UserStories.md`](UserStories.md).
   its dark fill and pale `#86b6ff` ring. E2E checks the drawn fill and ring of a planned copy.
 - Files: `web/src/theme.ts`, `web/src/styles.css`, `e2e/multidegree.spec.ts`.
 
+### Transdisciplinary stream counted without choosing it (US-022, US-027; 25 Sep 2026)
+- Bug: "Transdisciplinary Electives (6cp)" names only the stream CBK92069, which nobody "chooses",
+  so `measure` never walked it and a completed 950xx subject fell into free electives. The stream's
+  own line was ticked (worked out alone) while its slot showed 0/6cp.
+- `measure` in `core/engine.ts` treats a program that is a requirement's only item as chosen and
+  marks its node `implied`. An implied program does not make its way or parents "started" until
+  something in it is done or planned (`hasChosen`, way `chosenHere`, `programStatus` in
+  `web/src/Panels.tsx`). In the 2027 data this only applies to the transdisciplinary streams.
+- Tests: `core/progress.test.ts` (fails on the old engine), `e2e/outline.spec.ts`. The
+  `core/engine.test.ts` "unchosen major" test now uses a local degree with two majors, since its
+  shared fixture's single major now counts unchosen; its assertions are unchanged.
+
 ### US-028 Circle titles show progress
 - `titleCp` in `core/engine.ts`: not capped. A program counts the completed and planned subjects it
   lists; a degree counts `compatibility(...).countingCp`, with and without the planned subjects.

@@ -197,7 +197,18 @@ describe('progress', () => {
   });
 
   it('does not count a major that has not been chosen', () => {
-    const p = progress(tree, 'X1', plan({ completed: ['G'] }));
+    // With a second major beside M, "major" is a real choice. (A requirement naming one program only counts it unchosen.)
+    const choice: MapDoc = {
+      ...tree,
+      degrees: {
+        X1: degree(
+          'X1',
+          box('root', 36, [], [box('core', 12, [s('A'), s('B')]), box('major', 12, [{ kind: 'program', code: 'M' }, { kind: 'program', code: 'N' }]), box('free', 12, [], [], 'free')]),
+        ),
+      },
+      programs: { ...tree.programs, N: { code: 'N', title: 'Major N', kind: 'major', creditPoints: 12, url: '', structure: box('n', 12, [s('F')]) } },
+    };
+    const p = progress(choice, 'X1', plan({ completed: ['G'] }));
     expect(p.children[1].done).toBe(0);
     expect(p.children[2].done).toBe(6); // G falls to free electives instead
   });

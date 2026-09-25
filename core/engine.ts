@@ -213,6 +213,8 @@ export interface Progress {
   refs: string[];
   /** Set on the node of a chosen program: its code. */
   program?: string;
+  /** The program is counted because it is the only thing its requirement names, not because it was chosen. */
+  implied?: boolean;
   /** Completed or planned subjects this requirement lists that already count somewhere else, and where. */
   elsewhere?: { code: string; by: string }[];
   /** A free-elective requirement: the completed and planned subjects filling it (US-032). */
@@ -243,7 +245,7 @@ export function progressStatus(p: { required: number; done: number; planned: num
 }
 
 /** Whether a chosen program sits anywhere below. */
-const hasChosen = (children: Progress[]): boolean => children.some((c) => !!c.program || hasChosen(c.children));
+const hasChosen = (children: Progress[]): boolean => children.some((c) => (!!c.program && !c.implied) || hasChosen(c.children));
 
 const WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8 };
 
@@ -297,7 +299,15 @@ const chooseOne = (description: string) => /\bone of the following\b/i.test(desc
 function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
   const completed = new Set(plan.completed);
   const planned = new Set(plan.planned.filter((c) => !completed.has(c)));
-  const chosen = new Set(plan.programs);
+  const picked = new Set(plan.programs);
+  // A requirement naming one program and nothing else (e.g. "Transdisciplinary Electives: select 6cp
+  // from the following stream") leaves nothing to choose, so that program counts without choosing it.
+  const implied = new Set<string>();
+  (function only(c: Container) {
+    if (c.items.length === 1 && c.items[0].kind === 'program' && !picked.has(c.items[0].code)) implied.add(c.items[0].code);
+    c.children.forEach(only);
+  })(structure);
+  const chosen = new Set([...picked, ...implied]);
   /** Subject code -> title of the requirement (or program) it counts towards. */
   const claimed = new Map<string, string>();
   const free: Progress[] = [];
@@ -360,6 +370,7 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
       sub.required = program.creditPoints || sub.required;
       sub.refs = [code];
       sub.program = code;
+      if (implied.has(code)) sub.implied = true;
       node.children.push(sub);
     }
     for (const child of container.children) node.children.push(walk(child, idPrefix, idPrefix ? owner : child.title));
@@ -418,7 +429,8 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
         let chosenHere = false;
         for (const part of parts) {
           const pool = part.what === 'electives' ? below(n, (d) => isFree.has(d)) : below(n, (d) => kindOf(d) === part.what);
-          if (part.what !== 'electives' && pool.length) chosenHere = true;
+          // A way is started once one of its programs is chosen, or an implied one has something in it.
+          if (part.what !== 'electives' && pool.some((d) => !d.implied || d.done + d.planned > 0)) chosenHere = true;
           // Programs: the best `count` of them. Electives: all the free credit points under this requirement.
           const take = (score: (d: Progress) => number) =>
             part.what === 'electives'

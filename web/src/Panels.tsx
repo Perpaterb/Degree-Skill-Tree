@@ -490,7 +490,7 @@ function OutlineSection({ container, prog }: { container: Program['structure']; 
     const chosen = prog?.byProgram.get(code);
     if (chosen && prog?.within.get(code) !== container.id) return 'none';
     // A chosen program is at least started (yellow), even before any of it is done.
-    if (chosen) return progressStatus({ ...chosen, chosen: true });
+    if (chosen) return progressStatus({ ...chosen, chosen: !chosen.implied });
     const alone = prog?.finish.get(code);
     return alone === 'complete' || alone === 'planned' ? alone : 'none';
   };

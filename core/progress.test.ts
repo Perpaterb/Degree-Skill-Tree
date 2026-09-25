@@ -179,6 +179,29 @@ describe('free electives (US-032)', () => {
   });
 });
 
+describe('a requirement naming only one program (US-022, US-027)', () => {
+  // Bachelor of IT: Options > Electives > "Transdisciplinary Electives: select 6cp from the following stream" names only CBK92069.
+  const options = (p: Partial<Plan>) => progress(real, 'C10148', { ...emptyPlan(), degree: 'C10148', ...p }).children.find((c) => c.title === 'Options')!;
+  const electives = (p: Partial<Plan>) => options(p).children.find((c) => c.title === 'Electives')!;
+
+  it('counts the stream without choosing it, instead of letting its subject fall to free electives', () => {
+    const e = electives({ completed: ['95009', '31061', '32130'] });
+    const [free, stream] = e.children;
+    expect([free.done, free.fills]).toEqual([12, ['31061', '32130']]);
+    expect(stream.done).toBe(6);
+    expect(progressStatus(stream)).toBe('complete');
+    expect(stream.children[0]).toMatchObject({ program: 'CBK92069', implied: true });
+  });
+
+  it('does not mark the requirement or its way started when nothing in the stream is done', () => {
+    const o = options({ completed: [] });
+    const stream = o.children.find((c) => c.title === 'Electives')!.children[1];
+    expect(progressStatus(stream)).toBe('none');
+    expect(progressStatus(o)).toBe('none');
+    expect(o.ways!.map((w) => progressStatus(w))).toEqual(['none', 'none', 'none', 'none']);
+  });
+});
+
 describe('progressStatus (US-026, US-027)', () => {
   it('is complete, planned, started or untouched', () => {
     expect(progressStatus({ required: 12, done: 12, planned: 0 })).toBe('complete');

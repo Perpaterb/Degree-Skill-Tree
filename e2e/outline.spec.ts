@@ -114,3 +114,18 @@ test('US-032: a free-elective slot lists what fills it, and hovering its note li
   await page.mouse.move(5, 5);
   await expect.poll(() => page.evaluate(() => window.__dst!.ringed().length)).toBe(0);
 });
+
+test('US-027 / US-032: a transdisciplinary subject fills its own slot without choosing the stream, not the free electives', async ({ page }) => {
+  // 95009 is in the Transdisciplinary Electives stream; 31061 and 32130 are listed nowhere in the degree.
+  const panel = await outline(page, 'c=95009.31061.32130');
+  const tde = heading(panel, 'Transdisciplinary Electives');
+  await expect(tde).toHaveAttribute('data-status', 'complete');
+  await expect(tde.getByTestId('outline-cp')).toHaveText('(6/6cp)');
+  await expect(tde).toContainText('✓');
+  const free = panel.getByTestId('free-electives').first();
+  await expect(free).toContainText('31061');
+  await expect(free).not.toContainText('95009');
+  // With nothing done in it, the stream's slot is untouched rather than "started".
+  const empty = await outline(page, 'c=');
+  await expect(heading(empty, 'Transdisciplinary Electives')).toHaveAttribute('data-status', 'none');
+});
