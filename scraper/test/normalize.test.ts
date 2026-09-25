@@ -15,8 +15,12 @@ function allItems(c: Container, out: Container['items'] = []): Container['items'
 }
 
 describe('US-019: several degrees on one map', () => {
-  it('holds the four 2027 degrees', () => {
-    expect(Object.keys(map.degrees).sort()).toEqual(['C10026', 'C10148', 'C10471', 'C10476']);
+  it('holds the five 2027 degrees, the IT and Business double degree included', () => {
+    expect(Object.keys(map.degrees).sort()).toEqual(['C10026', 'C10148', 'C10219', 'C10471', 'C10476']);
+  });
+
+  it("names a double degree's two faculties without the handbook's line break tag", () => {
+    expect(map.degrees.C10219.faculty).toBe('Engineering and Information Technology, Business');
   });
 
   it('shares programs and subjects between degrees rather than duplicating them', () => {

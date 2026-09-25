@@ -1,0 +1,47 @@
+{
+  "year": "2027",
+  "course": "C10219",
+  "inScope": {
+    "courses": 1,
+    "areasOfStudy": 14,
+    "subjects": 153
+  },
+  "requisiteOnlySubjects": 53,
+  "failed": {
+    "coursesOrAreas": [],
+    "subjects": [
+      "48033: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>"
+    ],
+    "requisiteSubjects": [
+      "37171: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31267: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31465: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31488: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31508: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31140: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31276: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31475: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31270: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48720: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48410: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48450: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48740: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "48440: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31244: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31281: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31469: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "31279: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "41192: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "23000: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "25567: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "25568: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "36200: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "23001: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "23592: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "24108: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "37151: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "25622: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>",
+      "22207: HTTP 404: <!DOCTYPE html><html><head><meta charSet=\"utf-8\"/>"
+    ]
+  }
+}

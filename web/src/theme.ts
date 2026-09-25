@@ -61,9 +61,9 @@ const lightCanvas: typeof darkCanvas = {
 /** The current theme's canvas colours. Reassigned by setThemeColours; ES module bindings stay live. */
 export let canvas = darkCanvas;
 
-/** One hue per degree, in map order. */
-const darkHues = [0xf2c75c, 0x57e0ff, 0xff7a8a, 0x8fe07a, 0xc59bff, 0xffa65c];
-const lightHues = [0xa87400, 0x0086a8, 0xc8303f, 0x3a8a2a, 0x7048c8, 0xc0600c];
+/** One hue per degree, in map order. No red: red means a clash or a locked-out program (US-037). */
+const darkHues = [0xf2c75c, 0x57e0ff, 0xe07adf, 0x8fe07a, 0xc59bff, 0xffa65c];
+const lightHues = [0xa87400, 0x0086a8, 0xa8309f, 0x3a8a2a, 0x7048c8, 0xc0600c];
 export let degreeHues = darkHues;
 
 /** Blend two colours; t = 0 gives a, 1 gives b. */

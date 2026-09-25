@@ -18,6 +18,8 @@ type Json = Record<string, any>;
 
 const num = (v: unknown) => Number(v) || 0;
 const clean = (s: unknown) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : '');
+/** A double degree's faculty comes as two names joined by a line break tag. */
+const faculty = (s: unknown) => clean(s).replace(/\s*<br\s*\/?>\s*/gi, ', ');
 /** Container descriptions often start with an internal code, e.g. "(CBK90781) Select one of...". */
 const stripCode = (s: string) => s.replace(/^\([A-Z]{2,4}\d{4,6}\)\s*/, '');
 
@@ -134,7 +136,7 @@ function toSubject(code: string, s: Json, access: ReturnType<typeof parseAccessC
     title: clean(s.title),
     creditPoints: num(s.credit_points),
     level: clean(s.study_level_ref),
-    faculty: clean(s.parent_academic_org),
+    faculty: faculty(s.parent_academic_org),
     school: clean(s.academic_org),
     description: String(s.description ?? ''),
     learningOutcomes: [...(s.unit_learning_outcomes ?? [])]
@@ -181,7 +183,7 @@ export async function buildMap(rawDir: string, year: string, courseCodes: string
       title: clean(course.title),
       creditPoints: num(course.credit_points),
       level: clean(course.study_level_ref),
-      faculty: clean(course.parent_academic_org),
+      faculty: faculty(course.parent_academic_org),
       url: `${HANDBOOK}/course/${year}/${courseCode}`,
       structure: toContainer(course.curriculumStructure ?? {}, refs),
       studyPlans: studyPlans(course.study_plans),

@@ -146,6 +146,13 @@ a {
   font: inherit;
 }
 
+/* A select is as wide as its longest option; double-degree titles would push the bar off a phone. */
+.topbar select {
+  min-width: 0;
+  max-width: min(320px, 100%);
+  text-overflow: ellipsis;
+}
+
 .search {
   flex: 1;
   display: flex;

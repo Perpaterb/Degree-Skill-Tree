@@ -522,3 +522,23 @@ Stories are in [`UserStories.md`](UserStories.md).
 - Tests: `core/locks.test.ts` (order, counts nothing); `e2e/outline.spec.ts` "US-038".
 - Files: `core/engine.ts`, `web/src/Panels.tsx`, `e2e/outline.spec.ts`.
 
+### Double degree pulled (US-019, US-037; 25 Sep 2026)
+- Pulled C10219 Bachelor of Information Technology Bachelor of Business (2027) at 1 request / 3 s, no
+  blocks: 14 areas of study, 153 subjects in scope, 53 requisite-only subjects; 404s: 1 structure
+  subject (48033) and 29 requisite subjects (retired ones, in line with the other degrees). Almost
+  every page was already cached. Report: `data/reports/coverage-2027-C10219.json`.
+- Structure (192cp): the IT half (Majors - IT one of 5, Core - IT 48cp) and the Business half (Core -
+  Business 48cp, Majors - Business one of 9). No new programs or subjects. `programsFit` reads it as
+  one IT major plus one Business major; choosing both locks the other 12.
+- Map: 5 degrees, 70 programs, 399 subjects, 1080 subject copies. IT and Business majors are now
+  offered by two degrees each, so by the US-020 rule they sit outside every degree circle.
+  Pan/zoom still median 59.9 fps (`npm run test:perf`).
+- Fixes found on the way: a double degree's faculty arrived as "A<br />B" (`faculty()` in
+  `scraper/src/normalize.ts` joins with a comma); the degree-picker grew to the longest title and
+  pushed the phone layout sideways (`.topbar select` capped); the third degree hue was red, which now
+  means locked out, so it is magenta.
+- Tests adjusted for the new data, same checks: 5 degrees in the picker and in `normalize.test.ts`,
+  Programming 1 has 19 copies (the 19th in C10219), a degree button matched by its full title.
+- Files: `scraper/src/normalize.ts`, `scraper/test/normalize.test.ts`, `web/public/trees/*.json`,
+  `web/src/theme.ts`, `web/src/styles.css`, `e2e/multidegree.spec.ts`, `data/reports/coverage-2027-C10219.json`.
+

@@ -3,7 +3,7 @@ import { chooseDegree, clickCircle, goTo, openDegreeFromChip, openTree, waitRead
 
 const glowing = (page: import('@playwright/test').Page) => page.evaluate(() => window.__dst?.glowing() ?? []);
 
-test('US-019: four degrees share one map, and pre-map links still open with their plan', async ({ page }) => {
+test('US-019: the degrees share one map, and pre-map links still open with their plan', async ({ page }) => {
   await openTree(page);
   const options = await page.getByTestId('degree-picker').locator('option').allTextContents();
   expect(options).toEqual([
@@ -12,6 +12,7 @@ test('US-019: four degrees share one map, and pre-map links still open with thei
     'Bachelor of Computing Science',
     'Bachelor of Cybersecurity',
     'Bachelor of Information Technology',
+    'Bachelor of Information Technology Bachelor of Business',
   ]);
 
   // A link shared before degrees were merged into one map.
@@ -67,7 +68,7 @@ test('US-021: choosing a major needs a degree that offers it', async ({ page }) 
   await goTo(page, 'MAJ03444');
   const panel = page.getByTestId('detail-panel');
   await expect(panel.getByRole('button', { name: 'Choose this major' })).toHaveCount(0);
-  await panel.getByRole('button', { name: /Bachelor of Information Technology/ }).click();
+  await panel.getByRole('button', { name: /Bachelor of Information Technology$/ }).click();
   await expect(panel.getByRole('button', { name: 'Choose this major' })).toBeVisible();
 });
 
@@ -123,11 +124,12 @@ test('US-022: completed subjects that do not count are listed under the selected
 });
 
 test('US-020: every copy of a completed subject looks the same, entry copies and copies outside the degree included', async ({ page }) => {
-  // Programming 1 has 18 copies, 14 of them entry copies, in circles inside and outside Business.
+  // Programming 1 has 19 copies, 14 of them entry copies, in circles inside and outside Business
+  // (the 19th is in the Bachelor of IT Bachelor of Business double degree, pulled 25 Sep 2026).
   await openTree(page, 't=uts-2027&c=41039');
   await chooseDegree(page, 'C10148');
   const looks = await page.evaluate(() => window.__dst!.copies('41039').map((id) => ({ id, ...window.__dst!.look(id)! })));
-  expect(looks.length).toBe(18);
+  expect(looks.length).toBe(19);
   const first = { fill: looks[0].fill, ring: looks[0].ring, alpha: looks[0].alpha, scale: looks[0].scale };
   for (const l of looks) expect({ fill: l.fill, ring: l.ring, alpha: l.alpha, scale: l.scale }, l.id).toEqual(first);
   expect(first.alpha).toBe(1);
@@ -140,7 +142,7 @@ test('US-020: hovering one copy of a subject makes every copy pop out and glow',
   const at = (await page.evaluate(() => window.__dst!.pointFor('41039')))!;
   const b = (await page.getByTestId('tree-canvas').boundingBox())!;
   await page.mouse.move(b.x + at.x, b.y + at.y);
-  await expect.poll(() => page.evaluate(() => window.__dst!.highlighted().length)).toBe(18);
+  await expect.poll(() => page.evaluate(() => window.__dst!.highlighted().length)).toBe(19);
   const looks = await page.evaluate(() => window.__dst!.copies('41039').map((id) => window.__dst!.look(id)!));
   for (const l of looks) {
     expect(l).toMatchObject({ halo: true, alpha: 1 });
@@ -158,7 +160,7 @@ test('US-020: hover ends as soon as the pointer leaves the enlarged subject, not
   const b = (await page.getByTestId('tree-canvas').boundingBox())!;
   const at = (await page.evaluate(() => window.__dst!.pointFor('41039')))!;
   await page.mouse.move(b.x + at.x, b.y + at.y);
-  await expect.poll(() => page.evaluate(() => window.__dst!.highlighted().length)).toBe(18);
+  await expect.poll(() => page.evaluate(() => window.__dst!.highlighted().length)).toBe(19);
   // Just outside the enlarged disc, but well inside its glow (which reaches 30 units further out).
   // Every copy of the hovered subject is enlarged by the same amount.
   const { scale, zoom } = await page.evaluate(() => ({ scale: window.__dst!.look(window.__dst!.copies('41039')[0])!.scale, zoom: window.__dst!.zoom() }));

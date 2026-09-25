@@ -103,7 +103,7 @@ As a student, I want to see what my remaining plan will cost.
 
 ### US-019 Several degrees on one map
 As a student, I want several degrees on one map so I can see where my subjects could take me.
-- [x] Bachelor of Computing Science (C10476), Bachelor of Cybersecurity (C10471) and Bachelor of Business (C10026), 2027 handbook, pulled slowly alongside the Bachelor of IT (C10148)
+- [x] Bachelor of Computing Science (C10476), Bachelor of Cybersecurity (C10471) and Bachelor of Business (C10026), 2027 handbook, pulled slowly alongside the Bachelor of IT (C10148) *25 Sep 2026: the Bachelor of Information Technology Bachelor of Business double degree (C10219) added the same way.*
 - [x] One map holds all four degrees; a subject or program shared between degrees exists once
 - [x] One plan covers the whole map; links made before this change (`#t=uts-2027-C10148&...`) still open with their plan
 
