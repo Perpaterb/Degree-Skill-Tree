@@ -431,6 +431,8 @@ function Tick({ status }: { status: Status }) {
 interface OutlineProgress {
   byId: Map<string, Progress>;
   byProgram: Map<string, Progress>;
+  /** Chosen program code -> id of the requirement it counts towards (it counts in one place only). */
+  within: Map<string, string>;
   /** Status of every program on its own (drives the circle glows too). */
   finish: Map<string, Status>;
 }
@@ -443,24 +445,28 @@ function DegreeOutline({ degree, map }: { degree: Degree; map: MapDoc }) {
     const root = progress(map, degree.code, plan);
     const byId = new Map<string, Progress>();
     const byProgram = new Map<string, Progress>();
-    const walk = (n: Progress) => {
-      if (n.program) byProgram.set(n.program, n);
+    const within = new Map<string, string>();
+    const walk = (n: Progress, parent: string) => {
+      if (n.program) byProgram.set(n.program, n), within.set(n.program, parent);
       else byId.set(n.id, n);
-      n.children.forEach(walk);
+      n.children.forEach((c) => walk(c, n.id));
     };
-    walk(root);
-    return { byId, byProgram, finish };
+    walk(root, '');
+    return { byId, byProgram, within, finish };
   }, [map, degree.code, plan, finish]);
   return <OutlineSection container={degree.structure} prog={prog} />;
 }
 
 function OutlineSection({ container, prog }: { container: Program['structure']; prog?: OutlineProgress }) {
+  const map = useApp((s) => s.map)!;
+  const kindName = (code: string) => (map.programs[code]?.kind === 'sub_major' ? 'sub-major' : map.programs[code]?.kind === 'major' ? 'major' : 'program');
   const node = prog?.byId.get(container.id);
   const status = node ? progressStatus(node) : 'none';
   const ways = node?.ways ?? [];
   const intro = ways.length ? container.description.slice(0, container.description.search(/\b1\.\s/)).trim() : container.description;
   const programStatus = (code: string): Status => {
     const chosen = prog?.byProgram.get(code);
+    if (chosen && prog?.within.get(code) !== container.id) return 'none';
     // A chosen program is at least started (yellow), even before any of it is done.
     if (chosen) return progressStatus({ ...chosen, chosen: true });
     const alone = prog?.finish.get(code);
@@ -497,10 +503,24 @@ function OutlineSection({ container, prog }: { container: Program['structure']; 
               </li>
             );
           const ps = programStatus(i.code);
+          const home = prog?.within.get(i.code);
+          const countsElsewhere = home !== undefined && home !== container.id;
+          const shared = countsElsewhere ? [] : elsewhereIn(prog?.byProgram.get(i.code));
           return (
             <li key={i.code} className={`st-${ps}`} data-testid="outline-program" data-code={i.code} data-status={ps}>
               <ProgramLink code={i.code} />
               <Tick status={ps} />
+              {countsElsewhere ? <span className="muted small"> (counts under {prog?.byId.get(home)?.title})</span> : null}
+              {shared.length ? (
+                <ul className="plain muted small" data-testid="outline-shared">
+                  {shared.map((e) => (
+                    <li key={e.code}>
+                      <SubjectLink code={e.code} /> counts towards {e.by}, not here. Another subject from this {kindName(i.code)}'s options
+                      makes up its {map.subjects[e.code]?.creditPoints ?? 0}cp.
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </li>
           );
         })}
@@ -510,6 +530,14 @@ function OutlineSection({ container, prog }: { container: Program['structure']; 
       ))}
     </section>
   );
+}
+
+/** Subjects inside a chosen program that count towards something else instead. */
+function elsewhereIn(n: Progress | undefined, out: NonNullable<Progress['elsewhere']> = []) {
+  if (!n) return out;
+  for (const e of n.elsewhere ?? []) if (!out.some((o) => o.code === e.code)) out.push(e);
+  n.children.forEach((c) => elsewhereIn(c, out));
+  return out;
 }
 
 function ProgramLink({ code }: { code: string }) {

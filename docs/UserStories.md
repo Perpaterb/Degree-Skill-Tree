@@ -155,6 +155,7 @@ As a student, I want the degree outline to show what I have done and planned, so
 - [x] Program lines (majors, sub-majors, streams) are yellow when chosen, purple with a tick when the plan completes them, green with a tick when complete.
 - [x] Numbered ways in the handbook text ("1. one major (48cp); 2. two sub-majors ...") each go on their own line, coloured the same way: yellow once started, purple with a tick when the plan completes it, green with a tick when complete. The heading goes green (or purple) when any one way does. A line that cannot be interpreted is shown on its own line without colour.
 - [x] The outline and the progress panel always agree (same calculation).
+- [x] A chosen program counts in one place only: a second major listed under both "Major" and "Options > Majors" fills Options rather than being dropped. A subject shared by two chosen programs counts once, the outline names it under the second, and an extra subject from that program's options makes up the gap. *Added 25 Sep 2026 (bug: two completed majors showed Options 0/48).*
 - [x] E2E tests cover untouched, started, planned-complete and complete, for a compulsory block and for the Options ways.
 
 ## Admin CMS

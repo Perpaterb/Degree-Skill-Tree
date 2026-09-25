@@ -140,6 +140,34 @@ describe('progress with ways and choices (US-022)', () => {
   });
 });
 
+describe('two majors in the Bachelor of IT (US-022, US-027)', () => {
+  // Data Analytics and Interaction Design are listed under both "Major" and "Options > Majors", and share 41759.
+  const DA = ['33116', '31250', '31005', '32146', '42050', '41759', '48024', '42028'];
+  const ID = ['31260', '31777', '31080', '41019', '31263', '31264', '41759', '41889'];
+  const both = (extra: string[] = []) =>
+    progress(real, 'C10148', { ...emptyPlan(), degree: 'C10148', programs: ['MAJ02081', 'MAJ02092'], completed: [...new Set([...DA, ...ID, ...extra])] });
+  const find = (n: ReturnType<typeof progress>, title: string) => n.children.find((c) => c.title === title)!;
+
+  it('counts the second major under Options instead of dropping it', () => {
+    const root = both();
+    const major = find(root, 'Major - Information Technology');
+    expect(major.children.map((c) => c.program)).toEqual(['MAJ02081']);
+    const options = find(root, 'Options');
+    expect(find(options, 'Majors').children.map((c) => c.program)).toEqual(['MAJ02092']);
+    // 41759 counts once, towards Data Analytics, so Interaction Design is 6cp short.
+    expect([options.done, options.ways![0].done]).toEqual([42, 42]);
+    expect(root.done).toBe(90);
+  });
+
+  it('says which shared subject counts elsewhere, and completes once it is replaced', () => {
+    const id = find(find(both(), 'Options'), 'Majors').children[0];
+    expect(id.children.flatMap((c) => c.elsewhere ?? [])).toEqual([{ code: '41759', by: 'Data Analytics' }]);
+    const options = find(both(['31262']), 'Options');
+    expect(progressStatus(options)).toBe('complete');
+    expect(progressStatus(options.ways![0])).toBe('complete');
+  });
+});
+
 describe('progressStatus (US-026, US-027)', () => {
   it('is complete, planned, started or untouched', () => {
     expect(progressStatus({ required: 12, done: 12, planned: 0 })).toBe('complete');

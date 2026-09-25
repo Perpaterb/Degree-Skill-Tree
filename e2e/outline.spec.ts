@@ -61,3 +61,26 @@ test('US-027 / US-022: the Options ways each get their own line, fill in as sub-
   await expect(panel.locator('[data-testid="outline-program"][data-code="SMJ08198"]').first()).toHaveAttribute('data-status', 'complete');
   await expect(page.getByTestId('progress-panel').getByRole('button', { name: /^Options\s*48\/48cp/ })).toBeVisible();
 });
+
+test('US-027 / US-022: a second completed major counts under Options, and a subject shared with the first is named', async ({ page }) => {
+  const DA = ['33116', '31250', '31005', '32146', '42050', '41759', '48024', '42028'];
+  const ID = ['31260', '31777', '31080', '41019', '31263', '31264', '41889'];
+  const program = (panel: ReturnType<Page['getByTestId']>, code: string, n: number) => panel.locator(`[data-testid="outline-program"][data-code="${code}"]`).nth(n);
+
+  // 41759 is in both majors but counts once, so Interaction Design is 6cp short and the panel says why.
+  let panel = await outline(page, `m=MAJ02081.MAJ02092&c=${[...DA, ...ID].join('.')}`);
+  await expect(program(panel, 'MAJ02081', 0)).toHaveAttribute('data-status', 'complete');
+  await expect(program(panel, 'MAJ02092', 1)).toHaveAttribute('data-status', 'started');
+  await expect(program(panel, 'MAJ02092', 1).getByTestId('outline-shared')).toContainText('41759');
+  await expect(program(panel, 'MAJ02092', 1).getByTestId('outline-shared')).toContainText('counts towards Data Analytics, not here');
+  await expect(way(panel, 0)).toHaveAttribute('data-status', 'started');
+  await expect(page.getByTestId('progress-total')).toHaveText('90/144cp');
+
+  // One more Interaction Design option fills it: both majors green, Options way 1 green, 96cp in all.
+  panel = await outline(page, `m=MAJ02081.MAJ02092&c=${[...DA, ...ID, '31262'].join('.')}`);
+  await expect(program(panel, 'MAJ02092', 1)).toHaveAttribute('data-status', 'complete');
+  await expect(program(panel, 'MAJ02092', 1)).toContainText('✓');
+  await expect(way(panel, 0)).toHaveAttribute('data-status', 'complete');
+  await expect(heading(panel, 'Options').last()).toHaveAttribute('data-status', 'complete');
+  await expect(page.getByTestId('progress-total')).toHaveText('96/144cp');
+});

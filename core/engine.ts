@@ -213,6 +213,8 @@ export interface Progress {
   refs: string[];
   /** Set on the node of a chosen program: its code. */
   program?: string;
+  /** Completed or planned subjects this requirement lists that already count somewhere else, and where. */
+  elsewhere?: { code: string; by: string }[];
   /** Numbered ways to fill this requirement, when the handbook text lists them (e.g. "1. one major (48cp) ..."). */
   ways?: WayProgress[];
 }
@@ -294,12 +296,22 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
   const completed = new Set(plan.completed);
   const planned = new Set(plan.planned.filter((c) => !completed.has(c)));
   const chosen = new Set(plan.programs);
-  const claimed = new Set<string>();
+  /** Subject code -> title of the requirement (or program) it counts towards. */
+  const claimed = new Map<string, string>();
   const free: Progress[] = [];
   const isFree = new Set<Progress>();
   const cp = (c: string) => map.subjects[c]?.creditPoints ?? 0;
 
-  function walk(container: Container, idPrefix = ''): Progress {
+  // A chosen program counts in one place only. The same major can be listed twice (e.g. "Major" and
+  // again under "Options"), so a second chosen major must fill the second list, not the first again.
+  const listings = new Map<string, number>();
+  (function count(c: Container) {
+    for (const i of c.items) if (i.kind === 'program' && chosen.has(i.code)) listings.set(i.code, (listings.get(i.code) ?? 0) + 1);
+    c.children.forEach(count);
+  })(structure);
+  const placed = new Set<string>();
+
+  function walk(container: Container, idPrefix = '', owner = container.title): Progress {
     const node: Progress = {
       id: idPrefix + container.id,
       title: container.title,
@@ -316,22 +328,39 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
       return node;
     }
     for (const item of container.items) {
-      if (item.kind === 'subject') {
-        if (claimed.has(item.code)) continue;
-        if (completed.has(item.code)) (node.done += cp(item.code)), claimed.add(item.code);
-        else if (planned.has(item.code)) (node.planned += cp(item.code)), claimed.add(item.code);
-      } else if (chosen.has(item.code)) {
-        const program = map.programs[item.code];
-        if (!program) continue;
-        const sub = walk(program.structure, item.code + ':');
-        sub.title = program.title;
-        sub.required = program.creditPoints || sub.required;
-        sub.refs = [item.code];
-        sub.program = item.code;
-        node.children.push(sub);
+      if (item.kind !== 'subject' || !(completed.has(item.code) || planned.has(item.code))) continue;
+      const by = claimed.get(item.code);
+      if (by !== undefined) {
+        if (by !== owner) (node.elsewhere ??= []).push({ code: item.code, by });
+        continue;
       }
+      if (completed.has(item.code)) node.done += cp(item.code);
+      else node.planned += cp(item.code);
+      claimed.set(item.code, owner);
     }
-    for (const child of container.children) node.children.push(walk(child, idPrefix));
+    // "One of the following" holds one program. Programs with fewer other places to go get it first,
+    // then the order they were chosen in. A program with nowhere else left still goes here.
+    const order = (c: string) => plan.programs.indexOf(c);
+    const candidates = container.items
+      .filter((i) => i.kind === 'program' && chosen.has(i.code) && !placed.has(i.code) && map.programs[i.code])
+      .map((i) => i.code)
+      .sort((a, b) => (listings.get(a) ?? 0) - (listings.get(b) ?? 0) || order(a) - order(b));
+    let slots = chooseOne(container.description) ? 1 : Infinity;
+    for (const code of candidates) {
+      const later = (listings.get(code) ?? 1) - 1;
+      listings.set(code, later);
+      if (slots <= 0 && later > 0) continue;
+      slots--;
+      placed.add(code);
+      const program = map.programs[code];
+      const sub = walk(program.structure, code + ':', program.title);
+      sub.title = program.title;
+      sub.required = program.creditPoints || sub.required;
+      sub.refs = [code];
+      sub.program = code;
+      node.children.push(sub);
+    }
+    for (const child of container.children) node.children.push(walk(child, idPrefix, idPrefix ? owner : child.title));
     return node;
   }
 
@@ -340,12 +369,12 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
     for (const c of [...completed].filter((c) => !claimed.has(c))) {
       if (node.done >= node.required) break;
       node.done += cp(c);
-      claimed.add(c);
+      claimed.set(c, node.title);
     }
     for (const c of [...planned].filter((c) => !claimed.has(c))) {
       if (node.done + node.planned >= node.required) break;
       node.planned += cp(c);
-      claimed.add(c);
+      claimed.set(c, node.title);
     }
   }
 
@@ -357,6 +386,11 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
     return out;
   };
   const kindOf = (d: Progress) => (d.program ? map.programs[d.program]?.kind : undefined);
+
+  // Credit points a requirement had beyond its cap (done, done + planned), before capping.
+  const over = new Map<Progress, [number, number]>();
+  const sharedCp = (n: Progress): number =>
+    (n.elsewhere ?? []).reduce((t, e) => t + cp(e.code), 0) + n.children.filter((c) => !c.program).reduce((t, c) => t + sharedCp(c), 0);
 
   // Roll up bottom-up: children are summed (or the best one taken), capped at the requirement.
   const roll = (n: Progress): void => {
@@ -398,7 +432,16 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
         reach = n.done + n.planned + Math.max(...counted.map((w) => w.done + w.planned));
       }
     }
+    // A subject that already counts towards another program leaves a gap here; extra subjects taken
+    // from this program's own lists (beyond their caps) fill it, as a replacement subject would.
+    if (n.program) {
+      const gap = sharedCp(n);
+      const extra = n.children.filter((c) => !c.program).map((c) => over.get(c) ?? [0, 0]);
+      done += Math.min(gap, extra.reduce((t, e) => t + e[0], 0));
+      reach += Math.min(gap, extra.reduce((t, e) => t + e[1], 0));
+    }
     if (n.required > 0) {
+      over.set(n, [Math.max(0, done - n.required), Math.max(0, reach - n.required)]);
       done = Math.min(done, n.required);
       reach = Math.min(reach, n.required);
     }

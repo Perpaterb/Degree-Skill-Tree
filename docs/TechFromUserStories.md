@@ -327,6 +327,21 @@ Stories are in [`UserStories.md`](UserStories.md).
   its dark fill and pale `#86b6ff` ring. E2E checks the drawn fill and ring of a planned copy.
 - Files: `web/src/theme.ts`, `web/src/styles.css`, `e2e/multidegree.spec.ts`.
 
+### Two majors counted in both places (US-022, US-027; 25 Sep 2026)
+- Bug: in the Bachelor of IT, two chosen majors both landed under "Major - Information Technology"
+  (one of the following, so only the best counted) and again under "Options > Majors" with 0cp, as
+  their subjects were already claimed. Options showed 0/48, the second major never went green.
+- `measure` in `core/engine.ts` now places each chosen program once: a "one of the following"
+  container takes one program (fewest other listings first, then choice order), the rest go to the
+  next list that names them. `claimed` records who a subject counts towards; a program container that
+  lists a subject claimed elsewhere gets `Progress.elsewhere`. In the roll-up a program's shared credit
+  points can be made up by its own extra option subjects (credit beyond a child's cap).
+- `DegreeOutline` / `OutlineSection` in `web/src/Panels.tsx`: program status comes from where the
+  program actually counts (`within`); elsewhere it shows "(counts under ...)". Shared subjects are
+  listed under the program with what makes up their credit points.
+- Tests: `core/progress.test.ts` (two majors, real data; both fail on the old engine),
+  `e2e/outline.spec.ts` (outline statuses, shared-subject note, totals 90 then 96 of 144).
+
 ### Planned purple, unlock paths crimson (US-009, US-026, US-027; 25 Sep 2026)
 - Blue for planned was lost among the other blues (available rings, cyan glows, the IT degree's hue).
   Planned is now purple: fill `#33175c`, ring and glow `#b36bff` (`stateLook.planned`,
