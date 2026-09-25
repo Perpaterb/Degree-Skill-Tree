@@ -582,3 +582,12 @@ Stories are in [`UserStories.md`](UserStories.md).
 - Files: `docs/FacultyColours.md`, `data/faculty-colours/uts.json`, `scraper/src/facultyColours.ts`,
   `scraper/src/normalize.ts`, `scraper/src/cli.ts`, `scraper/test/facultyColours.test.ts`, `web/public/trees/uts-2027.json`.
 
+### Full 2027 handbook pulled (US-001; 25-26 Sep 2026)
+- Overnight at 1 request / 3 s per host, the handbook and the requisite pages in separate processes
+  (the throttle is per process, and they are different hosts): `list`, then `pages` and `access`.
+  22:59 to 02:36, no 403, no failures. 2027 lists 444 courses, 957 areas of study, 3,299 subjects
+  (search totals matched); all fetched, plus 3,309 requisite pages. 4,700 handbook pages, all valid
+  JSON; 138 MB in `data/raw/2027/` (gitignored). Summary: `data/reports/full-2027.json`.
+- Only the data: the map still holds 5 degrees. Putting the whole handbook on one map needs the map
+  split by faculty or loaded on demand first.
+
