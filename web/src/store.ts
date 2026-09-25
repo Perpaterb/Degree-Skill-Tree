@@ -5,11 +5,13 @@ import {
   decodePlan,
   emptyPlan,
   encodePlan,
+  programLocks,
   programProgress,
   progress,
   progressStatus,
   titleCp,
   type Fit,
+  type Lock,
   type NodeState,
   type Plan,
   type Status,
@@ -41,6 +43,8 @@ interface AppState {
   finish: Map<string, Status>;
   /** Credit points on each degree and program circle's title (US-028). */
   titles: Map<string, TitleCp>;
+  /** Majors and sub-majors that can no longer count towards the selected degree, and why (US-037). */
+  locks: Map<string, Lock>;
   view: ViewSettings;
   theme: ThemeName;
   /** The subject, program or degree shown in the detail panel. */
@@ -114,16 +118,18 @@ function matchesFor(map: MapDoc, q: string): string[] {
 
 function derive(map: MapDoc, plan: Plan) {
   const fits = new Map(Object.keys(map.degrees).map((d) => [d, compatibility(map, d, plan)]));
+  const locks = plan.degree && map.degrees[plan.degree] ? programLocks(map, plan.degree, plan).locks : new Map<string, Lock>();
   const finish = new Map<string, Status>([
     ...Object.keys(map.degrees).map((d) => [d, progressStatus(progress(map, d, plan))] as const),
-    ...Object.keys(map.programs).map((p) => [p, progressStatus(programProgress(map, p, plan))] as const),
+    // A program locked out of the selected degree never glows, however much of it is done (US-037).
+    ...Object.keys(map.programs).map((p) => [p, locks.has(p) ? 'none' : progressStatus(programProgress(map, p, plan))] as const),
   ]);
   const titles = new Map<string, TitleCp>();
   for (const id of [...Object.keys(map.degrees), ...Object.keys(map.programs)]) {
     const t = titleCp(map, id, plan);
     if (t) titles.set(id, t);
   }
-  return { states: computeStates(map, plan), fits, finish, titles };
+  return { states: computeStates(map, plan), fits, finish, titles, locks };
 }
 
 function applyTheme(t: ThemeName) {
@@ -143,6 +149,7 @@ export const useApp = create<AppState>((set, get) => ({
   fits: new Map(),
   finish: new Map(),
   titles: new Map(),
+  locks: new Map(),
   view: loadView(),
   theme: initialTheme,
   selected: null,

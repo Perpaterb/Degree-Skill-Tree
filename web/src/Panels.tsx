@@ -10,6 +10,7 @@ import {
   type NodeState,
   type PrerequisiteGap,
   type Progress,
+  type Lock,
   type Status,
   type WayPart,
   type WayPartProgress,
@@ -335,6 +336,7 @@ function ProgramDetail({ program, map }: { program: Program; map: MapDoc }) {
   const list = (c: Program['structure']): string[] => [...c.items.filter((i) => i.kind === 'subject').map((i) => i.code), ...c.children.flatMap(list)];
   const offering = degreesOffering(map, program.code);
   const offered = !!degree && offering.some((d) => d.code === degree);
+  const lock = useApp((s) => s.locks.get(program.code));
   return (
     <>
       <div className="kicker">{kind}</div>
@@ -343,11 +345,18 @@ function ProgramDetail({ program, map }: { program: Program; map: MapDoc }) {
         {program.code} {program.creditPoints ? `· ${program.creditPoints}cp` : ''}
       </div>
       {program.legacy ? <p className="note">Named by a degree but not published in the {map.year} handbook.</p> : null}
+      {lock ? <LockNote lock={lock} degree={map.degrees[degree!]} chosen={chosen} /> : null}
       {offered || chosen ? (
         <div className="actions">
-          <button className={chosen ? 'on' : ''} onClick={() => toggle(program.code)} disabled={program.legacy}>
-            {chosen ? `✓ Chosen` : `Choose this ${kind.toLowerCase()}`}
-          </button>
+          {chosen && lock ? (
+            <button onClick={() => toggle(program.code)} data-testid="unchoose">
+              Unchoose
+            </button>
+          ) : (
+            <button className={chosen ? 'on' : ''} onClick={() => toggle(program.code)} disabled={program.legacy || !!lock}>
+              {chosen ? `✓ Chosen` : `Choose this ${kind.toLowerCase()}`}
+            </button>
+          )}
         </div>
       ) : (
         <div className="note">
@@ -432,6 +441,23 @@ function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
         </a>
       </p>
     </>
+  );
+}
+
+/** Why a program can no longer count towards the selected degree, and what is in the way (US-037, US-038). */
+function LockNote({ lock, degree, chosen }: { lock: Lock; degree: Degree; chosen: boolean }) {
+  const map = useApp((s) => s.map)!;
+  return (
+    <div className="note lock-note" data-testid="lock-note" data-why={lock.why}>
+      <b>✗ {chosen ? `Chosen, but cannot count towards ${degree.title}.` : `Cannot count towards ${degree.title}.`}</b> {lock.text}
+      {lock.blockers.length ? (
+        <ul className="plain">
+          {lock.blockers.map((b) => (
+            <li key={b}>{map.programs[b] ? <ProgramLink code={b} /> : <SubjectLink code={b} />}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -555,8 +581,17 @@ function countsElsewhere(code: string, containerId: string, prog?: OutlineProgre
 function ProgramLine({ code, containerId, prog }: { code: string; containerId: string; prog?: OutlineProgress }) {
   const map = useApp((s) => s.map)!;
   const kindName = map.programs[code]?.kind === 'sub_major' ? 'sub-major' : map.programs[code]?.kind === 'major' ? 'major' : 'program';
+  const lock = useApp((s) => (prog ? s.locks.get(code) : undefined));
   const ps = programStatus(code, containerId, prog);
   const shared = elsewhereIn(prog?.byProgram.get(code));
+  // Locked out of the selected degree: greyed and crossed, with the reason on hover (US-037).
+  if (lock)
+    return (
+      <li className="st-locked" data-testid="outline-program" data-code={code} data-status="locked" title={lock.text}>
+        <ProgramLink code={code} />
+        <span className="cross"> ✗</span>
+      </li>
+    );
   return (
     <li className={`st-${ps}`} data-testid="outline-program" data-code={code} data-status={ps}>
       <ProgramLink code={code} />

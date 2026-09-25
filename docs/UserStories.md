@@ -19,7 +19,9 @@ Later: US-028 to US-032 added (progress on circle titles, view settings, light a
 progress on each outline way, what fills elective slots). US-030 ends "the tree is always dark".
 Later: US-033 to US-036 added (the degree panel takes over from the top-left progress card, the
 outline expands and collapses, each way lists what fills it, a program is listed in one place only);
-US-022 and US-027 changed to match.
+US-022 and US-027 changed to match. Later: US-037 and US-038 added (majors and sub-majors that can
+no longer fit are crossed out; a chosen one that cannot count is shown as such); US-021, US-026 and
+US-028 changed to match.
 
 ---
 
@@ -118,7 +120,7 @@ As a student, I want to pick the degree I am aiming for and see what it needs.
 - [x] Clicking a degree circle selects it; it stays selected until another degree is selected or the selection is cleared
 - [ ] The selected degree's remaining requirements stand out: its subjects I still need are highlighted, and the other degrees' outlines dim (their compatibility shading from US-023 stays visible). *Partial: implemented (gold rings on still-needed compulsory subjects, other degrees dimmed); checked by screenshot only, no automated check.*
 - [x] The selected degree is part of the shareable link and survives a reload
-- [x] Majors and sub-majors are chosen by clicking their circles while their degree is selected (the panel offers Choose only when the selected degree offers the program)
+- [x] Majors and sub-majors are chosen by clicking their circles while their degree is selected (the panel offers Choose only when the selected degree offers the program). *25 Sep 2026: and not while the program is locked out (US-037).*
 
 ### US-022 Progress panel for the selected degree
 As a student, I want progress shown for the degree I have selected, and to see which parts of the map each requirement means.
@@ -149,7 +151,7 @@ As a student, I want a warning if I mark a subject completed before its prerequi
 
 ### US-026 Finished circles glow
 As a student, I want circles I have finished, or will finish with my plan, to stand out, so I can see at a glance what is done.
-- [x] A major, sub-major or stream circle gets a green glow around the outside when my completed subjects meet its requirements, and a purple glow when my completed plus planned subjects would meet them. Worked out the same way as the progress panel, whether or not the program is chosen.
+- [x] A major, sub-major or stream circle gets a green glow around the outside when my completed subjects meet its requirements, and a purple glow when my completed plus planned subjects would meet them. Worked out the same way as the progress panel, whether or not the program is chosen. *25 Sep 2026: except a program locked out of the selected degree, which never glows (US-037).*
 - [x] A degree circle glows green when the degree is complete, purple when the plan completes it.
 - [x] The glow is only around the outside; a chosen program keeps its yellow outline.
 - [x] An E2E test: every subject of a sub-major completed glows it green; planned instead glows it purple; partly done does not glow.
@@ -169,7 +171,7 @@ As a student, I want each circle's title to show how far along it is, so I can r
 - [x] Degree and program (major, sub-major, stream) titles sit a little higher above their circle than before
 - [x] Each title ends with completed / needed credit points (e.g. `Data Analytics 42/48cp`), with planned credit shown as the progress panel does (`42+6/48cp`)
 - [x] The completed number is not capped: extra subjects show above what is needed (e.g. `54/48cp`). For a degree, only completed subjects that count towards it are included
-- [x] A green tick when complete, a purple tick when the plan completes it (same status as the circle glows, US-026)
+- [x] A green tick when complete, a purple tick when the plan completes it (same status as the circle glows, US-026). *25 Sep 2026: a program locked out of the selected degree shows ✗ instead (US-037).*
 - [x] The credit points can be turned off in view settings (US-029)
 
 ### US-029 View settings
@@ -227,6 +229,23 @@ As a student, I want a major I have already counted not to be offered again as a
 - [x] A major or sub-major that counts towards one requirement is not listed under another requirement of the same degree (Data Analytics counting under "Major - Information Technology" is not listed under Options' "one major")
 - [x] With nothing chosen, every list is complete
 - [x] An E2E test: with Data Analytics and Interaction Design chosen, each appears in exactly one list
+
+### US-037 Programs that can no longer fit are crossed out
+As a student, I want majors and sub-majors I can no longer count towards my degree to be crossed out, so I do not plan around something that cannot happen.
+- [x] With a degree selected, a major or sub-major the degree offers is locked out when: it has no room (it cannot be placed alongside the chosen programs in any way the degree allows); it cannot be completed (the subjects still free to count for it fall short of its credit points, because the rest count towards the degree or a chosen program); or it clashes (one of its compulsory subjects cannot be taken with a subject completed or planned). With no degree selected nothing is locked
+- [x] The limits are read from the degree's structure by rule, not written per degree: "one of the following" holds one program, a requirement with numbered ways holds what its best way allows, "select N cp" holds N cp of programs. On the 2027 data: Bachelor of IT and Bachelor of Business at most 2 majors or 1 major + 2 sub-majors; Computing Science 2 sub-majors; Cybersecurity 1 sub-major (unit tests on real data). *Also found: with the Data Analytics major chosen, the Business Information Systems Management major is out too (12cp of its subjects are Data Analytics compulsory subjects, leaving 36 of 48cp). A gap in the handbook data alone never locks a program (Business's Taxation Law lists unpublished subjects).*
+- [x] A locked-out circle looks like a clashing subject: grey fill, red outline, a red cross; its title shows ✗ instead of a tick
+- [x] A locked-out program never gets the green or purple glow or tick, on the map, on its title or in the outline, even with all its subjects done
+- [x] In the degree outline, locked-out programs stay listed, greyed with a red cross; hovering shows why
+- [x] The program's panel says why and names what blocks it (chosen programs clickable); its Choose button is disabled
+- [x] Bug fix: whether a subject already counts elsewhere is decided by program, not by title (the Data Analytics major and sub-major share a title, so the "counts towards ..., not here" note never showed)
+- [x] An E2E test: choosing 2 Bachelor of IT majors crosses out the other majors and every sub-major; unchoosing one brings them back; the Data Analytics sub-major is crossed out as "cannot be completed" once the Data Analytics major is chosen
+
+### US-038 A chosen program that cannot count
+As a student, I want to see when something I chose cannot count, and undo it.
+- [x] When the chosen programs cannot all fit (e.g. an old link, or chosen before the degree was selected), programs are kept in the order they were chosen and the later ones that do not fit are locked out, with the reason and an Unchoose button in their panel
+- [x] A locked-out chosen program counts nothing towards the degree's progress
+- [x] An E2E test: a link choosing the Data Analytics major and sub-major shows the sub-major locked, counting nothing, and Unchoose removes it
 
 ## Admin CMS
 

@@ -71,6 +71,8 @@ interface Scene {
   highlighted: string[];
   /** Circles drawn with a finished glow in the last paint (US-026). */
   finished: Record<string, 'complete' | 'planned'>;
+  /** Program circles drawn locked out (grey, red, crossed) in the last paint (US-037). */
+  locked: string[];
   /** Subject codes drawn with the glow ring (search match or a hovered panel row) in the last paint. */
   ringed: Set<string>;
   /** Ask for one redraw on the next frame. */
@@ -88,6 +90,7 @@ declare global {
       copies(code: string): string[];
       zoom(): number;
       finished(): Record<string, 'complete' | 'planned'>;
+      locked(): string[];
       ringed(): string[];
       title(id: string): { text: string; progress: string; progressColour: number; visible: boolean; progressVisible: boolean; px: number; bottom: number; circleTop: number } | null;
       subjectLabel(id: string): { visible: boolean; px: number } | null;
@@ -242,7 +245,7 @@ export function TreeCanvas() {
         viewport.cursor = over ? 'pointer' : 'grab';
       });
 
-      scene.current = { app, viewport, edges, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, ringed: new Set(), invalidate };
+      scene.current = { app, viewport, edges, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, locked: [], ringed: new Set(), invalidate };
       // The camera moves on its own during inertia and fly-to animations, so each of these redraws.
       for (const ev of ['moved', 'zoomed', 'moved-end', 'zoomed-end'] as const) viewport.on(ev, invalidate);
       fit(viewport, layout);
@@ -274,6 +277,7 @@ export function TreeCanvas() {
         look: (id) => scene.current?.nodes.get(id)?.drawn ?? null,
         zoom: () => scene.current?.viewport.scale.x ?? 1,
         finished: () => scene.current?.finished ?? {},
+        locked: () => scene.current?.locked ?? [],
         ringed: () => [...(scene.current?.ringed ?? [])],
         title(id) {
           const s = scene.current;
@@ -329,6 +333,7 @@ export function TreeCanvas() {
         if (
           s.states !== prev.states ||
           s.finish !== prev.finish ||
+          s.locks !== prev.locks ||
           s.hovered !== prev.hovered ||
           s.hoveredCircle !== prev.hoveredCircle ||
           s.glow !== prev.glow ||
@@ -451,7 +456,7 @@ function tracePath(g: Graphics, path: PathCmd[]) {
 /** Everything that depends on plan, hover, selection, glow or search. */
 function paint(s: Scene) {
   s.invalidate();
-  const { states, hovered, hoveredCircle, glow, selected, matches, plan, fits, finish, titles, view } = useApp.getState();
+  const { states, hovered, hoveredCircle, glow, selected, matches, plan, fits, finish, titles, view, locks } = useApp.getState();
   const { map, layout } = s;
   const completed = new Set(plan.completed);
   const chosen = new Set(plan.programs);
@@ -485,6 +490,7 @@ function paint(s: Scene) {
 
   s.glowing = [];
   s.finished = {};
+  s.locked = [];
   for (const v of s.circles) {
     const { circle, shape, title } = v;
     const g = shape.clear();
@@ -509,6 +515,19 @@ function paint(s: Scene) {
         .fill({ color: fill, alpha: isSel ? 0.09 : 0.05 })
         .stroke({ color: glowing ? canvas.glow : mix(hue, canvas.grey, grey * 0.8), width: isSel ? 16 : glowing ? 14 : 8, alpha: other && !glowing ? 0.3 : 1 });
       title.alpha = other ? 0.45 : 1 - grey * 0.5;
+    } else if (locks.has(circle.id)) {
+      // Locked out of the selected degree: drawn like a clashing subject, grey, red and crossed (US-037).
+      s.locked.push(circle.id);
+      const k = circle.r * 0.5;
+      g.circle(circle.x, circle.y, circle.r)
+        .fill({ color: canvas.grey, alpha: 0.35 })
+        .stroke({ color: glowing ? canvas.glow : canvas.wasted, width: glowing ? 8 : 4, alpha: 0.9 });
+      g.moveTo(circle.x - k, circle.y - k)
+        .lineTo(circle.x + k, circle.y + k)
+        .moveTo(circle.x + k, circle.y - k)
+        .lineTo(circle.x - k, circle.y + k)
+        .stroke({ color: canvas.wasted, width: 6, alpha: 0.45 });
+      title.alpha = glowing ? 1 : 0.6;
     } else {
       const isChosen = chosen.has(circle.id);
       const inSel = !degree || (inDegree && circle.members.some((m) => inDegree.has(m)));
@@ -524,9 +543,11 @@ function paint(s: Scene) {
     if (circle.id === selected) g.circle(circle.x, circle.y, circle.r + 10).stroke({ color: canvas.selectRing, width: 3, alpha: 0.8 });
     // Credit points after the title, with a tick coloured like the glow (US-028).
     const t = titles.get(circle.id);
-    const text = t && view.showCp ? `${t.done}${t.planned ? `+${t.planned}` : ''}/${t.required}cp${halo !== null ? ' ✓' : ''}` : '';
+    const lockedOut = locks.has(circle.id);
+    const mark = lockedOut ? ' ✗' : halo !== null ? ' ✓' : '';
+    const text = t && view.showCp ? `${t.done}${t.planned ? `+${t.planned}` : ''}/${t.required}cp${mark}` : lockedOut ? '✗' : '';
     if (v.progress.text !== text) v.progress.text = text;
-    const colour = halo ?? (circle.kind === 'degree' ? s.hue.get(circle.id)! : canvas.clusterTitle);
+    const colour = lockedOut ? canvas.wasted : (halo ?? (circle.kind === 'degree' ? s.hue.get(circle.id)! : canvas.clusterTitle));
     if (v.progressColour !== colour) (v.progress.style.fill = colour), (v.progressColour = colour);
     v.progress.alpha = title.alpha;
   }

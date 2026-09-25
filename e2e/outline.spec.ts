@@ -270,3 +270,74 @@ test('US-036: a major counting under one requirement is not listed under another
   await expect(heading(panel, 'Major - Information Technology').locator('xpath=..').locator('[data-code="MAJ02092"]')).toHaveCount(0);
   await expect(panel).not.toContainText('counts under');
 });
+
+test('US-037: choosing 2 majors crosses out every other major and sub-major, and unchoosing one brings them back', async ({ page }) => {
+  const program = (panel: ReturnType<Page['getByTestId']>, code: string) => panel.locator(`[data-testid="outline-program"][data-code="${code}"]`).first();
+  const locked = () => page.evaluate(() => window.__dst!.locked().sort());
+  // Nothing locked with one major.
+  let panel = await outline(page, 'm=MAJ02081');
+  await openWay(panel, 1);
+  await expect(program(panel, 'SMJ08198')).not.toHaveAttribute('data-status', 'locked');
+  // With one major there is room for everything; only programs sharing its subjects are out.
+  const oneMajor = await locked();
+  expect(oneMajor).toEqual(['MAJ02080', 'SMJ02065']);
+
+  // Data Analytics and Interaction Design: no room for a third major or any sub-major.
+  panel = await outline(page, 'm=MAJ02081.MAJ02092');
+  await openWay(panel, 1);
+  await expect(program(panel, 'SMJ08198')).toHaveAttribute('data-status', 'locked');
+  await expect(program(panel, 'SMJ08198')).toContainText('✗');
+  await expect(program(panel, 'SMJ08198')).toHaveAttribute('title', /^No room: with .*Data Analytics \(major\).*Interaction Design \(major\)/);
+  await expect(program(panel, 'MAJ03444')).toHaveAttribute('data-status', 'locked');
+  await expect.poll(async () => (await locked()).length).toBe(25);
+  expect(await locked()).toEqual(expect.arrayContaining(['MAJ03444', 'SMJ08198', 'SMJ10156']));
+  expect(await locked()).not.toContain('MAJ02081');
+
+  // Its own panel says why and will not let it be chosen.
+  await goTo(page, 'MAJ03444');
+  const detail = page.getByTestId('detail-panel');
+  await expect(detail.getByTestId('lock-note')).toHaveAttribute('data-why', 'room');
+  await expect(detail.getByRole('button', { name: 'Choose this major' })).toBeDisabled();
+
+  // Unchoose Interaction Design: the others come back, as they were with one major.
+  await goTo(page, 'MAJ02092');
+  await detail.getByRole('button', { name: '✓ Chosen' }).click();
+  await expect.poll(locked).toEqual(oneMajor);
+  await goTo(page, 'MAJ03444');
+  await expect(detail.getByTestId('lock-note')).toHaveCount(0);
+  await expect(detail.getByRole('button', { name: 'Choose this major' })).toBeEnabled();
+});
+
+test('US-037: a completed sub-major locked out by the major that shares its subjects shows a cross, not a green tick or glow', async ({ page }) => {
+  const DA = ['33116', '31250', '31005', '32146', '42050', '41759', '48024', '42028'];
+  // Every Data Analytics sub-major subject (bar the unpublished 31256) is done, so on its own it is complete.
+  await outline(page, `m=MAJ02081&c=${DA.join('.')}`);
+  expect(await page.evaluate(() => window.__dst!.finished()['SMJ02065'])).toBeUndefined();
+  expect(await page.evaluate(() => window.__dst!.finished()['MAJ02081'])).toBe('complete');
+  expect(await page.evaluate(() => window.__dst!.locked())).toContain('SMJ02065');
+  expect((await page.evaluate(() => window.__dst!.title('SMJ02065')))!.progress).toMatch(/✗$/);
+  await goTo(page, 'SMJ02065');
+  const note = page.getByTestId('detail-panel').getByTestId('lock-note');
+  await expect(note).toHaveAttribute('data-why', 'overlap');
+  await expect(note).toContainText('Data Analytics (major)');
+
+  // With no degree selected, nothing is locked and it glows green on its own again.
+  await page.getByTestId('degree-picker').selectOption('');
+  await expect.poll(() => page.evaluate(() => window.__dst!.locked())).toEqual([]);
+  expect(await page.evaluate(() => window.__dst!.finished()['SMJ02065'])).toBe('complete');
+});
+
+test('US-038: a chosen sub-major that cannot count is shown locked, counts nothing, and can be unchosen', async ({ page }) => {
+  const DA = ['33116', '31250', '31005', '32146', '42050', '41759', '48024', '42028'];
+  const panel = await outline(page, `m=MAJ02081.SMJ02065&c=${DA.join('.')}`);
+  // Only the major's 48cp count; the sub-major adds nothing.
+  await expect(panel.getByTestId('progress-total')).toHaveText('48/144cp');
+  await expect(heading(panel, 'Options').last().getByTestId('outline-cp')).toHaveText('(0/48cp)');
+  await goTo(page, 'SMJ02065');
+  const detail = page.getByTestId('detail-panel');
+  await expect(detail.getByTestId('lock-note')).toContainText('Chosen, but cannot count towards Bachelor of Information Technology');
+  await detail.getByTestId('unchoose').click();
+  await expect(page).not.toHaveURL(/SMJ02065/);
+  await expect(detail.getByTestId('lock-note')).toContainText('Cannot count towards');
+  await expect(detail.getByRole('button', { name: 'Choose this sub-major' })).toBeDisabled();
+});

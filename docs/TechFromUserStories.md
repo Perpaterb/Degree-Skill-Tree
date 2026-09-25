@@ -488,3 +488,37 @@ Stories are in [`UserStories.md`](UserStories.md).
 - Tests: `e2e/outline.spec.ts` "US-036". Mutation check: making `countsElsewhere` always false turns it red.
 - Files: `web/src/Panels.tsx`, `e2e/outline.spec.ts`.
 
+### US-037 Programs that can no longer fit are crossed out
+- `core/engine.ts`:
+  - `programsFit(map, degree, codes)` places each program in a requirement that lists it (trying
+    every placement; a handful at most) and checks the structure: a requirement with numbered ways
+    takes what one understood way allows per kind; any other takes programs up to its credit points
+    (skipped under a ways requirement, whose ways govern).
+  - `programLocks(map, degree, plan)` returns `{ accepted, locks }`. For each major and sub-major the
+    degree lists: `room` (does not fit beside the accepted ones), `overlap` (subjects still free, i.e.
+    not compulsory in the degree or an accepted program and not counted by a requirement, fall below
+    `min(its cp, all its listed cp)`, so gaps in the handbook data never lock) and `clash` (a compulsory
+    subject clashes with one taken). Each `Lock` has a sentence and its blockers.
+  - Bug fix: `measure` tracks who a subject counts towards by key (program code or container id), not
+    title; the Data Analytics major and sub-major share a title, which hid the "counts towards" note.
+    The root `Progress` now carries `claims` (subject -> key) for the overlap check.
+- `web/src/store.ts`: `locks` derived with the plan while a degree is selected; a locked program's
+  `finish` is `none`, so it never glows. ~10-35 ms per plan change for the whole derive.
+- `web/src/TreeCanvas.tsx`: locked circles drawn grey with a red outline and cross; title ends ✗ in
+  red. `window.__dst.locked()` for tests.
+- `web/src/Panels.tsx`: `ProgramLine` greyed, struck through, ✗, reason as tooltip (`data-status`
+  `locked`); `LockNote` in the program panel with blockers as links; Choose disabled.
+- Tests: `core/locks.test.ts` (each degree's limits, room, overlap, data gap, other degree, no degree,
+  the title bug on a synthetic map; the bug test fails on the old title comparison);
+  `e2e/outline.spec.ts` "US-037" x2. Mutation check: with the store's locks forced empty, all three
+  US-037 / US-038 E2E tests go red.
+- Files: `core/engine.ts`, `core/locks.test.ts`, `web/src/store.ts`, `web/src/TreeCanvas.tsx`,
+  `web/src/Panels.tsx`, `web/src/styles.css`, `e2e/outline.spec.ts`, `docs/UserStories.md`.
+
+### US-038 A chosen program that cannot count
+- `programLocks` walks `plan.programs` in choice order; one that does not fit beside those accepted
+  before it is locked. `progress()` measures with `accepted` only, so it counts nothing.
+- `ProgramDetail` shows "Chosen, but cannot count towards ..." and an Unchoose button (`unchoose`).
+- Tests: `core/locks.test.ts` (order, counts nothing); `e2e/outline.spec.ts` "US-038".
+- Files: `core/engine.ts`, `web/src/Panels.tsx`, `e2e/outline.spec.ts`.
+

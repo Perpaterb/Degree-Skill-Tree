@@ -756,3 +756,27 @@ a {
 .ways .free-electives li {
   margin: 1px 0;
 }
+
+/* Programs locked out of the selected degree (US-037). */
+.st-locked,
+.st-locked .link {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+}
+
+.st-locked .cross {
+  margin-left: 4px;
+  color: var(--danger);
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.lock-note {
+  border-left: 3px solid var(--danger);
+}
+
+.lock-note ul {
+  margin-top: 4px;
+}

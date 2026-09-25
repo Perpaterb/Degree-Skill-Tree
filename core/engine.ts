@@ -221,6 +221,8 @@ export interface Progress {
   fills?: string[];
   /** Numbered ways to fill this requirement, when the handbook text lists them (e.g. "1. one major (48cp) ..."). */
   ways?: WayProgress[];
+  /** On the root only: completed and planned subjects counted by a listing requirement, and the program code (or requirement id) counting them. */
+  claims?: Map<string, string>;
 }
 
 export interface WayProgress {
@@ -319,8 +321,8 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
     c.children.forEach(only);
   })(structure);
   const chosen = new Set([...picked, ...implied]);
-  /** Subject code -> title of the requirement (or program) it counts towards. */
-  const claimed = new Map<string, string>();
+  /** Subject code -> the requirement (or program) it counts towards: `key` identifies it, `title` names it. */
+  const claimed = new Map<string, { key: string; title: string }>();
   const free: Progress[] = [];
   const isFree = new Set<Progress>();
   const cp = (c: string) => map.subjects[c]?.creditPoints ?? 0;
@@ -334,7 +336,7 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
   })(structure);
   const placed = new Set<string>();
 
-  function walk(container: Container, idPrefix = '', owner = container.title): Progress {
+  function walk(container: Container, idPrefix = '', owner = { key: container.id, title: container.title }): Progress {
     const node: Progress = {
       id: idPrefix + container.id,
       title: container.title,
@@ -354,7 +356,8 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
       if (item.kind !== 'subject' || !(completed.has(item.code) || planned.has(item.code))) continue;
       const by = claimed.get(item.code);
       if (by !== undefined) {
-        if (by !== owner) (node.elsewhere ??= []).push({ code: item.code, by });
+        // Compared by key: two programs can share a title (the Data Analytics major and sub-major).
+        if (by.key !== owner.key) (node.elsewhere ??= []).push({ code: item.code, by: by.title });
         continue;
       }
       if (completed.has(item.code)) node.done += cp(item.code);
@@ -376,7 +379,7 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
       slots--;
       placed.add(code);
       const program = map.programs[code];
-      const sub = walk(program.structure, code + ':', program.title);
+      const sub = walk(program.structure, code + ':', { key: code, title: program.title });
       sub.title = program.title;
       sub.required = program.creditPoints || sub.required;
       sub.refs = [code];
@@ -384,22 +387,23 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
       if (implied.has(code)) sub.implied = true;
       node.children.push(sub);
     }
-    for (const child of container.children) node.children.push(walk(child, idPrefix, idPrefix ? owner : child.title));
+    for (const child of container.children) node.children.push(walk(child, idPrefix, idPrefix ? owner : { key: child.id, title: child.title }));
     return node;
   }
 
   const root = walk(structure);
+  root.claims = new Map([...claimed].map(([c, o]) => [c, o.key]));
   for (const node of free) {
     for (const c of [...completed].filter((c) => !claimed.has(c))) {
       if (node.done >= node.required) break;
       node.done += cp(c);
-      claimed.set(c, node.title);
+      claimed.set(c, { key: node.id, title: node.title });
       (node.fills ??= []).push(c);
     }
     for (const c of [...planned].filter((c) => !claimed.has(c))) {
       if (node.done + node.planned >= node.required) break;
       node.planned += cp(c);
-      claimed.set(c, node.title);
+      claimed.set(c, { key: node.id, title: node.title });
       (node.fills ??= []).push(c);
     }
   }
@@ -486,7 +490,8 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
 /** Progress towards one degree, for the progress panel and the degree outline (US-022, US-027). */
 export function progress(map: MapDoc, degreeCode: string, plan: Plan): Progress {
   const degree = map.degrees[degreeCode];
-  const root = measure(map, degree.structure, plan);
+  // A chosen program locked out of this degree counts nothing (US-038).
+  const root = measure(map, degree.structure, { ...plan, programs: programLocks(map, degreeCode, plan).accepted });
   root.title = degree.title;
   return root;
 }
@@ -501,6 +506,135 @@ export function programProgress(map: MapDoc, code: string, plan: Plan): Progress
   root.planned = Math.min(root.planned, root.required - root.done);
   root.program = code;
   return root;
+}
+
+/** Why a major or sub-major can no longer count towards the selected degree (US-037). */
+export interface Lock {
+  /** No room left for it; its subjects count elsewhere so it cannot be completed; or it clashes with a subject taken. */
+  why: 'room' | 'overlap' | 'clash';
+  text: string;
+  /** Chosen programs (room, overlap) or taken subjects (clash) that cause it. */
+  blockers: string[];
+}
+
+const programCp = (map: MapDoc, code: string) => map.programs[code]?.creditPoints || map.programs[code]?.structure.creditPoints || 0;
+const lockable = (map: MapDoc, code: string) => map.programs[code]?.kind === 'major' || map.programs[code]?.kind === 'sub_major';
+
+/**
+ * Whether these programs can all count towards a degree at once, read from its structure: each goes
+ * in a requirement that lists it; a requirement with numbered ways takes what one of its ways allows
+ * (so many majors, so many sub-majors); any other requirement takes programs up to its credit points.
+ */
+export function programsFit(map: MapDoc, degreeCode: string, codes: string[]): boolean {
+  const structure = map.degrees[degreeCode].structure;
+  const homes = new Map<string, Container[]>(codes.map((c) => [c, []]));
+  (function find(c: Container) {
+    for (const i of c.items) if (i.kind === 'program' && homes.has(i.code)) homes.get(i.code)!.push(c);
+    c.children.forEach(find);
+  })(structure);
+  if (codes.some((c) => !homes.get(c)!.length)) return false;
+
+  const ok = (at: Map<string, Container>) => {
+    const inside = (c: Container, out: string[] = []): string[] => {
+      for (const [code, home] of at) if (home === c) out.push(code);
+      c.children.forEach((ch) => inside(ch, out));
+      return out;
+    };
+    const check = (c: Container, underWays: boolean): boolean => {
+      const here = inside(c);
+      const ways = parseWays(c.description).filter((w) => w.parts);
+      if (ways.length) {
+        const count = (k: string) => here.filter((p) => map.programs[p]?.kind === k).length;
+        const fits = ways.some((w) =>
+          (['major', 'sub_major', 'stream'] as const).every((k) => count(k) <= w.parts!.filter((p) => p.what === k).reduce((t, p) => t + p.count, 0)),
+        );
+        if (!fits) return false;
+        underWays = true;
+      } else if (!underWays && c.creditPoints > 0 && here.reduce((t, p) => t + programCp(map, p), 0) > c.creditPoints) return false;
+      return c.children.every((ch) => check(ch, underWays));
+    };
+    return check(structure, false);
+  };
+
+  // Every way of placing each program in one of the requirements that list it (a handful at most).
+  const place = (i: number, at: Map<string, Container>): boolean => {
+    if (i === codes.length) return ok(at);
+    for (const home of homes.get(codes[i])!) {
+      at.set(codes[i], home);
+      if (place(i + 1, at)) return true;
+    }
+    at.delete(codes[i]);
+    return false;
+  };
+  return place(0, new Map());
+}
+
+/**
+ * Majors and sub-majors of a degree that can no longer count towards it (US-037, US-038). Chosen
+ * programs are kept in the order they were chosen; one that does not fit beside those before it is
+ * locked out, and `accepted` is the plan's programs without them.
+ */
+export function programLocks(map: MapDoc, degreeCode: string, plan: Plan): { accepted: string[]; locks: Map<string, Lock> } {
+  const degree = map.degrees[degreeCode];
+  const locks = new Map<string, Lock>();
+  if (!degree) return { accepted: plan.programs, locks };
+  const offered = [...programsUnder(map, degree.structure)].filter((c) => lockable(map, c));
+  const taken = new Set([...plan.completed, ...plan.planned]);
+  const cp = (c: string) => (map.subjects[c]?.legacy ? 0 : (map.subjects[c]?.creditPoints ?? 0));
+  const title = (c: string) => map.programs[c]?.title ?? c;
+  const kindName = (c: string) => (map.programs[c]?.kind === 'sub_major' ? 'sub-major' : 'major');
+  const names = (codes: string[]) => codes.map((c) => `${title(c)} (${kindName(c)})`).join(' and ');
+
+  const claimedFor = (accepted: string[]) => {
+    // Subjects that count elsewhere: the degree's and the accepted programs' compulsory subjects, and
+    // taken subjects already counted by a requirement or program (not by free electives).
+    const owner = new Map<string, string>();
+    compulsorySubjects(map, degree.structure).forEach((c) => owner.set(c, 'degree'));
+    for (const p of accepted) if (offered.includes(p)) compulsorySubjects(map, map.programs[p].structure).forEach((c) => owner.has(c) || owner.set(c, p));
+    const root = measure(map, degree.structure, { ...plan, programs: accepted });
+    for (const [c, by] of root.claims ?? []) if (!owner.has(c)) owner.set(c, map.programs[by] ? by : 'degree');
+    return owner;
+  };
+
+  const check = (code: string, accepted: string[], claimed: Map<string, string>): Lock | null => {
+    // Only programs this degree offers take up its room; others chosen for another degree do not.
+    const others = accepted.filter((c) => offered.includes(c) && c !== code);
+    if (!programsFit(map, degreeCode, [...others, code])) {
+      return { why: 'room', text: `No room: with ${names(others)} chosen, ${degree.title} has no place left for this ${kindName(code)}.`, blockers: others };
+    }
+    const listed = [...subjectsUnder(map, map.programs[code].structure)];
+    const free = listed.filter((c) => !claimed.has(c) || claimed.get(c) === code).reduce((t, c) => t + cp(c), 0);
+    const need = programCp(map, code);
+    // Only a shortfall caused by subjects counting elsewhere; one caused by gaps in the handbook data
+    // (subjects missing from this year) is not the student's doing and does not lock it.
+    const total = listed.reduce((t, c) => t + cp(c), 0);
+    if (free < Math.min(need, total)) {
+      const by = [...new Set(listed.map((c) => claimed.get(c)).filter((b): b is string => !!b && b !== code))];
+      const progs = by.filter((b) => b !== 'degree');
+      const where = [...(progs.length ? [names(progs)] : []), ...(by.includes('degree') ? [`${degree.title}'s own requirements`] : [])].join(' and ');
+      return { why: 'overlap', text: `Cannot be completed: its subjects already count towards ${where}, leaving ${free} of the ${need}cp it needs.`, blockers: progs };
+    }
+    for (const req of compulsorySubjects(map, map.programs[code].structure)) {
+      const s = map.subjects[req];
+      if (!s || taken.has(req)) continue;
+      const against = [...taken].filter((t) => clashes(s, new Set([t]), map));
+      if (against.length) return { why: 'clash', text: `Clashes: its compulsory subject ${req} cannot be taken with ${against.join(', ')}, which you have.`, blockers: against };
+    }
+    return null;
+  };
+
+  const accepted: string[] = [];
+  for (const code of plan.programs) {
+    const lock = offered.includes(code) ? check(code, accepted, claimedFor(accepted)) : null;
+    if (lock) locks.set(code, lock);
+    else accepted.push(code);
+  }
+  const claimed = claimedFor(accepted);
+  for (const code of offered) if (!plan.programs.includes(code)) {
+    const lock = check(code, accepted, claimed);
+    if (lock) locks.set(code, lock);
+  }
+  return { accepted, locks };
 }
 
 /** Credit points for a circle's title (US-028). */
