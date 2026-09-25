@@ -15,6 +15,8 @@ US-025 added (warn before marking completed without prerequisites); US-007 noted
 US-026 and US-027 added (green / blue progress on circles and the degree outline); planned subjects
 turn blue (US-009); numbered option ways counted properly (US-022). Then planned changed from blue
 to purple (too much other blue on the map), and "what this unlocks" paths from purple to crimson.
+Later: US-028 to US-032 added (progress on circle titles, view settings, light and dark mode,
+progress on each outline way, what fills elective slots). US-030 ends "the tree is always dark".
 
 ---
 
@@ -157,6 +159,40 @@ As a student, I want the degree outline to show what I have done and planned, so
 - [x] The outline and the progress panel always agree (same calculation).
 - [x] A chosen program counts in one place only: a second major listed under both "Major" and "Options > Majors" fills Options rather than being dropped. A subject shared by two chosen programs counts once, the outline names it under the second, and an extra subject from that program's options makes up the gap. *Added 25 Sep 2026 (bug: two completed majors showed Options 0/48).*
 - [x] E2E tests cover untouched, started, planned-complete and complete, for a compulsory block and for the Options ways.
+
+### US-028 Circle titles show progress
+As a student, I want each circle's title to show how far along it is, so I can read progress straight off the map.
+- [ ] Degree and program (major, sub-major, stream) titles sit a little higher above their circle than before
+- [ ] Each title ends with completed / needed credit points (e.g. `Data Analytics 42/48cp`), with planned credit shown as the progress panel does (`42+6/48cp`)
+- [ ] The completed number is not capped: extra subjects show above what is needed (e.g. `54/48cp`). For a degree, only completed subjects that count towards it are included
+- [ ] A green tick when complete, a purple tick when the plan completes it (same status as the circle glows, US-026)
+- [ ] The credit points can be turned off in view settings (US-029)
+
+### US-029 View settings
+As a student, I want to adjust how the map's text looks.
+- [ ] A Settings button at the top right opens a small popup
+- [ ] "Text grows with zoom" (on/off): on, circle titles and subject labels scale with zoom but stay between a minimum and maximum on-screen size; off, they stay one size on screen at every zoom
+- [ ] "Text size" slider as a relative percentage (50%-200%), not pixels; it works in both modes
+- [ ] "Show credit points on titles" (on/off, US-028)
+- [ ] Settings are remembered in this browser and are not part of a shared plan link
+- [ ] The US-004 pan/zoom performance target (median 55fps) still holds
+
+### US-030 Light and dark mode
+As a student, I want to switch between light and dark.
+- [ ] A button at the top right, beside Settings, switches between light and dark
+- [ ] The first visit follows the operating system's setting; after that the choice is remembered
+- [ ] Light mode covers everything, the map included (background, circles, subject states, links, glows); every subject state stays distinguishable and text readable in both
+
+### US-031 Progress on each way and heading in the outline
+As a student, I want to see how far along each way of filling a requirement is.
+- [ ] Each numbered way (e.g. "one major (48cp)") shows its own done / needed, with planned in purple, and a small bar
+- [ ] Each requirement heading shows done / needed the same way (e.g. `Options 42/48cp`)
+
+### US-032 See what can fill elective slots
+As a student, I want to know what can go in an elective slot.
+- [ ] Under a free-elective requirement ("Electives (18cp)", "Free Electives (24cp)"), the outline lists the completed and planned subjects counting there, each clickable
+- [ ] It says any UTS subject not already counting elsewhere can go there, and hovering the line glows the subjects on this map that would count
+- [ ] It does not list every UTS subject, only this map's, through the glow
 
 ## Admin CMS
 
