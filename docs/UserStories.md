@@ -185,14 +185,14 @@ As a student, I want to switch between light and dark.
 
 ### US-031 Progress on each way and heading in the outline
 As a student, I want to see how far along each way of filling a requirement is.
-- [ ] Each numbered way (e.g. "one major (48cp)") shows its own done / needed, with planned in purple, and a small bar
-- [ ] Each requirement heading shows done / needed the same way (e.g. `Options 42/48cp`)
+- [x] Each numbered way (e.g. "one major (48cp)") shows its own done / needed, with planned in purple, and a small bar
+- [x] Each requirement heading shows done / needed the same way (e.g. `Options (42+6/48cp)`)
 
 ### US-032 See what can fill elective slots
 As a student, I want to know what can go in an elective slot.
-- [ ] Under a free-elective requirement ("Electives (18cp)", "Free Electives (24cp)"), the outline lists the completed and planned subjects counting there, each clickable
-- [ ] It says any UTS subject not already counting elsewhere can go there, and hovering the line glows the subjects on this map that would count
-- [ ] It does not list every UTS subject, only this map's, through the glow
+- [x] Under a free-elective requirement ("Electives (18cp)", "Free Electives (24cp)"), the outline lists the completed and planned subjects counting there, each clickable
+- [x] It says any UTS subject not already counting elsewhere can go there, and hovering the line glows the subjects on this map that would count. *Built as: glows the subjects you could take now (requisites met), since nearly every subject on the map would count and lighting them all shows nothing.*
+- [x] It does not list every UTS subject, only this map's, through the glow
 
 ## Admin CMS
 

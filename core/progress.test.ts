@@ -168,6 +168,17 @@ describe('two majors in the Bachelor of IT (US-022, US-027)', () => {
   });
 });
 
+describe('free electives (US-032)', () => {
+  it('records which subjects fill a free-elective slot', () => {
+    // 31061 and 32130 are not listed anywhere in the Bachelor of IT.
+    const root = progress(real, 'C10148', { ...emptyPlan(), degree: 'C10148', completed: ['31061'], planned: ['32130'] });
+    const fills: Record<string, string[]> = {};
+    const walk = (n: typeof root) => (n.fills && (fills[n.title] = n.fills), n.children.forEach(walk));
+    walk(root);
+    expect(fills).toEqual({ Electives: ['31061', '32130'] });
+  });
+});
+
 describe('progressStatus (US-026, US-027)', () => {
   it('is complete, planned, started or untouched', () => {
     expect(progressStatus({ required: 12, done: 12, planned: 0 })).toBe('complete');

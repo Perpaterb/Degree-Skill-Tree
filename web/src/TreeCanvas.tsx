@@ -55,6 +55,8 @@ interface Scene {
   highlighted: string[];
   /** Circles drawn with a finished glow in the last paint (US-026). */
   finished: Record<string, 'complete' | 'planned'>;
+  /** Subject codes drawn with the glow ring (search match or a hovered panel row) in the last paint. */
+  ringed: Set<string>;
   /** Ask for one redraw on the next frame. */
   invalidate(): void;
 }
@@ -70,6 +72,7 @@ declare global {
       copies(code: string): string[];
       zoom(): number;
       finished(): Record<string, 'complete' | 'planned'>;
+      ringed(): string[];
     };
   }
 }
@@ -211,7 +214,7 @@ export function TreeCanvas() {
         viewport.cursor = over ? 'pointer' : 'grab';
       });
 
-      scene.current = { app, viewport, edges, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, invalidate };
+      scene.current = { app, viewport, edges, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, ringed: new Set(), invalidate };
       // The camera moves on its own during inertia and fly-to animations, so each of these redraws.
       for (const ev of ['moved', 'zoomed', 'moved-end', 'zoomed-end'] as const) viewport.on(ev, invalidate);
       fit(viewport, layout);
@@ -243,6 +246,7 @@ export function TreeCanvas() {
         look: (id) => scene.current?.nodes.get(id)?.drawn ?? null,
         zoom: () => scene.current?.viewport.scale.x ?? 1,
         finished: () => scene.current?.finished ?? {},
+        ringed: () => [...(scene.current?.ringed ?? [])],
         copies: (code) => [...(scene.current?.nodes.values() ?? [])].filter((v) => v.node.code === code).map((v) => v.node.id),
       };
 
@@ -458,6 +462,7 @@ function paint(s: Scene) {
   };
 
   s.highlighted = [];
+  s.ringed = new Set();
   for (const v of s.nodes.values()) {
     const { node, shape, root } = v;
     const code = node.code;
@@ -474,7 +479,10 @@ function paint(s: Scene) {
       g.circle(0, 0, node.r + 22).fill({ color: canvas.glow, alpha: 0.16 });
       g.circle(0, 0, node.r + 15).fill({ color: canvas.glow, alpha: 0.28 });
     } else if (look.glow && !hollow) g.circle(0, 0, node.r + 7).fill({ color: look.glow, alpha: 0.16 });
-    if (matchSet.has(code) || glowSet.has(code)) g.circle(0, 0, node.r + 10).stroke({ color: canvas.glow, width: 3, alpha: 0.9 });
+    if (matchSet.has(code) || glowSet.has(code)) {
+      g.circle(0, 0, node.r + 10).stroke({ color: canvas.glow, width: 3, alpha: 0.9 });
+      s.ringed.add(code);
+    }
     if (path.has(code)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgePath, width: 3 });
     if (unlocks.has(code)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgeUnlock, width: 3 });
     if (needed.has(code) && insideSel(node.circle)) g.circle(0, 0, node.r + 5).stroke({ color: canvas.needed, width: 2, alpha: 0.85 });

@@ -573,9 +573,36 @@ a {
 }
 
 .ways li {
-  margin: 2px 0;
+  margin: 2px 0 6px;
+}
+
+.way-num {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ways .bar {
+  display: flex;
+  max-width: 220px;
+  margin-top: 3px;
 }
 
 .needs-first {
   margin: 0 0 4px 22px;
+}
+
+/* What fills a free-elective slot (US-032). */
+.free-electives {
+  margin: -4px 0 8px;
+}
+
+.free-electives .hint {
+  margin: 4px 0 0;
+  cursor: help;
+}
+
+.free-electives .hint:hover {
+  color: var(--text);
 }

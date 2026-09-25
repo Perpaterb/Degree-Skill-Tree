@@ -427,6 +427,26 @@ function Tick({ status }: { status: Status }) {
   return status === 'complete' || status === 'planned' ? <span className="tick"> ✓</span> : null;
 }
 
+/** Done / needed credit points, with the planned part in purple: "42+6/48cp". */
+function Cp({ p }: { p: { done: number; planned: number; required: number } }) {
+  return (
+    <>
+      {p.done}
+      {p.planned ? <span className="planned-num">+{p.planned}</span> : null}/{p.required}cp
+    </>
+  );
+}
+
+function Bar({ p }: { p: { done: number; planned: number; required: number } }) {
+  const pct = (n: number) => (p.required ? Math.min(100, (n / p.required) * 100) : 0);
+  return (
+    <span className="bar">
+      <span className="bar-done" style={{ width: `${pct(p.done)}%` }} />
+      <span className="bar-planned" style={{ width: `${pct(p.planned)}%` }} />
+    </span>
+  );
+}
+
 /** Progress per container of the degree, keyed by container id, and per chosen program, keyed by code. */
 interface OutlineProgress {
   byId: Map<string, Progress>;
@@ -476,11 +496,19 @@ function OutlineSection({ container, prog }: { container: Program['structure']; 
     <section>
       {container.title !== 'Structure' ? (
         <h3 className={`st-${status}`} data-testid="outline-heading" data-status={status}>
-          {container.title} {container.creditPoints ? <span className="cp">({container.creditPoints}cp)</span> : null}
+          {container.title}{' '}
+          {node ? (
+            <span className="cp" data-testid="outline-cp">
+              (<Cp p={node} />)
+            </span>
+          ) : container.creditPoints ? (
+            <span className="cp">({container.creditPoints}cp)</span>
+          ) : null}
           <Tick status={status} />
         </h3>
       ) : null}
       {intro ? <p className="muted">{intro}</p> : null}
+      {container.kind === 'free' && node ? <FreeElectives node={node} /> : null}
       {ways.length ? (
         <ol className="ways">
           {ways.map((w) => {
@@ -489,6 +517,14 @@ function OutlineSection({ container, prog }: { container: Program['structure']; 
               <li key={w.text} className={`st-${ws}`} data-testid="outline-way" data-status={ws}>
                 {w.text}
                 <Tick status={ws} />
+                {w.understood ? (
+                  <>
+                    <span className="way-num" data-testid="outline-way-cp">
+                      <Cp p={w} />
+                    </span>
+                    <Bar p={w} />
+                  </>
+                ) : null}
               </li>
             );
           })}
@@ -529,6 +565,36 @@ function OutlineSection({ container, prog }: { container: Program['structure']; 
         <OutlineSection key={c.id} container={c} prog={prog} />
       ))}
     </section>
+  );
+}
+
+/** What fills a free-elective slot, and what could (US-032). */
+function FreeElectives({ node }: { node: Progress }) {
+  const states = useApp((s) => s.states);
+  const setGlow = useApp((s) => s.setGlow);
+  // Any subject counts, so the useful ones to point at are those that can be taken now.
+  const open = useMemo(() => [...states].filter(([, st]) => st === 'available').map(([c]) => c), [states]);
+  return (
+    <div className="free-electives" data-testid="free-electives">
+      {node.fills?.length ? (
+        <ul className="plain">
+          {node.fills.map((c) => (
+            <li key={c}>
+              <SubjectLink code={c} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p
+        className="muted small hint"
+        data-testid="free-electives-hint"
+        onMouseEnter={() => setGlow(open)}
+        onMouseLeave={() => setGlow([])}
+      >
+        Any UTS subject not already counting towards something else can go here. Hover here to light up the {open.length} subjects on this map
+        you could take now.
+      </p>
+    </div>
   );
 }
 
@@ -574,7 +640,6 @@ export function DetailPanel() {
 function ProgressRow({ p, depth }: { p: Progress; depth: number }) {
   const [open, setOpen] = useState(depth < 1);
   const setGlow = useApp((s) => s.setGlow);
-  const pct = (n: number) => (p.required ? Math.min(100, (n / p.required) * 100) : 0);
   return (
     <li>
       <button
@@ -588,13 +653,9 @@ function ProgressRow({ p, depth }: { p: Progress; depth: number }) {
       >
         <span className="progress-title">{p.title}</span>
         <span className="progress-num">
-          {p.done}
-          {p.planned ? <span className="planned-num">+{p.planned}</span> : null}/{p.required}cp
+          <Cp p={p} />
         </span>
-        <span className="bar">
-          <span className="bar-done" style={{ width: `${pct(p.done)}%` }} />
-          <span className="bar-planned" style={{ width: `${pct(p.planned)}%` }} />
-        </span>
+        <Bar p={p} />
       </button>
       {open && p.children.length ? (
         <ul>

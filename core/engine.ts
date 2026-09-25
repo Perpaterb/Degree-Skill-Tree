@@ -215,6 +215,8 @@ export interface Progress {
   program?: string;
   /** Completed or planned subjects this requirement lists that already count somewhere else, and where. */
   elsewhere?: { code: string; by: string }[];
+  /** A free-elective requirement: the completed and planned subjects filling it (US-032). */
+  fills?: string[];
   /** Numbered ways to fill this requirement, when the handbook text lists them (e.g. "1. one major (48cp) ..."). */
   ways?: WayProgress[];
 }
@@ -370,11 +372,13 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
       if (node.done >= node.required) break;
       node.done += cp(c);
       claimed.set(c, node.title);
+      (node.fills ??= []).push(c);
     }
     for (const c of [...planned].filter((c) => !claimed.has(c))) {
       if (node.done + node.planned >= node.required) break;
       node.planned += cp(c);
       claimed.set(c, node.title);
+      (node.fills ??= []).push(c);
     }
   }
 

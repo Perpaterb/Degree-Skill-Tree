@@ -84,3 +84,33 @@ test('US-027 / US-022: a second completed major counts under Options, and a subj
   await expect(heading(panel, 'Options').last()).toHaveAttribute('data-status', 'complete');
   await expect(page.getByTestId('progress-total')).toHaveText('96/144cp');
 });
+
+test('US-031: each Options way and heading shows its own done / needed credit points', async ({ page }) => {
+  const DA = ['33116', '31250', '31005', '32146', '42050', '41759', '48024', '42028'];
+  const ID = ['31260', '31777', '31080', '41019', '31263', '31264', '41889'];
+  const panel = await outline(page, `m=MAJ02081.MAJ02092&c=${[...DA, ...ID].join('.')}&p=31262`);
+  // Way 1 (one major): Interaction Design is 42 done, and the planned extra option makes up the shared 6.
+  await expect(way(panel, 0).getByTestId('outline-way-cp')).toHaveText('42+6/48cp');
+  await expect(way(panel, 1).getByTestId('outline-way-cp')).toHaveText('0/48cp');
+  await expect(heading(panel, 'Options').last().getByTestId('outline-cp')).toHaveText('(42+6/48cp)');
+  await expect(heading(panel, 'Compulsory').getByTestId('outline-cp')).toHaveText('(0/42cp)');
+  // The bar is drawn for each way it can read.
+  await expect(way(panel, 0).locator('.bar-done')).toHaveAttribute('style', /width: 87\.5/);
+});
+
+test('US-032: a free-elective slot lists what fills it, and hovering its note lights up subjects you could take now', async ({ page }) => {
+  // 31061 and 32130 are not listed anywhere in the Bachelor of IT, so they can only count as free electives.
+  const panel = await outline(page, 'c=31061.32130');
+  const free = panel.getByTestId('free-electives');
+  await expect(free.first()).toContainText('31061');
+  await expect(free.first()).toContainText('32130');
+  const hint = panel.getByTestId('free-electives-hint').first();
+  await expect(hint).toContainText('Any UTS subject');
+  expect(await page.evaluate(() => window.__dst!.ringed().length)).toBe(0);
+  await hint.hover();
+  await expect.poll(() => page.evaluate(() => window.__dst!.ringed().length)).toBeGreaterThan(5);
+  const n = Number((await hint.textContent())!.match(/the (\d+) subjects/)![1]);
+  expect(await page.evaluate(() => window.__dst!.ringed().length)).toBe(n);
+  await page.mouse.move(5, 5);
+  await expect.poll(() => page.evaluate(() => window.__dst!.ringed().length)).toBe(0);
+});

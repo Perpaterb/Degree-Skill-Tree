@@ -327,6 +327,22 @@ Stories are in [`UserStories.md`](UserStories.md).
   its dark fill and pale `#86b6ff` ring. E2E checks the drawn fill and ring of a planned copy.
 - Files: `web/src/theme.ts`, `web/src/styles.css`, `e2e/multidegree.spec.ts`.
 
+### US-031 Progress on each way and heading in the outline
+- `Cp` and `Bar` in `web/src/Panels.tsx` (shared with the progress panel's rows) render "42+6/48cp"
+  and the done / planned bar. `OutlineSection` puts them on every heading of the degree outline (in
+  place of the bare "(48cp)") and on each way the engine could read (`WayProgress`).
+- Styles: `.way-num`, `.ways .bar` in `web/src/styles.css`.
+- E2E: `e2e/outline.spec.ts` "US-031", with two majors and a planned replacement subject.
+
+### US-032 See what can fill elective slots
+- `measure` in `core/engine.ts` records `Progress.fills` on free-elective nodes: the completed and
+  planned subjects it assigned there.
+- `FreeElectives` in `web/src/Panels.tsx`, under each free container of the outline: the filling
+  subjects as links, and a note that any UTS subject can go there. Hovering the note glows the
+  subjects in state `available` (requisites met, not taken) through the existing `setGlow`.
+- Test hook `window.__dst.ringed()` (`web/src/TreeCanvas.tsx`): subjects drawn with the glow ring.
+- Tests: `core/progress.test.ts` (fills), `e2e/outline.spec.ts` "US-032".
+
 ### Two majors counted in both places (US-022, US-027; 25 Sep 2026)
 - Bug: in the Bachelor of IT, two chosen majors both landed under "Major - Information Technology"
   (one of the following, so only the best counted) and again under "Options > Majors" with 0cp, as
