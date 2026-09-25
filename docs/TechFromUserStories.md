@@ -322,6 +322,14 @@ Stories are in [`UserStories.md`](UserStories.md).
   its dark fill and pale `#86b6ff` ring. E2E checks the drawn fill and ring of a planned copy.
 - Files: `web/src/theme.ts`, `web/src/styles.css`, `e2e/multidegree.spec.ts`.
 
+### Planned purple, unlock paths crimson (US-009, US-026, US-027; 25 Sep 2026)
+- Blue for planned was lost among the other blues (available rings, cyan glows, the IT degree's hue).
+  Planned is now purple: fill `#33175c`, ring and glow `#b36bff` (`stateLook.planned`,
+  `canvas.plannedGlow`, CSS `--planned` / `--planned-deep`, which also colour the outline's planned
+  lines and ticks). The "what this unlocks" links and rings (`canvas.edgeUnlock`), which were purple,
+  are crimson `#dc143c`. Stories reworded from blue to purple.
+- Files: `web/src/theme.ts`, `web/src/styles.css`, `e2e/multidegree.spec.ts`, `docs/UserStories.md`.
+
 ### US-026 Finished circles glow
 - The store derives `finish` (a `Status` per degree and program, from `progress` / `programProgress`)
   with the plan, so repaints do not recompute it. The canvas draws three soft rings outside a finished

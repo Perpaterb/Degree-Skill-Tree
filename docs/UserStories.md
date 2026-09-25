@@ -13,7 +13,8 @@ US-009 changed to match. Later again: circles stop overlapping (linked copies in
 depth, US-024 railway-style links added, and a "does not count" list added to US-022. 25 Sep 2026:
 US-025 added (warn before marking completed without prerequisites); US-007 noted to match. Later:
 US-026 and US-027 added (green / blue progress on circles and the degree outline); planned subjects
-turn blue (US-009); numbered option ways counted properly (US-022).
+turn blue (US-009); numbered option ways counted properly (US-022). Then planned changed from blue
+to purple (too much other blue on the map), and "what this unlocks" paths from purple to crimson.
 
 ---
 
@@ -82,7 +83,7 @@ As a student, I want hovering a node to show the chain needed to reach it and wh
 As a student, I want to choose a major and plan future subjects and see progress to graduation.
 - [x] Choose major/sub-majors/electives the course allows by clicking their circles (click the circle, then Choose in its panel; free electives are filled automatically from anything left over). *Changed 24 Sep 2026: choosing via the ◆ node panel was built and verified; choosing moves to circles (US-020, US-022).*
 - [x] Mark subjects as planned; progress per structure container ("Core: 30/48cp") and overall (x/144cp)
-- [x] Planned subjects are drawn blue (fill and outline), distinct from the pale blue outline of "Available now". *Added 25 Sep 2026: was green; green now means complete (US-026, US-027).*
+- [x] Planned subjects are drawn purple (fill and outline), distinct from "Available now". *Added 25 Sep 2026: was green; green now means complete (US-026, US-027). Blue tried first, changed to purple the same day: too much other blue on the map.*
 - [ ] Warn when a plan breaks a rule (anti-requisite, over-selecting an option group, requisite not met by the time it is planned)
 - [ ] Optional session-by-session view using offerings
 
@@ -143,16 +144,16 @@ As a student, I want a warning if I mark a subject completed before its prerequi
 
 ### US-026 Finished circles glow
 As a student, I want circles I have finished, or will finish with my plan, to stand out, so I can see at a glance what is done.
-- [x] A major, sub-major or stream circle gets a green glow around the outside when my completed subjects meet its requirements, and a blue glow when my completed plus planned subjects would meet them. Worked out the same way as the progress panel, whether or not the program is chosen.
-- [x] A degree circle glows green when the degree is complete, blue when the plan completes it.
+- [x] A major, sub-major or stream circle gets a green glow around the outside when my completed subjects meet its requirements, and a purple glow when my completed plus planned subjects would meet them. Worked out the same way as the progress panel, whether or not the program is chosen.
+- [x] A degree circle glows green when the degree is complete, purple when the plan completes it.
 - [x] The glow is only around the outside; a chosen program keeps its yellow outline.
-- [x] An E2E test: every subject of a sub-major completed glows it green; planned instead glows it blue; partly done does not glow.
+- [x] An E2E test: every subject of a sub-major completed glows it green; planned instead glows it purple; partly done does not glow.
 
 ### US-027 Degree outline shows progress
 As a student, I want the degree outline to show what I have done and planned, so I can read off what is left.
-- [x] Each requirement heading in the degree panel's outline (e.g. "Compulsory (42cp)") is green with a green tick when my completed subjects meet it, blue with a blue tick when completed plus planned subjects would meet it, yellow while started (something completed, planned or chosen), and unchanged when untouched.
-- [x] Program lines (majors, sub-majors, streams) are yellow when chosen, blue with a tick when the plan completes them, green with a tick when complete.
-- [x] Numbered ways in the handbook text ("1. one major (48cp); 2. two sub-majors ...") each go on their own line, coloured the same way: yellow once started, blue with a tick when the plan completes it, green with a tick when complete. The heading goes green (or blue) when any one way does. A line that cannot be interpreted is shown on its own line without colour.
+- [x] Each requirement heading in the degree panel's outline (e.g. "Compulsory (42cp)") is green with a green tick when my completed subjects meet it, purple with a purple tick when completed plus planned subjects would meet it, yellow while started (something completed, planned or chosen), and unchanged when untouched.
+- [x] Program lines (majors, sub-majors, streams) are yellow when chosen, purple with a tick when the plan completes them, green with a tick when complete.
+- [x] Numbered ways in the handbook text ("1. one major (48cp); 2. two sub-majors ...") each go on their own line, coloured the same way: yellow once started, purple with a tick when the plan completes it, green with a tick when complete. The heading goes green (or purple) when any one way does. A line that cannot be interpreted is shown on its own line without colour.
 - [x] The outline and the progress panel always agree (same calculation).
 - [x] E2E tests cover untouched, started, planned-complete and complete, for a compulsory block and for the Options ways.
 

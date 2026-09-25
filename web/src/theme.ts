@@ -13,7 +13,7 @@ export const canvas = {
   edgeDone: 0xe2b857,
   edgeOpen: 0x86b6ff,
   edgePath: 0x57e0ff,
-  edgeUnlock: 0xb68cff,
+  edgeUnlock: 0xdc143c, // crimson
   label: 0xd7dde8,
   labelDim: 0x6b7385,
   chosen: 0xe2b857,
@@ -25,7 +25,7 @@ export const canvas = {
   grey: 0x3a3d44,
   /** Circle glows (US-026): finished by completed subjects, or by the plan. */
   complete: 0x45d16b,
-  plannedGlow: 0x4c8dff,
+  plannedGlow: 0xb36bff,
 };
 
 /** One hue per degree, in map order. */
@@ -48,7 +48,7 @@ export interface NodeLook {
 
 export const stateLook: Record<NodeState, NodeLook> = {
   completed: { fill: 0x5c4414, ring: 0xf2c75c, ringWidth: 5, alpha: 1, glow: 0xf2c75c },
-  planned: { fill: 0x16295c, ring: 0x4c8dff, ringWidth: 4, alpha: 1 },
+  planned: { fill: 0x33175c, ring: 0xb36bff, ringWidth: 4, alpha: 1 },
   available: { fill: 0x14233d, ring: 0x86b6ff, ringWidth: 4, alpha: 1, glow: 0x86b6ff },
   reachable: { fill: 0x121a2a, ring: 0x4d6a99, ringWidth: 3, alpha: 1 },
   locked: { fill: 0x15181f, ring: 0x3d4452, ringWidth: 2, alpha: 1 },

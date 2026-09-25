@@ -179,10 +179,10 @@ test('US-026: a finished circle glows green, one the plan finishes glows blue, a
   expect((await finished()).SMJ10156).toBeUndefined();
 });
 
-test('US-009: planned subjects are drawn blue, distinct from the pale blue of available ones', async ({ page }) => {
+test('US-009: planned subjects are drawn purple, distinct from available ones', async ({ page }) => {
   await openTree(page, 't=uts-2027&p=41039');
   const planned = await page.evaluate(() => window.__dst!.look(window.__dst!.copies('41039')[0])!);
-  expect(planned).toMatchObject({ fill: 0x16295c, ring: 0x4c8dff });
+  expect(planned).toMatchObject({ fill: 0x33175c, ring: 0xb36bff });
   // 31265 has no prerequisites, so it is available now.
   const available = await page.evaluate(() => window.__dst!.look(window.__dst!.copies('31265')[0])!);
   expect(available.fill).not.toBe(planned.fill);
