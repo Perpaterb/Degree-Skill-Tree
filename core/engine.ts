@@ -232,6 +232,16 @@ export interface WayProgress {
   planned: number;
   /** A program this way needs (a major, a sub-major, a stream) has been chosen. */
   chosen: boolean;
+  /** Each part of the way ("one sub-major (24cp)", "four electives (24cp)"), counted on its own. */
+  parts: WayPartProgress[];
+}
+
+export interface WayPartProgress {
+  text: string;
+  what: WayPart['what'];
+  required: number;
+  done: number;
+  planned: number;
 }
 
 /** How far a requirement (or a way) has got: met by completed subjects, met once planned ones are done, started, or untouched. */
@@ -249,7 +259,8 @@ const hasChosen = (children: Progress[]): boolean => children.some((c) => (!!c.p
 
 const WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8 };
 
-interface WayPart {
+export interface WayPart {
+  text: string;
   what: 'major' | 'sub_major' | 'stream' | 'electives';
   count: number;
   cp: number;
@@ -281,7 +292,7 @@ export function parseWays(description: string): { text: string; parts: WayPart[]
       const cp = times ? Number(times[1]) * Number(times[2]) : each ? count * Number(each[1]) : Number(paren.match(/(\d+)\s*cp/i)?.[1] ?? NaN);
       if (!count || !Number.isFinite(cp)) return { text, parts: null };
       const what = kind.startsWith('transdisciplinary') ? 'stream' : kind.startsWith('elective') ? 'electives' : kind.startsWith('sub') ? 'sub_major' : 'major';
-      parts.push({ what, count, cp });
+      parts.push({ text: piece.trim(), what, count, cp });
     }
     return { text, parts };
   });
@@ -423,10 +434,11 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
     const ways = parseWays(n.description);
     if (ways.length) {
       n.ways = ways.map(({ text, parts }) => {
-        if (!parts) return { text, understood: false, required: 0, done: 0, planned: 0, chosen: false };
+        if (!parts) return { text, understood: false, required: 0, done: 0, planned: 0, chosen: false, parts: [] };
         let wDone = 0;
         let wReach = 0;
         let chosenHere = false;
+        const partProgress: WayPartProgress[] = [];
         for (const part of parts) {
           const pool = part.what === 'electives' ? below(n, (d) => isFree.has(d)) : below(n, (d) => kindOf(d) === part.what);
           // A way is started once one of its programs is chosen, or an implied one has something in it.
@@ -436,11 +448,14 @@ function measure(map: MapDoc, structure: Container, plan: Plan): Progress {
             part.what === 'electives'
               ? pool.reduce((t, d) => t + score(d), 0)
               : pool.map(score).sort((a, b) => b - a).slice(0, part.count).reduce((t, v) => t + v, 0);
-          wDone += Math.min(part.cp, take((d) => d.done));
-          wReach += Math.min(part.cp, take(dp));
+          const pDone = Math.min(part.cp, take((d) => d.done));
+          const pReach = Math.min(part.cp, take(dp));
+          partProgress.push({ text: part.text, what: part.what, required: part.cp, done: pDone, planned: pReach - pDone });
+          wDone += pDone;
+          wReach += pReach;
         }
         const required = parts.reduce((t, p) => t + p.cp, 0);
-        return { text, understood: true, required, done: wDone, planned: wReach - wDone, chosen: chosenHere };
+        return { text, understood: true, required, done: wDone, planned: wReach - wDone, chosen: chosenHere, parts: partProgress };
       });
       const counted = n.ways.filter((w) => w.understood);
       if (counted.length) {

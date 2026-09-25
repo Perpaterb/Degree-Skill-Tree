@@ -77,12 +77,12 @@ describe('parseWays (US-022, US-027)', () => {
   it('reads the Bachelor of IT options text into four ways', () => {
     const text = real.degrees.C10148.structure.children.find((c) => c.title === 'Options')!.description;
     expect(parseWays(text)).toEqual([
-      { text: 'one major (48cp)', parts: [{ what: 'major', count: 1, cp: 48 }] },
-      { text: 'two sub-majors (2 x 24cp)', parts: [{ what: 'sub_major', count: 2, cp: 48 }] },
-      { text: 'one sub-major (24cp) and four electives (24cp)', parts: [{ what: 'sub_major', count: 1, cp: 24 }, { what: 'electives', count: 4, cp: 24 }] },
+      { text: 'one major (48cp)', parts: [{ text: 'one major (48cp)', what: 'major', count: 1, cp: 48 }] },
+      { text: 'two sub-majors (2 x 24cp)', parts: [{ text: 'two sub-majors (2 x 24cp)', what: 'sub_major', count: 2, cp: 48 }] },
+      { text: 'one sub-major (24cp) and four electives (24cp)', parts: [{ text: 'one sub-major (24cp)', what: 'sub_major', count: 1, cp: 24 }, { text: 'four electives (24cp)', what: 'electives', count: 4, cp: 24 }] },
       {
         text: 'one transdisciplinary elective (6cp) and seven electives (42cp)',
-        parts: [{ what: 'stream', count: 1, cp: 6 }, { what: 'electives', count: 7, cp: 42 }],
+        parts: [{ text: 'one transdisciplinary elective (6cp)', what: 'stream', count: 1, cp: 6 }, { text: 'seven electives (42cp)', what: 'electives', count: 7, cp: 42 }],
       },
     ]);
   });
@@ -90,10 +90,10 @@ describe('parseWays (US-022, US-027)', () => {
   it('reads the Bachelor of Business options text into four ways', () => {
     const text = real.degrees.C10026.structure.children.find((c) => c.title === 'Options')!.description;
     expect(parseWays(text).map((w) => [w.text, w.parts])).toEqual([
-      ['One major (48cp)', [{ what: 'major', count: 1, cp: 48 }]],
-      ['Two sub-majors (24cp for each sub-major)', [{ what: 'sub_major', count: 2, cp: 48 }]],
-      ['One sub-major (24cp) plus electives (24cp)', [{ what: 'sub_major', count: 1, cp: 24 }, { what: 'electives', count: 1, cp: 24 }]],
-      ['Electives (48cp)', [{ what: 'electives', count: 1, cp: 48 }]],
+      ['One major (48cp)', [{ text: 'One major (48cp)', what: 'major', count: 1, cp: 48 }]],
+      ['Two sub-majors (24cp for each sub-major)', [{ text: 'Two sub-majors (24cp for each sub-major)', what: 'sub_major', count: 2, cp: 48 }]],
+      ['One sub-major (24cp) plus electives (24cp)', [{ text: 'One sub-major (24cp)', what: 'sub_major', count: 1, cp: 24 }, { text: 'electives (24cp)', what: 'electives', count: 1, cp: 24 }]],
+      ['Electives (48cp)', [{ text: 'Electives (48cp)', what: 'electives', count: 1, cp: 48 }]],
     ]);
   });
 
@@ -165,6 +165,24 @@ describe('two majors in the Bachelor of IT (US-022, US-027)', () => {
     const options = find(both(['31262']), 'Options');
     expect(progressStatus(options)).toBe('complete');
     expect(progressStatus(options.ways![0])).toBe('complete');
+  });
+});
+
+describe('each part of a way (US-035)', () => {
+  it('counts the stream and the electives of way 4 on their own, adding up to the way', () => {
+    // 95009 is in the transdisciplinary stream; 31061 done and 32130 planned count only as electives.
+    const o = progress(real, 'C10148', { ...emptyPlan(), degree: 'C10148', completed: ['95009', '31061'], planned: ['32130'] }).children.find(
+      (c) => c.title === 'Options',
+    )!;
+    const way4 = o.ways![3];
+    expect(way4.parts.map((p) => [p.text, p.what, p.done, p.planned, p.required])).toEqual([
+      ['one transdisciplinary elective (6cp)', 'stream', 6, 0, 6],
+      ['seven electives (42cp)', 'electives', 6, 6, 42],
+    ]);
+    for (const w of o.ways!) {
+      expect(w.parts.reduce((t, p) => t + p.done, 0)).toBe(w.done);
+      expect(w.parts.reduce((t, p) => t + p.planned, 0)).toBe(w.planned);
+    }
   });
 });
 

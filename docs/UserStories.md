@@ -17,6 +17,9 @@ turn blue (US-009); numbered option ways counted properly (US-022). Then planned
 to purple (too much other blue on the map), and "what this unlocks" paths from purple to crimson.
 Later: US-028 to US-032 added (progress on circle titles, view settings, light and dark mode,
 progress on each outline way, what fills elective slots). US-030 ends "the tree is always dark".
+Later: US-033 to US-036 added (the degree panel takes over from the top-left progress card, the
+outline expands and collapses, each way lists what fills it, a program is listed in one place only);
+US-022 and US-027 changed to match.
 
 ---
 
@@ -119,9 +122,9 @@ As a student, I want to pick the degree I am aiming for and see what it needs.
 
 ### US-022 Progress panel for the selected degree
 As a student, I want progress shown for the degree I have selected, and to see which parts of the map each requirement means.
-- [x] The progress panel appears only while a degree is selected
-- [x] Hovering a row makes the circles or subjects it refers to glow (e.g. hovering "Majors" under the Bachelor of IT glows the major circles)
-- [x] Completed subjects that do not count toward the selected degree are listed at the bottom of the panel, with a note saying they do not count
+- [x] The progress panel appears only while a degree is selected. *Changed 25 Sep 2026: the separate progress card is replaced by the degree panel and a chip that reopens it (US-033).*
+- [x] Hovering a row makes the circles or subjects it refers to glow (e.g. hovering "Major - Information Technology" glows the major circles). *Changed 25 Sep 2026: now the degree panel's outline rows (US-033).*
+- [x] Completed subjects that do not count toward the selected degree are listed in the degree panel, with a note saying why each does not count. *Changed 25 Sep 2026: one list in the degree panel, merged with "In the way" (US-033).*
 - [x] Where the handbook offers numbered ways to fill a requirement (e.g. Options: "1. one major (48cp); 2. two sub-majors (2 x 24cp); ..."), the requirement counts the best way, so two completed sub-majors give 48/48cp, not 24/48cp. *Added 25 Sep 2026: bug found in review; before, each heading stopped at its own credit points.*
 
 ### US-023 See which degrees are still open
@@ -156,9 +159,9 @@ As a student, I want the degree outline to show what I have done and planned, so
 - [x] Each requirement heading in the degree panel's outline (e.g. "Compulsory (42cp)") is green with a green tick when my completed subjects meet it, purple with a purple tick when completed plus planned subjects would meet it, yellow while started (something completed, planned or chosen), and unchanged when untouched.
 - [x] Program lines (majors, sub-majors, streams) are yellow when chosen, purple with a tick when the plan completes them, green with a tick when complete.
 - [x] Numbered ways in the handbook text ("1. one major (48cp); 2. two sub-majors ...") each go on their own line, coloured the same way: yellow once started, purple with a tick when the plan completes it, green with a tick when complete. The heading goes green (or purple) when any one way does. A line that cannot be interpreted is shown on its own line without colour.
-- [x] The outline and the progress panel always agree (same calculation).
+- [x] The outline and the progress panel always agree (same calculation). *25 Sep 2026: the outline is now the only progress view (US-033).*
 - [x] A requirement that names only one program (e.g. "Transdisciplinary Electives: select 6cp from the following stream") counts it without it being chosen, so its subjects fill that slot rather than free electives. *Added 25 Sep 2026 (bug: the stream line was ticked but its slot showed 0/6cp).*
-- [x] A chosen program counts in one place only: a second major listed under both "Major" and "Options > Majors" fills Options rather than being dropped. A subject shared by two chosen programs counts once, the outline names it under the second, and an extra subject from that program's options makes up the gap. *Added 25 Sep 2026 (bug: two completed majors showed Options 0/48).*
+- [x] A chosen program counts in one place only: a second major listed under both "Major" and "Options > Majors" fills Options rather than being dropped. A subject shared by two chosen programs counts once, the outline names it under the second, and an extra subject from that program's options makes up the gap. *Added 25 Sep 2026 (bug: two completed majors showed Options 0/48). Later: the "(counts under ...)" note is replaced by leaving the program out of the other list (US-036).*
 - [x] E2E tests cover untouched, started, planned-complete and complete, for a compulsory block and for the Options ways.
 
 ### US-028 Circle titles show progress
@@ -194,6 +197,36 @@ As a student, I want to know what can go in an elective slot.
 - [x] Under a free-elective requirement ("Electives (18cp)", "Free Electives (24cp)"), the outline lists the completed and planned subjects counting there, each clickable
 - [x] It says any UTS subject not already counting elsewhere can go there, and hovering the line glows the subjects on this map that would count. *Built as: glows the subjects you could take now (requisites met), since nearly every subject on the map would count and lighting them all shows nothing.*
 - [x] It does not list every UTS subject, only this map's, through the glow
+
+### US-033 The degree panel holds the progress
+As a student, I want my degree's progress in one place, the degree panel, rather than in two cards that show the same thing.
+- [x] The top-left progress card is gone. The degree panel's header shows the degree's total done / needed with a bar (e.g. `96+12/144cp`)
+- [x] Anything in the degree panel that refers to something on the map glows it on hover: the total (the degree circle), each heading (everything it names, and everything named below it), each way and each part of a way, each program line, each subject
+- [x] "Completed, but not counting" and "In the way" are one list in the degree panel, each subject with why it does not count
+- [x] While a degree is selected and its panel is not open (closed, or showing a subject or program), a chip at the top left shows the degree and its total; clicking it reopens the degree panel, and it has a button to clear the degree
+- [x] An E2E test walks it: select a degree, open a subject, the chip shows the total and brings the degree panel back; hovering outline rows glows what they name
+
+### US-034 Expand and collapse the outline
+As a student, I want to open only the parts of the outline I care about.
+- [x] Every heading and every numbered way has an arrow, ▸ closed and ▾ open; clicking the row's arrow or title toggles it
+- [x] Headings start open. Ways start closed, started or not (decided 25 Sep 2026)
+- [ ] What is open stays open while the degree panel is showing; it is not part of the share link. *Partial: held in the outline's own component state and never written to the link (by construction); no test checks it survives a change while the panel stays open.*
+- [x] An E2E test: a closed way hides its contents, clicking opens it, clicking again closes it; a started way also starts closed
+
+### US-035 Each way lists what fills it
+As a student, I want each way of filling a requirement to show its own choices underneath, so I do not have to match "one major" to a "Majors" heading further down.
+- [x] An open way shows one row per part (e.g. "one sub-major (24cp)", "four electives (24cp)"), each with its own done / needed and bar; a way with one part shows its contents directly
+- [x] Under each part, what can fill it: the majors or sub-majors listed for it, the transdisciplinary stream, or the electives filling it with the US-032 note on what else could go there
+- [x] Inside a requirement that lists numbered ways, headings that only group other headings (the Bachelor of IT's "Electives (24cp)" around "Electives (18cp)" and "Transdisciplinary Electives (6cp)") are not shown; their contents appear under the ways that use them. Anything no way uses is still shown after the ways. The degree data does not change
+- [x] Requirements without numbered ways (Computing Science, Cybersecurity) keep their headings as they are
+- [x] The per-part numbers come from the same calculation as the way and heading totals (unit test on real data)
+- [x] An E2E test on the Bachelor of IT Options: each way shows its parts and choices, and the redundant "Electives (24cp)" heading is gone
+
+### US-036 A program is listed in one place only
+As a student, I want a major I have already counted not to be offered again as a second major.
+- [x] A major or sub-major that counts towards one requirement is not listed under another requirement of the same degree (Data Analytics counting under "Major - Information Technology" is not listed under Options' "one major")
+- [x] With nothing chosen, every list is complete
+- [x] An E2E test: with Data Analytics and Interaction Design chosen, each appears in exactly one list
 
 ## Admin CMS
 

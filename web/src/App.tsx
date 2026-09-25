@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { decodePlan } from '../../core/engine';
-import { DetailPanel, Legend, ProgressPanel, TopBar } from './Panels';
+import { DegreeChip, DetailPanel, Legend, TopBar } from './Panels';
 import { DEFAULT_MAP, useApp } from './store';
 import { TreeCanvas } from './TreeCanvas';
 
@@ -35,7 +35,7 @@ export function App() {
         {loadError ? <div className="error">{loadError}</div> : null}
         {!map && !loadError ? <div className="loading">Loading the map…</div> : null}
         <TreeCanvas />
-        <ProgressPanel />
+        <DegreeChip />
         <DetailPanel />
         <Legend />
       </main>

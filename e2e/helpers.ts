@@ -36,8 +36,16 @@ export async function clickCentre(page: Page) {
 /** Pick a degree from the top bar (the same as clicking its circle), then close the panel it opens. */
 export async function chooseDegree(page: Page, code: string) {
   await page.getByTestId('degree-picker').selectOption(code);
-  await expect(page.getByTestId('progress-panel')).toBeVisible();
+  await expect(page.getByTestId('detail-panel')).toContainText(code);
   await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByTestId('degree-chip')).toBeVisible();
+}
+
+/** Reopen the selected degree's panel from the chip at the top left (US-033). */
+export async function openDegreeFromChip(page: Page) {
+  await page.getByTestId('degree-chip').getByRole('button', { name: /Bachelor/ }).click();
+  await expect(page.getByTestId('degree-total')).toBeVisible();
+  return page.getByTestId('detail-panel');
 }
 
 /** Click a circle through the real canvas, at a spot that belongs to it and nothing smaller. */

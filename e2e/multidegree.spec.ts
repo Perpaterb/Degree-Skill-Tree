@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { chooseDegree, clickCircle, goTo, openTree, waitReady } from './helpers';
+import { chooseDegree, clickCircle, goTo, openDegreeFromChip, openTree, waitReady } from './helpers';
 
 const glowing = (page: import('@playwright/test').Page) => page.evaluate(() => window.__dst?.glowing() ?? []);
 
@@ -34,7 +34,7 @@ test('US-020: clicking a program circle opens it, and clicking a degree circle s
   await page.getByTestId('degree-picker').selectOption(''); // nothing selected yet
   await clickCircle(page, 'C10476');
   await expect(page.getByTestId('degree-picker')).toHaveValue('C10476');
-  await expect(page.getByTestId('progress-panel')).toContainText('Bachelor of Computing Science');
+  await expect(page.getByTestId('detail-panel').locator('h2')).toHaveText('Bachelor of Computing Science');
 });
 
 test('US-020: hovering a circle makes it glow', async ({ page }) => {
@@ -56,9 +56,9 @@ test('US-021: a selected degree stays selected across reloads until another is c
   await expect(page.getByTestId('degree-picker')).toHaveValue('C10476');
 
   await chooseDegree(page, 'C10148');
-  await expect(page.getByTestId('progress-panel')).toContainText('Bachelor of Information Technology');
-  await page.getByTestId('progress-panel').getByRole('button', { name: 'Clear degree' }).click();
-  await expect(page.getByTestId('progress-panel')).toHaveCount(0);
+  await expect(page.getByTestId('degree-chip')).toContainText('Bachelor of Information Technology');
+  await page.getByTestId('degree-chip').getByRole('button', { name: 'Clear degree' }).click();
+  await expect(page.getByTestId('degree-chip')).toHaveCount(0);
   await expect(page.getByTestId('degree-picker')).toHaveValue('');
 });
 
@@ -71,11 +71,12 @@ test('US-021: choosing a major needs a degree that offers it', async ({ page }) 
   await expect(panel.getByRole('button', { name: 'Choose this major' })).toBeVisible();
 });
 
-test('US-022: the progress panel appears only with a degree, and hovering a row glows what it names', async ({ page }) => {
+test('US-022: progress appears only with a degree, and hovering an outline heading glows what it names', async ({ page }) => {
   await openTree(page);
-  await expect(page.getByTestId('progress-panel')).toHaveCount(0);
+  await expect(page.getByTestId('degree-chip')).toHaveCount(0);
   await chooseDegree(page, 'C10148');
-  await page.getByTestId('progress-panel').getByText('Major - Information Technology').hover();
+  const panel = await openDegreeFromChip(page);
+  await panel.getByTestId('outline-heading').filter({ hasText: /^Major - Information Technology/ }).hover();
   await expect.poll(async () => (await glowing(page)).sort()).toEqual(['MAJ02080', 'MAJ02081', 'MAJ02092', 'MAJ03444', 'MAJ03445']);
   await page.mouse.move(5, 5);
   await expect.poll(() => glowing(page)).toEqual([]);
@@ -115,6 +116,7 @@ test('US-020: selecting a subject lights up every copy of it across the map', as
 test('US-022: completed subjects that do not count are listed under the selected degree', async ({ page }) => {
   await openTree(page, 't=uts-2027&c=21212.22108.24109.25400.21214.22208');
   await chooseDegree(page, 'C10476');
+  await openDegreeFromChip(page);
   const list = page.getByTestId('not-counting');
   await expect(list).toContainText('These subjects do not count towards this degree');
   for (const code of ['22208', '24109', '25400']) await expect(list).toContainText(code);

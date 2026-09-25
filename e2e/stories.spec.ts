@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { chooseDegree, clickCentre, goTo, openTree, waitReady } from './helpers';
+import { chooseDegree, clickCentre, goTo, openDegreeFromChip, openTree, waitReady } from './helpers';
 
 // Every test name starts with its story ID; scripts/story-coverage.mjs reads them.
 
@@ -133,7 +133,8 @@ test('US-009: choosing a major and completing its subjects shows progress to the
   await goTo(page, '41039');
   await panel.getByRole('button', { name: 'Mark completed' }).click();
   await expect(page.getByTestId('progress-total')).toHaveText('6/144cp');
-  await expect(page.getByTestId('progress-panel')).toContainText('Enterprise Software Development');
+  const degree = await openDegreeFromChip(page);
+  await expect(degree.locator('[data-testid="outline-program"][data-code="MAJ03444"]').first()).toHaveAttribute('data-status', 'started');
 });
 
 test('US-004: phone-width layout keeps the map and a bottom sheet usable @phone', async ({ page }) => {

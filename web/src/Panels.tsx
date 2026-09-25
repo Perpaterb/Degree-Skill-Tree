@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   missingFor,
@@ -11,8 +11,11 @@ import {
   type PrerequisiteGap,
   type Progress,
   type Status,
+  type WayPart,
+  type WayPartProgress,
+  type WayProgress,
 } from '../../core/engine';
-import type { Degree, MapDoc, Program, Rule, Subject } from '../../core/model';
+import type { Container, Degree, MapDoc, Program, Rule, Subject } from '../../core/model';
 import { track } from './analytics';
 import { useApp } from './store';
 import { cssColor, stateLabel, stateLook } from './theme';
@@ -28,10 +31,11 @@ function SubjectLink({ code }: { code: string }) {
   const map = useApp((s) => s.map)!;
   const state = useApp((s) => s.states.get(code));
   const select = useApp((s) => s.select);
+  const glow = useGlowOn([code]);
   const s = map.subjects[code];
   if (!s) return <span className="muted">{code} (not on this map)</span>;
   return (
-    <button className="link" onClick={() => select(code, true)}>
+    <button className="link" onClick={() => select(code, true)} {...glow}>
       <Dot state={state} />
       <b>{code}</b> {s.title}
     </button>
@@ -373,10 +377,13 @@ function ProgramDetail({ program, map }: { program: Program; map: MapDoc }) {
 }
 
 function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
-  const selectedDegree = useApp((s) => s.plan.degree);
+  const plan = useApp((s) => s.plan);
   const fit = useApp((s) => s.fits.get(degree.code));
   const selectDegree = useApp((s) => s.selectDegree);
-  const isSel = selectedDegree === degree.code;
+  const isSel = plan.degree === degree.code;
+  const root = useMemo(() => progress(map, degree.code, plan), [map, degree.code, plan]);
+  const glow = useGlowOn([degree.code]);
+  const noMajor = isSel && plan.programs.filter((p) => degreesOffering(map, p).some((d) => d.code === degree.code)).length === 0;
   return (
     <>
       <div className="kicker">Degree</div>
@@ -384,11 +391,19 @@ function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
       <div className="meta">
         {degree.code} · {degree.creditPoints}cp · {degree.faculty}
       </div>
+      <div className="degree-total" data-testid="degree-total" {...glow}>
+        <span>Progress</span>
+        <b data-testid="progress-total">
+          <Cp p={root} />
+        </b>
+        <Bar p={root} />
+      </div>
       <div className="actions">
         <button className={isSel ? 'on' : ''} onClick={() => selectDegree(isSel ? null : degree.code)}>
           {isSel ? '✓ Working towards this (clear)' : 'Work towards this degree'}
         </button>
       </div>
+      {noMajor ? <p className="muted small">Choose a major: hover "Major" in the outline to see them, then click one of the glowing circles.</p> : null}
       {fit && fit.completedCp > 0 ? (
         <section data-testid="degree-fit">
           <h3>Your completed subjects</h3>
@@ -397,8 +412,8 @@ function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
             {fit.impossible ? ' It can no longer be completed as things stand.' : ''}
           </p>
           {fit.wasted.length ? (
-            <>
-              <p className="muted">In the way:</p>
+            <div className="not-counting" data-testid="not-counting">
+              <p className="muted">These subjects do not count towards this degree:</p>
               <ul className="plain">
                 {fit.wasted.map((w) => (
                   <li key={w.code}>
@@ -406,11 +421,11 @@ function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
                   </li>
                 ))}
               </ul>
-            </>
+            </div>
           ) : null}
         </section>
       ) : null}
-      <DegreeOutline degree={degree} map={map} />
+      <DegreeOutline degree={degree} root={root} />
       <p>
         <a href={degree.url} target="_blank" rel="noreferrer">
           Official handbook page ↗
@@ -420,11 +435,11 @@ function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
   );
 }
 
-function StructureView({ container }: { container: Program['structure'] }) {
+function StructureView({ container }: { container: Container }) {
   return <OutlineSection container={container} />;
 }
 
-/** A tick after a line that is met (green) or met once the plan is done (blue). */
+/** A tick after a line that is met (green) or met once the plan is done (purple). */
 function Tick({ status }: { status: Status }) {
   return status === 'complete' || status === 'planned' ? <span className="tick"> ✓</span> : null;
 }
@@ -449,6 +464,50 @@ function Bar({ p }: { p: { done: number; planned: number; required: number } }) 
   );
 }
 
+/** Pointer and focus handlers that glow these circles or subjects on the map (US-033). */
+function useGlowOn(ids: string[]) {
+  const setGlow = useApp((s) => s.setGlow);
+  if (!ids.length) return {};
+  const on = () => setGlow(ids);
+  const off = () => setGlow([]);
+  return { onMouseEnter: on, onMouseLeave: off, onFocus: on, onBlur: off };
+}
+
+/** Click and keyboard handlers for a row that opens and closes (US-034). */
+function toggleProps(open: boolean, setOpen: (o: boolean) => void) {
+  return {
+    role: 'button',
+    tabIndex: 0,
+    'aria-expanded': open,
+    'data-open': open,
+    onClick: () => setOpen(!open),
+    onKeyDown: (e: ReactKeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') e.preventDefault(), setOpen(!open);
+    },
+  };
+}
+
+/** Every program and subject a container names, itself and below. */
+function codesUnder(c: Container, out: string[] = []): string[] {
+  for (const i of c.items) if (!out.includes(i.code)) out.push(i.code);
+  c.children.forEach((k) => codesUnder(k, out));
+  return out;
+}
+
+/** The containers below `c` that hold something, looking through headings that only group others (US-035). */
+function leavesOf(c: Container): Container[] {
+  return c.children.flatMap((k) => (!k.items.length && k.children.length ? leavesOf(k) : [k]));
+}
+
+/** What a container offers in the terms a way uses: majors, sub-majors, a stream, or free electives. */
+function offers(c: Container, map: MapDoc): WayPart['what'] | null {
+  if (c.children.length) return null;
+  if (c.kind === 'free') return 'electives';
+  const kinds = new Set(c.items.map((i) => (i.kind === 'program' ? map.programs[i.code]?.kind : 'subject')));
+  const [k] = kinds;
+  return kinds.size === 1 && (k === 'major' || k === 'sub_major' || k === 'stream') ? k : null;
+}
+
 /** Progress per container of the degree, keyed by container id, and per chosen program, keyed by code. */
 interface OutlineProgress {
   byId: Map<string, Progress>;
@@ -459,12 +518,10 @@ interface OutlineProgress {
   finish: Map<string, Status>;
 }
 
-/** The degree's structure, coloured by progress: green done, blue done once planned, yellow started (US-027). */
-function DegreeOutline({ degree, map }: { degree: Degree; map: MapDoc }) {
-  const plan = useApp((s) => s.plan);
+/** The degree's structure, coloured by progress: green done, purple done once planned, yellow started (US-027). */
+function DegreeOutline({ degree, root }: { degree: Degree; root: Progress }) {
   const finish = useApp((s) => s.finish);
   const prog = useMemo(() => {
-    const root = progress(map, degree.code, plan);
     const byId = new Map<string, Progress>();
     const byProgram = new Map<string, Progress>();
     const within = new Map<string, string>();
@@ -475,29 +532,156 @@ function DegreeOutline({ degree, map }: { degree: Degree; map: MapDoc }) {
     };
     walk(root, '');
     return { byId, byProgram, within, finish };
-  }, [map, degree.code, plan, finish]);
+  }, [root, finish]);
   return <OutlineSection container={degree.structure} prog={prog} />;
 }
 
-function OutlineSection({ container, prog }: { container: Program['structure']; prog?: OutlineProgress }) {
+/** Colour of a program line in the list of requirement `containerId`. */
+function programStatus(code: string, containerId: string, prog?: OutlineProgress): Status {
+  const chosen = prog?.byProgram.get(code);
+  if (chosen && prog?.within.get(code) !== containerId) return 'none';
+  // A chosen program is at least started (yellow), even before any of it is done.
+  if (chosen) return progressStatus({ ...chosen, chosen: !chosen.implied });
+  const alone = prog?.finish.get(code);
+  return alone === 'complete' || alone === 'planned' ? alone : 'none';
+}
+
+/** A program that counts towards another requirement of the degree is not offered here too (US-036). */
+function countsElsewhere(code: string, containerId: string, prog?: OutlineProgress) {
+  const home = prog?.within.get(code);
+  return home !== undefined && home !== containerId;
+}
+
+function ProgramLine({ code, containerId, prog }: { code: string; containerId: string; prog?: OutlineProgress }) {
   const map = useApp((s) => s.map)!;
-  const kindName = (code: string) => (map.programs[code]?.kind === 'sub_major' ? 'sub-major' : map.programs[code]?.kind === 'major' ? 'major' : 'program');
+  const kindName = map.programs[code]?.kind === 'sub_major' ? 'sub-major' : map.programs[code]?.kind === 'major' ? 'major' : 'program';
+  const ps = programStatus(code, containerId, prog);
+  const shared = elsewhereIn(prog?.byProgram.get(code));
+  return (
+    <li className={`st-${ps}`} data-testid="outline-program" data-code={code} data-status={ps}>
+      <ProgramLink code={code} />
+      <Tick status={ps} />
+      {shared.length ? (
+        <ul className="plain muted small" data-testid="outline-shared">
+          {shared.map((e) => (
+            <li key={e.code}>
+              <SubjectLink code={e.code} /> counts towards {e.by}, not here. Another subject from this {kindName}'s options makes up its{' '}
+              {map.subjects[e.code]?.creditPoints ?? 0}cp.
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
+/** What can fill one part of a way: the programs its containers list, or the electives filling it (US-035). */
+function partContents(what: WayPart['what'], from: Container[], prog?: OutlineProgress) {
+  if (what === 'electives') {
+    const fills = [...new Set(from.flatMap((c) => prog?.byId.get(c.id)?.fills ?? []))];
+    return { fills, programs: [], ids: fills };
+  }
+  const programs: { code: string; containerId: string }[] = [];
+  for (const c of from)
+    for (const i of c.items)
+      if (i.kind === 'program' && !programs.some((p) => p.code === i.code) && !countsElsewhere(i.code, c.id, prog)) programs.push({ code: i.code, containerId: c.id });
+  return { fills: [], programs, ids: programs.map((p) => p.code) };
+}
+
+function PartBody({ what, from, prog }: { what: WayPart['what']; from: Container[]; prog?: OutlineProgress }) {
+  const { fills, programs } = partContents(what, from, prog);
+  if (what === 'electives') return <FreeElectives fills={fills} />;
+  return (
+    <ul className="plain way-choices">
+      {programs.map((p) => (
+        <ProgramLine key={p.code} code={p.code} containerId={p.containerId} prog={prog} />
+      ))}
+    </ul>
+  );
+}
+
+function WayPartRow({ part, from, prog }: { part: WayPartProgress; from: Container[]; prog?: OutlineProgress }) {
+  const ps = progressStatus(part);
+  const glow = useGlowOn(partContents(part.what, from, prog).ids);
+  return (
+    <div className="way-part">
+      <div className={`part-row st-${ps}`} data-testid="outline-part" data-what={part.what} data-status={ps} {...glow}>
+        {part.text}
+        <Tick status={ps} />
+        <span className="way-num" data-testid="outline-part-cp">
+          <Cp p={part} />
+        </span>
+        <Bar p={part} />
+      </div>
+      <PartBody what={part.what} from={from} prog={prog} />
+    </div>
+  );
+}
+
+/** One numbered way; open, it shows each of its parts and what can fill them (US-034, US-035). */
+function WayRow({ way, leaves, prog }: { way: WayProgress; leaves: { c: Container; what: WayPart['what'] | null }[]; prog?: OutlineProgress }) {
+  const [open, setOpen] = useState(false);
+  const ws = way.understood ? progressStatus(way) : 'none';
+  const parts = way.parts.map((p) => ({ p, from: leaves.filter((l) => l.what === p.what).map((l) => l.c) }));
+  const glow = useGlowOn([...new Set(parts.flatMap(({ p, from }) => partContents(p.what, from, prog).ids))]);
+  return (
+    <li>
+      <div
+        className={`way-row st-${ws}${way.understood ? ' outline-toggle' : ''}`}
+        data-testid="outline-way"
+        data-status={ws}
+        {...(way.understood ? toggleProps(open, setOpen) : {})}
+        {...glow}
+      >
+        {way.text}
+        <Tick status={ws} />
+        {way.understood ? (
+          <>
+            <span className="way-num" data-testid="outline-way-cp">
+              <Cp p={way} />
+            </span>
+            <Bar p={way} />
+          </>
+        ) : null}
+      </div>
+      {open && way.understood ? (
+        <div className="way-body" data-testid="outline-way-body">
+          {parts.length === 1 ? (
+            <PartBody what={parts[0].p.what} from={parts[0].from} prog={prog} />
+          ) : (
+            parts.map(({ p, from }) => <WayPartRow key={p.text} part={p} from={from} prog={prog} />)
+          )}
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+function OutlineSection({ container, prog }: { container: Container; prog?: OutlineProgress }) {
+  const map = useApp((s) => s.map)!;
+  const [open, setOpen] = useState(true);
   const node = prog?.byId.get(container.id);
   const status = node ? progressStatus(node) : 'none';
   const ways = node?.ways ?? [];
   const intro = ways.length ? container.description.slice(0, container.description.search(/\b1\.\s/)).trim() : container.description;
-  const programStatus = (code: string): Status => {
-    const chosen = prog?.byProgram.get(code);
-    if (chosen && prog?.within.get(code) !== container.id) return 'none';
-    // A chosen program is at least started (yellow), even before any of it is done.
-    if (chosen) return progressStatus({ ...chosen, chosen: !chosen.implied });
-    const alone = prog?.finish.get(code);
-    return alone === 'complete' || alone === 'planned' ? alone : 'none';
-  };
+  const glow = useGlowOn(useMemo(() => codesUnder(container), [container]));
+  // With numbered ways, the containers below are shown under the ways that use them, and headings
+  // that only group others are dropped; anything no way uses is still shown after the ways (US-035).
+  const byWays = ways.some((w) => w.understood);
+  const leaves = byWays ? leavesOf(container).map((c) => ({ c, what: offers(c, map) })) : [];
+  const used = new Set(ways.flatMap((w) => w.parts.map((p) => p.what)));
+  const rest = byWays ? leaves.filter((l) => !l.what || !used.has(l.what)).map((l) => l.c) : container.children;
+  const root = container.title === 'Structure';
   return (
     <section>
-      {container.title !== 'Structure' ? (
-        <h3 className={`st-${status}`} data-testid="outline-heading" data-status={status}>
+      {!root ? (
+        <h3
+          className={`outline-toggle st-${status}`}
+          data-testid="outline-heading"
+          data-status={status}
+          {...toggleProps(open, setOpen)}
+          {...glow}
+        >
           {container.title}{' '}
           {node ? (
             <span className="cp" data-testid="outline-cp">
@@ -509,78 +693,48 @@ function OutlineSection({ container, prog }: { container: Program['structure']; 
           <Tick status={status} />
         </h3>
       ) : null}
-      {intro ? <p className="muted">{intro}</p> : null}
-      {container.kind === 'free' && node ? <FreeElectives node={node} /> : null}
-      {ways.length ? (
-        <ol className="ways">
-          {ways.map((w) => {
-            const ws = w.understood ? progressStatus(w) : 'none';
-            return (
-              <li key={w.text} className={`st-${ws}`} data-testid="outline-way" data-status={ws}>
-                {w.text}
-                <Tick status={ws} />
-                {w.understood ? (
-                  <>
-                    <span className="way-num" data-testid="outline-way-cp">
-                      <Cp p={w} />
-                    </span>
-                    <Bar p={w} />
-                  </>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
+      {open || root ? (
+        <div className={root ? '' : 'outline-body'}>
+          {intro ? <p className="muted">{intro}</p> : null}
+          {container.kind === 'free' && node ? <FreeElectives fills={node.fills ?? []} /> : null}
+          {ways.length ? (
+            <ol className="ways">
+              {ways.map((w) => (
+                <WayRow key={w.text} way={w} leaves={leaves} prog={prog} />
+              ))}
+            </ol>
+          ) : null}
+          <ul className="plain">
+            {container.items.map((i) =>
+              i.kind === 'subject' ? (
+                <li key={i.code}>
+                  <SubjectLink code={i.code} />
+                </li>
+              ) : countsElsewhere(i.code, container.id, prog) ? null : (
+                <ProgramLine key={i.code} code={i.code} containerId={container.id} prog={prog} />
+              ),
+            )}
+          </ul>
+          {rest.map((c) => (
+            <OutlineSection key={c.id} container={c} prog={prog} />
+          ))}
+        </div>
       ) : null}
-      <ul className="plain">
-        {container.items.map((i) => {
-          if (i.kind === 'subject')
-            return (
-              <li key={i.code}>
-                <SubjectLink code={i.code} />
-              </li>
-            );
-          const ps = programStatus(i.code);
-          const home = prog?.within.get(i.code);
-          const countsElsewhere = home !== undefined && home !== container.id;
-          const shared = countsElsewhere ? [] : elsewhereIn(prog?.byProgram.get(i.code));
-          return (
-            <li key={i.code} className={`st-${ps}`} data-testid="outline-program" data-code={i.code} data-status={ps}>
-              <ProgramLink code={i.code} />
-              <Tick status={ps} />
-              {countsElsewhere ? <span className="muted small"> (counts under {prog?.byId.get(home)?.title})</span> : null}
-              {shared.length ? (
-                <ul className="plain muted small" data-testid="outline-shared">
-                  {shared.map((e) => (
-                    <li key={e.code}>
-                      <SubjectLink code={e.code} /> counts towards {e.by}, not here. Another subject from this {kindName(i.code)}'s options
-                      makes up its {map.subjects[e.code]?.creditPoints ?? 0}cp.
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-      {container.children.map((c) => (
-        <OutlineSection key={c.id} container={c} prog={prog} />
-      ))}
     </section>
   );
 }
 
 /** What fills a free-elective slot, and what could (US-032). */
-function FreeElectives({ node }: { node: Progress }) {
+function FreeElectives({ fills }: { fills: string[] }) {
   const states = useApp((s) => s.states);
   const setGlow = useApp((s) => s.setGlow);
   // Any subject counts, so the useful ones to point at are those that can be taken now.
   const open = useMemo(() => [...states].filter(([, st]) => st === 'available').map(([c]) => c), [states]);
   return (
     <div className="free-electives" data-testid="free-electives">
-      {node.fills?.length ? (
+      {fills.length ? (
         <ul className="plain">
-          {node.fills.map((c) => (
+          {fills.map((c) => (
             <li key={c}>
               <SubjectLink code={c} />
             </li>
@@ -611,9 +765,10 @@ function elsewhereIn(n: Progress | undefined, out: NonNullable<Progress['elsewhe
 function ProgramLink({ code }: { code: string }) {
   const map = useApp((s) => s.map)!;
   const select = useApp((s) => s.select);
+  const glow = useGlowOn([code]);
   const p = map.programs[code];
   return (
-    <button className="link" onClick={() => select(code, true)}>
+    <button className="link" onClick={() => select(code, true)} {...glow}>
       ◆ {p?.title ?? code}
     </button>
   );
@@ -623,6 +778,8 @@ export function DetailPanel() {
   const map = useApp((s) => s.map);
   const selected = useApp((s) => s.selected);
   const select = useApp((s) => s.select);
+  // A hovered row that goes away with the panel's content never gets its mouseleave.
+  useEffect(() => useApp.getState().setGlow([]), [selected]);
   if (!map || !selected) return null;
   const subject = map.subjects[selected];
   const program = map.programs[selected];
@@ -639,83 +796,29 @@ export function DetailPanel() {
   );
 }
 
-function ProgressRow({ p, depth }: { p: Progress; depth: number }) {
-  const [open, setOpen] = useState(depth < 1);
-  const setGlow = useApp((s) => s.setGlow);
-  return (
-    <li>
-      <button
-        className="progress-row"
-        onClick={() => setOpen(!open)}
-        onMouseEnter={() => setGlow(p.refs)}
-        onMouseLeave={() => setGlow([])}
-        onFocus={() => setGlow(p.refs)}
-        onBlur={() => setGlow([])}
-        aria-disabled={!p.children.length}
-      >
-        <span className="progress-title">{p.title}</span>
-        <span className="progress-num">
-          <Cp p={p} />
-        </span>
-        <Bar p={p} />
-      </button>
-      {open && p.children.length ? (
-        <ul>
-          {p.children.map((c) => (
-            <ProgressRow key={c.id} p={c} depth={depth + 1} />
-          ))}
-        </ul>
-      ) : null}
-    </li>
-  );
-}
-
-export function ProgressPanel() {
+/** The selected degree and its total, while its panel is not open; click to reopen it (US-033). */
+export function DegreeChip() {
   const map = useApp((s) => s.map);
   const plan = useApp((s) => s.plan);
+  const selected = useApp((s) => s.selected);
+  const select = useApp((s) => s.select);
   const selectDegree = useApp((s) => s.selectDegree);
-  const [open, setOpen] = useState(true);
   const root = useMemo(() => (map && plan.degree ? progress(map, plan.degree, plan) : null), [map, plan]);
-  const fit = useApp((s) => (plan.degree ? s.fits.get(plan.degree) : undefined));
-  // Only shown while a degree is selected (US-022).
-  if (!map || !root || !plan.degree) return null;
+  const glow = useGlowOn(plan.degree ? [plan.degree] : []);
+  if (!map || !root || !plan.degree || selected === plan.degree) return null;
   return (
-    <aside className={`panel progress ${open ? '' : 'collapsed'}`} data-testid="progress-panel">
-      <button className="panel-toggle" onClick={() => setOpen(!open)}>
-        {open ? '▾' : '▸'} {root.title}{' '}
+    <div className="panel degree-chip" data-testid="degree-chip">
+      <button className="chip-open" onClick={() => select(plan.degree)} title="Open this degree's panel" {...glow}>
+        <span className="chip-title">{map.degrees[plan.degree]?.title}</span>
         <b data-testid="progress-total">
-          {root.done}/{root.required}cp
+          <Cp p={root} />
         </b>
+        <Bar p={root} />
       </button>
-      {open ? (
-        <>
-          <ul className="progress-tree">
-            {root.children.map((c) => (
-              <ProgressRow key={c.id} p={c} depth={0} />
-            ))}
-          </ul>
-          {plan.programs.filter((p) => degreesOffering(map, p).some((d) => d.code === plan.degree)).length === 0 ? (
-            <p className="muted small">Choose a major: hover "Major" above to see them, then click one of the glowing circles.</p>
-          ) : null}
-          {fit && fit.wasted.length ? (
-            <section className="not-counting" data-testid="not-counting">
-              <h4>Completed, but not counting</h4>
-              <p className="muted small">These subjects do not count towards this degree.</p>
-              <ul className="plain">
-                {fit.wasted.map((w) => (
-                  <li key={w.code} title={w.reason}>
-                    <SubjectLink code={w.code} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-          <button className="link small" onClick={() => selectDegree(null)}>
-            Clear degree
-          </button>
-        </>
-      ) : null}
-    </aside>
+      <button className="chip-clear" onClick={() => selectDegree(null)} aria-label="Clear degree" title="Clear degree">
+        ×
+      </button>
+    </div>
   );
 }
 

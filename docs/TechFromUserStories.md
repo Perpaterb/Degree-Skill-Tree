@@ -437,3 +437,54 @@ Stories are in [`UserStories.md`](UserStories.md).
   moves. Same load: reload ~1.8 s, 8 of 8 repeats pass, full E2E suite 1.6 min (was 2.3). Real-GPU
   pan/zoom still median 59.9 fps.
 - Files: `web/src/TreeCanvas.tsx`.
+
+### US-033 The degree panel holds the progress
+- `ProgressPanel` (the top-left card) is removed. `DegreeDetail` in `web/src/Panels.tsx` shows the
+  degree's total (`progress()` root, `Cp` + `Bar`, test id `degree-total` / `progress-total`) and
+  takes over the "choose a major" hint. The "In the way" list and the card's "Completed, but not
+  counting" list are one list (`not-counting`) inside `degree-fit`, each subject with its reason.
+- `DegreeChip` (replaces `ProgressPanel` in `web/src/App.tsx`): shown while a degree is selected and
+  its panel is not open; the title and total reopen the panel (`select(degree)`), × clears the degree.
+- `useGlowOn(ids)` gives any row pointer and focus handlers that set the store's `glow`: the total
+  (degree circle), headings (`codesUnder`: everything named at and below), ways and way parts
+  (everything that could fill them), program lines (`ProgramLink`) and subjects (`SubjectLink`, so
+  this also applies in subject and program panels). `DetailPanel` clears the glow when its selection
+  changes, since a row that disappears never gets its mouseleave.
+- Tests: `e2e/outline.spec.ts` "US-033" (total, chip round trip, hover glows); existing tests moved
+  from the card to the panel and chip with the same assertions (`e2e/helpers.ts` `chooseDegree`,
+  `openDegreeFromChip`; `e2e/multidegree.spec.ts`, `e2e/stories.spec.ts`).
+- Files: `web/src/Panels.tsx`, `web/src/App.tsx`, `web/src/styles.css`, `e2e/*.ts`.
+
+### US-034 Expand and collapse the outline
+- `toggleProps(open, setOpen)` in `web/src/Panels.tsx`: role button, `aria-expanded`, `data-open`,
+  click and Enter / Space. Headings (`OutlineSection`, starts open) and understood ways (`WayRow`,
+  starts closed) use it. The arrow is CSS (`.outline-toggle::before`, ▸ / ▾), so it is not in the
+  row's text. State is component state, never in the plan or link.
+- Tests: `e2e/outline.spec.ts` "US-034"; tests that look inside a way now open it first (`openWay`).
+- Files: `web/src/Panels.tsx`, `web/src/styles.css`, `e2e/outline.spec.ts`.
+
+### US-035 Each way lists what fills it
+- `core/engine.ts`: `parseWays` keeps each part's text; `measure` records `WayProgress.parts`
+  (`WayPartProgress`: text, what, required, done, planned), the same numbers it already summed per way.
+- `web/src/Panels.tsx`: under a requirement with understood ways, `leavesOf` looks through headings
+  that only group others, and `offers` says what each remaining container provides (majors,
+  sub-majors, a stream, or free electives), matching the pools the engine counts. `WayRow` shows a
+  `WayPartRow` per part (or the contents directly for one part); `PartBody` lists the programs
+  (`ProgramLine`) or the electives filling it (`FreeElectives`, now given the merged `fills`).
+  Containers no way uses are still rendered after the ways. Requirements without ways are unchanged.
+- Blast radius, checked on the 2027 data: numbered ways appear only in the Bachelor of IT and the
+  Bachelor of Business Options. Business's two "Electives" wrappers (42 + 6, 18 + 6) are dropped the
+  same way; its transdisciplinary stream is not named by any Business way, so it stays after the ways.
+- Tests: `core/progress.test.ts` "each part of a way" (real data; parts add up to their way);
+  `e2e/outline.spec.ts` "US-035" (BIT parts and contents, grouping headings gone; Computing Science
+  keeps its headings). Mutation check: making `leavesOf` return the children as they are turns the
+  BIT test red.
+- Files: `core/engine.ts`, `core/progress.test.ts`, `web/src/Panels.tsx`, `web/src/styles.css`, `e2e/outline.spec.ts`.
+
+### US-036 A program is listed in one place only
+- `countsElsewhere` in `web/src/Panels.tsx`: a program whose `within` (where the engine counted it)
+  is another requirement is left out of this list, in plain lists and in way contents. Replaces the
+  "(counts under ...)" note.
+- Tests: `e2e/outline.spec.ts` "US-036". Mutation check: making `countsElsewhere` always false turns it red.
+- Files: `web/src/Panels.tsx`, `e2e/outline.spec.ts`.
+
