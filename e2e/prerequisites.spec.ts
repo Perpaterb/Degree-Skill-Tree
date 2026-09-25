@@ -12,7 +12,9 @@ test('US-025: marking a subject completed before its prerequisites asks first, a
 
   await panel.getByRole('button', { name: 'Mark completed' }).click();
   await expect(warning).toBeVisible();
-  await expect(warning.getByTestId('prereq-missing').locator('li')).toHaveText([/97101/, /97102/]);
+  // Its requisite is 97102, which in turn needs 97101.
+  await expect(warning.getByTestId('prereq-rule')).toContainText('97102');
+  await expect(warning.getByTestId('needs-first')).toHaveText('needs 97101 first');
 
   // Close changes nothing; so do Escape and a click outside.
   await warning.getByRole('button', { name: 'Close' }).click();
@@ -52,4 +54,16 @@ test('US-025: no warning when the prerequisites are completed, or there are none
     await expect(page.getByTestId('prereq-warning')).toBeHidden();
     await expect(panel.getByRole('button', { name: '✓ Completed' })).toBeVisible();
   }
+});
+
+test('US-025: when any one of several subjects will do, the warning lists every one of them', async ({ page }) => {
+  // 41001 Cloud Computing needs one of 48440, 31244, 31281, 31061, 48024, 31271.
+  await openTree(page);
+  await goTo(page, '41001');
+  await page.getByTestId('detail-panel').getByRole('button', { name: 'Mark completed' }).click();
+  const rule = page.getByTestId('prereq-warning').getByTestId('prereq-rule');
+  await expect(rule).toContainText('One of:');
+  for (const code of ['48440', '31244', '31281', '31061', '48024', '31271']) await expect(rule).toContainText(code);
+  // 48024 has alternatives of its own, so its note gives an example rather than the only way.
+  await expect(rule.getByTestId('needs-first').first()).toContainText('for example');
 });

@@ -289,6 +289,11 @@ Stories are in [`UserStories.md`](UserStories.md).
   through a portal on `document.body`: inside the panel, the panel's `backdrop-filter` confines a
   fixed-position backdrop to the panel, and a click beside the dialog reached the map (caught by the
   E2E test).
+- 25 Sep 2026, after testing with 41001 (six alternatives, the dialog showed one): the dialog now
+  renders the requisite rule in full (`PrerequisiteRule`, like `RuleView` with state dots), and under
+  each option not yet completed a note from `prerequisiteGap` for that option: "needs 97101 first",
+  or "needs its own prerequisites first, for example 48023" when it has alternatives of its own.
+  `prerequisiteGap` still decides whether the dialog opens. New E2E: all six 41001 options listed.
 - Tests: unit tests for `prerequisiteGap` and the met credit-point note; `e2e/prerequisites.spec.ts`
   walks the flow (planned prerequisites still warn, Close/Escape/outside change nothing, Mark anyway
   survives a reload, un-marking never asks, no warning when prerequisites are met or absent). The

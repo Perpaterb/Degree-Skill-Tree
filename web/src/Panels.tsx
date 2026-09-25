@@ -84,10 +84,49 @@ function Html({ html }: { html: string }) {
   );
 }
 
-/** Asks before marking a subject completed when its prerequisites are not completed (US-025). */
-function PrerequisiteWarning({ subject, gap, onClose, onConfirm }: { subject: Subject; gap: PrerequisiteGap; onClose(): void; onConfirm(): void }) {
+/**
+ * A requisite rule for the warning: every option, as in the Requisites section, and under any
+ * option that is not yet completed, what it needs first in turn.
+ */
+function PrerequisiteRule({ rule }: { rule: Rule }) {
   const map = useApp((s) => s.map)!;
+  const plan = useApp((s) => s.plan);
   const states = useApp((s) => s.states);
+  if ('op' in rule) {
+    return (
+      <div className="rule">
+        <div className="rule-head">{rule.op === 'and' ? 'All of:' : 'One of:'}</div>
+        <ul>
+          {rule.args.map((r, i) => (
+            <li key={i}>
+              <PrerequisiteRule rule={r} />
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+  if ('subject' in rule) {
+    const gap = states.get(rule.subject) === 'completed' ? null : prerequisiteGap(map, rule.subject, plan.completed, plan.degree);
+    return (
+      <>
+        <SubjectLink code={rule.subject} />
+        {gap && gap.subjects.length ? (
+          <div className="muted small needs-first" data-testid="needs-first">
+            {/* With alternatives of its own, this is one way in, not the only one. */}
+            needs {gap.alternatives ? 'its own prerequisites first, for example ' : ''}
+            {gap.subjects.join(', ')}
+            {gap.alternatives ? '' : ' first'}
+          </div>
+        ) : null}
+      </>
+    );
+  }
+  return <RuleView rule={rule} />;
+}
+
+/** Asks before marking a subject completed when its prerequisites are not completed (US-025). */
+function PrerequisiteWarning({ subject, onClose, onConfirm }: { subject: Subject; onClose(): void; onConfirm(): void }) {
   const close = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     close.current?.focus();
@@ -111,23 +150,7 @@ function PrerequisiteWarning({ subject, gap, onClose, onConfirm }: { subject: Su
         <p>
           <b>{subject.code}</b> {subject.title} needs these completed first:
         </p>
-        {gap.subjects.length ? (
-          <ol className="chain" data-testid="prereq-missing">
-            {gap.subjects.map((c) => (
-              <li key={c}>
-                <Dot state={states.get(c)} />
-                <b>{c}</b> {map.subjects[c]?.title ?? '(not on this map)'}
-              </li>
-            ))}
-          </ol>
-        ) : null}
-        {gap.notes.map((n) => (
-          <p key={n} className="muted">
-            {gap.subjects.length ? 'Also: ' : ''}
-            {n}
-          </p>
-        ))}
-        {gap.alternatives ? <p className="muted small">Other combinations would also work; see Requisites in the subject panel.</p> : null}
+        <div data-testid="prereq-rule">{subject.requisite ? <PrerequisiteRule rule={subject.requisite} /> : null}</div>
         <div className="modal-actions">
           <button ref={close} onClick={onClose}>
             Close
@@ -186,7 +209,6 @@ function SubjectDetail({ subject, map }: { subject: Subject; map: MapDoc }) {
       {warning ? (
         <PrerequisiteWarning
           subject={subject}
-          gap={warning}
           onClose={() => setWarning(null)}
           onConfirm={() => {
             setWarning(null);
