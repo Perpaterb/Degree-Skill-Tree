@@ -27,6 +27,15 @@ export interface Degree {
   url: string;
   structure: Container;
   studyPlans: StudyPlan[];
+  /** The title in parts (one per component of a double degree), each with its faculty's colour (US-039, US-040). */
+  titleParts?: TitlePart[];
+}
+
+export interface TitlePart {
+  text: string;
+  faculty: string;
+  /** The faculty's colour as "#rrggbb", or null when the university's colour table has none for it. */
+  colour: string | null;
 }
 
 export type ProgramKind = 'major' | 'sub_major' | 'stream' | 'other';

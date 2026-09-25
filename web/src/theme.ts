@@ -61,10 +61,63 @@ const lightCanvas: typeof darkCanvas = {
 /** The current theme's canvas colours. Reassigned by setThemeColours; ES module bindings stay live. */
 export let canvas = darkCanvas;
 
-/** One hue per degree, in map order. No red: red means a clash or a locked-out program (US-037). */
-const darkHues = [0xf2c75c, 0x57e0ff, 0xe07adf, 0x8fe07a, 0xc59bff, 0xffa65c];
-const lightHues = [0xa87400, 0x0086a8, 0xa8309f, 0x3a8a2a, 0x7048c8, 0xc0600c];
-export let degreeHues = darkHues;
+/** Map backgrounds per theme, for making faculty colours readable on them (US-039). */
+export const backgrounds: Record<ThemeName, number> = { dark: darkCanvas.background, light: lightCanvas.background };
+
+/** A degree with no faculty colour. */
+export const neutralDegree = 0x9aa3b5;
+
+/** WCAG contrast ratio between two colours (1 to 21). */
+export function contrast(a: number, b: number): number {
+  const lum = (c: number) => {
+    const ch = (s: number) => {
+      const v = ((c >> s) & 255) / 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * ch(16) + 0.7152 * ch(8) + 0.0722 * ch(0);
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+function toHsl(c: number): [number, number, number] {
+  const r = ((c >> 16) & 255) / 255, g = ((c >> 8) & 255) / 255, b = (c & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+
+function fromHsl(h: number, s: number, l: number): number {
+  const f = (n: number) => {
+    const k = (n + h * 12) % 12;
+    const a = s * Math.min(l, 1 - l);
+    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+  };
+  return (f(0) << 16) | (f(8) << 8) | f(4);
+}
+
+/**
+ * The colour, lightened or darkened only as far as needed to reach `min` contrast on `background`,
+ * keeping its hue and saturation (US-039). Faculty colours are fabric colours; some (eau de nil,
+ * science yellow) would vanish on the light map as they are.
+ */
+export function readable(colour: number, background: number, min = 3): number {
+  if (contrast(colour, background) >= min) return colour;
+  const [h, s, l0] = toHsl(colour);
+  const darker = toHsl(background)[2] > 0.5;
+  for (let step = 1; step <= 100; step++) {
+    const l = darker ? l0 - (l0 * step) / 100 : l0 + ((1 - l0) * step) / 100;
+    const c = fromHsl(h, s, l);
+    if (contrast(c, background) >= min) return c;
+  }
+  return darker ? 0x000000 : 0xffffff;
+}
+
+/** A degree title part's colour for the current theme. */
+export const facultyColour = (hex: string | null | undefined) => readable(hex ? parseInt(hex.slice(1), 16) : neutralDegree, canvas.background);
 
 /** Blend two colours; t = 0 gives a, 1 gives b. */
 export function mix(a: number, b: number, t: number): number {
@@ -106,7 +159,6 @@ export let stateLook = darkLook;
 /** Switch the canvas and legend colours to a theme. */
 export function setThemeColours(t: ThemeName) {
   canvas = t === 'light' ? lightCanvas : darkCanvas;
-  degreeHues = t === 'light' ? lightHues : darkHues;
   stateLook = t === 'light' ? lightLook : darkLook;
 }
 

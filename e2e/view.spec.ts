@@ -158,3 +158,50 @@ test('US-029: the settings popup stays on screen at phone width @phone', async (
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(width);
 });
+
+test.describe('faculty colours (US-039, US-040)', () => {
+  test.use({ colorScheme: 'dark' });
+  // From data/faculty-colours/uts.json (UTS academic dress). Both already reach 3:1 on the dark map.
+  const IT = 0x269fdb;
+  const BUSINESS = 0xbedbe0;
+  const rgb = (c: number) => `rgb(${(c >> 16) & 255}, ${(c >> 8) & 255}, ${c & 255})`;
+
+  test('US-039: degrees take their faculty colour: IT blue for IT, Computing Science and Cybersecurity, and a lighter-safe version in light mode', async ({ page }) => {
+    await openTree(page, 't=uts-2027');
+    for (const code of ['C10148', 'C10476', 'C10471']) expect((await title(page, code)).fill, code).toBe(IT);
+    expect((await title(page, 'C10026')).fill).toBe(BUSINESS);
+    // The circle's credit points take the same colour as its title.
+    expect((await title(page, 'C10148')).progressColour).toBe(IT);
+
+    // The degree panel heading matches.
+    await goTo(page, 'C10026');
+    await expect(page.getByTestId('degree-title').locator('span')).toHaveCSS('color', rgb(BUSINESS));
+
+    // Eau de nil is too pale for the light map, so it is darkened there; the hue family stays.
+    await page.getByTestId('theme-toggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    const light = (await title(page, 'C10026')).fill;
+    expect(light).not.toBe(BUSINESS);
+    const lum = (c: number) => ((c >> 16) & 255) + ((c >> 8) & 255) + (c & 255);
+    expect(lum(light)).toBeLessThan(lum(BUSINESS));
+  });
+
+  test('US-040: the IT and Business double degree title is drawn in both faculty colours, on the map and in its panel', async ({ page }) => {
+    await openTree(page, 't=uts-2027');
+    const t = await title(page, 'C10219');
+    expect(t.parts).toEqual([
+      { text: 'Bachelor of Information Technology', fill: IT },
+      { text: 'Bachelor of Business', fill: BUSINESS },
+    ]);
+    // Drawn with a colour tag per part: the IT words in p0, the Business words in p1.
+    expect(t.tags).toEqual({ p0: IT, p1: BUSINESS });
+    expect(t.text).toMatch(/^<p0>Bachelor of<\/p0>/);
+    expect(t.text).toMatch(/<p1>Business<\/p1>$/);
+
+    await goTo(page, 'C10219');
+    const spans = page.getByTestId('degree-title').locator('span');
+    await expect(spans).toHaveText(['Bachelor of Information Technology', ' Bachelor of Business']);
+    await expect(spans.nth(0)).toHaveCSS('color', rgb(IT));
+    await expect(spans.nth(1)).toHaveCSS('color', rgb(BUSINESS));
+  });
+});

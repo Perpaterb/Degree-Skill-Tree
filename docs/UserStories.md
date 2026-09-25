@@ -21,7 +21,8 @@ Later: US-033 to US-036 added (the degree panel takes over from the top-left pro
 outline expands and collapses, each way lists what fills it, a program is listed in one place only);
 US-022 and US-027 changed to match. Later: US-037 and US-038 added (majors and sub-majors that can
 no longer fit are crossed out; a chosen one that cannot count is shown as such); US-021, US-026 and
-US-028 changed to match.
+US-028 changed to match. Later: US-039 to US-041 added (degrees coloured by faculty, from UTS
+academic dress; double degrees in both colours; a standard faculty-colour lookup for any university).
 
 ---
 
@@ -246,6 +247,25 @@ As a student, I want to see when something I chose cannot count, and undo it.
 - [x] When the chosen programs cannot all fit (e.g. an old link, or chosen before the degree was selected), programs are kept in the order they were chosen and the later ones that do not fit are locked out, with the reason and an Unchoose button in their panel
 - [x] A locked-out chosen program counts nothing towards the degree's progress
 - [x] An E2E test: a link choosing the Data Analytics major and sub-major shows the sub-major locked, counting nothing, and Unchoose removes it
+
+### US-039 Degrees in their faculty's colour
+As a student, I want each degree coloured by its faculty, so degrees from the same faculty read as a family.
+- [x] Each degree's title on the map and in its panel, and its circle's outline and tint, use its faculty's colour (decided 25 Sep 2026: circles too, not only titles). The colour comes from the faculty's academic dress (US-041)
+- [x] A Faculty of Engineering and IT award takes Engineering scarlet when it is an Engineering degree, otherwise IT blue (so Information Technology, Computing Science and Cybersecurity are IT blue, decided 25 Sep 2026)
+- [x] Each colour keeps its hue but is adjusted per theme so the title stays readable: at least 3:1 contrast against the map background in light and dark (unit test over every colour)
+- [x] A degree whose faculty has no colour gets a neutral colour, and the data build lists it. *Every degree on the map has one today, so the neutral path is exercised only by the unit test on `titleParts`.*
+
+### US-040 Double degrees in both colours
+As a student, I want a double degree's title to show both faculties.
+- [x] A double degree's title is split into its component degrees and each part takes its own faculty's colour (e.g. "Bachelor of Information Technology" in IT blue, "Bachelor of Business" in Business grey), on the map and in its panel. The handbook lists the faculties in order
+- [x] A title that cannot be split takes its first faculty's colour whole
+- [x] An E2E test: the Bachelor of IT Bachelor of Business title is drawn in two colours, IT blue then Business grey
+
+### US-041 A standard faculty-colour lookup for any university
+As the project owner, I want faculty colours found the same way for every university, with where each came from.
+- [x] `docs/FacultyColours.md` sets the procedure, in order: (1) official faculty brand colours if the university publishes them; (2) academic dress hood colours; (3) a fallback palette. Each colour records its source URL, date, official name, hex, and whether the hex was published or sampled from a photo
+- [x] `data/faculty-colours/uts.json` holds UTS's ten faculty colours (six named officially, four from photos only; all hex values sampled from the official photos, 25 Sep 2026) and the rules matching a handbook faculty (and, for Engineering and IT, the degree title) to a colour
+- [x] The data build attaches the colour to each degree (to each part of a double degree); a unit test fails if a degree on the map has no faculty colour
 
 ## Admin CMS
 

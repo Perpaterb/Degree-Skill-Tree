@@ -542,3 +542,43 @@ Stories are in [`UserStories.md`](UserStories.md).
 - Files: `scraper/src/normalize.ts`, `scraper/test/normalize.test.ts`, `web/public/trees/*.json`,
   `web/src/theme.ts`, `web/src/styles.css`, `e2e/multidegree.spec.ts`, `data/reports/coverage-2027-C10219.json`.
 
+### US-039 Degrees in their faculty's colour
+- `web/src/theme.ts`: `contrast` (WCAG ratio), `readable(colour, background, min = 3)` (moves HSL
+  lightness only as far as needed, keeping hue and saturation), `facultyColour(hex)` for the current
+  theme, `backgrounds`, `neutralDegree`. The per-degree hue list (`degreeHues`) is gone.
+- `web/src/TreeCanvas.tsx`: `degreeHue` gives each degree its first faculty's readable colour, used
+  for the circle outline and tint and the credit points; `titleColours` sets each title's fill, and
+  `restyle` redoes both on a theme change. Test hook `title(id)` now returns `fill`, `parts`, `tags`.
+- `web/src/Panels.tsx`: `DegreeTitle` renders the panel heading in the same colours.
+- Tests: `web/src/theme.test.ts` (every UTS colour reaches 3:1 on both maps and keeps its hue within
+  8 degrees; fails with the adjustment switched off); `e2e/view.spec.ts` "US-039".
+- Files: `web/src/theme.ts`, `web/src/theme.test.ts`, `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`, `e2e/view.spec.ts`.
+
+### US-040 Double degrees in both colours
+- `scraper/src/facultyColours.ts`: `splitTitle` cuts a title at each "Bachelor of" / "Master of" /
+  "Diploma in" ...; `titleParts` pairs the parts with the handbook's faculties (comma separated,
+  in order), or keeps the title whole with the first faculty when the counts differ.
+- `web/src/TreeCanvas.tsx`: `taggedTitle` wraps each part's words in `<pN>` tags per wrapped line,
+  drawn by Pixi's `tagStyles` with one fill per part.
+- Tests: `scraper/test/facultyColours.test.ts` (splitting, mismatched counts); `e2e/view.spec.ts`
+  "US-040" (map tags and panel spans; fails when the tags are dropped).
+- Files: `scraper/src/facultyColours.ts`, `core/model.ts` (`Degree.titleParts`, `TitlePart`),
+  `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`.
+
+### US-041 A standard faculty-colour lookup for any university
+- `docs/FacultyColours.md`: the procedure (brand colours, then academic dress, then a fallback
+  palette), how to get a hex (published, or sampled from the university's hood photo), and the rules
+  format.
+- `data/faculty-colours/uts.json`: UTS from academic dress, 25 Sep 2026. No faculty brand colours
+  exist publicly. Six hood colours are named in the gallery's image descriptions; IT (blue), Law
+  (violet), Science (yellow) and Transdisciplinary (terracotta) only in photos. All ten hex values are
+  medians of the hood fabric in the official Bachelor photos. Rules: Engineering and IT awards are
+  scarlet if the title says Engineering, else IT blue; only the EIT and Business rules are checked
+  against degrees on the map.
+- `buildMap` takes the table and sets `Degree.titleParts`; `normalize` in `scraper/src/cli.ts` reads
+  `data/faculty-colours/uts.json` and warns for any part without a colour (none today).
+- Tests: `scraper/test/facultyColours.test.ts` (the table is complete, rules point at real colours,
+  every degree on the map has a colour for every title part).
+- Files: `docs/FacultyColours.md`, `data/faculty-colours/uts.json`, `scraper/src/facultyColours.ts`,
+  `scraper/src/normalize.ts`, `scraper/src/cli.ts`, `scraper/test/facultyColours.test.ts`, `web/public/trees/uts-2027.json`.
+

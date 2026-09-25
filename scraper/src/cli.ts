@@ -180,7 +180,11 @@ const TREES = 'web/public/trees';
 async function normalize() {
   const codes = process.argv.slice(3);
   if (!codes.length) throw new Error('usage: npm run scrape -- normalize <COURSE_CODE>...');
-  const map = await buildMap(RAW, YEAR, codes);
+  // Faculty colours (US-041): data/faculty-colours/<institution>.json, found by docs/FacultyColours.md.
+  const colours = JSON.parse(await readFile('data/faculty-colours/uts.json', 'utf8'));
+  const map = await buildMap(RAW, YEAR, codes, colours);
+  for (const d of Object.values(map.degrees))
+    for (const p of d.titleParts ?? []) if (!p.colour) console.warn(`no faculty colour for ${d.code} "${p.text}" (faculty "${p.faculty}")`);
   const started = Date.now();
   map.layout = layoutMap(map);
   const copies = Object.keys(map.layout.nodes).length;

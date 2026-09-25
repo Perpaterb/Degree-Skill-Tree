@@ -5,7 +5,7 @@ import { compulsorySubjects, missingFor, subjectsUnder, unlockedBy } from '../..
 import { circleAt, TITLE_LINE, type Layout, type LayoutCircle, type LayoutNode, type PathCmd } from '../../core/layout';
 import type { MapDoc } from '../../core/model';
 import { useApp } from './store';
-import { canvas, degreeHues, mix, stateLook } from './theme';
+import { canvas, facultyColour, mix, stateLook } from './theme';
 import { textPx } from './view';
 
 const LABEL_MIN_SCALE = 0.42;
@@ -54,6 +54,44 @@ interface CircleView {
   /** Credit points and tick after the title (US-028). */
   progress: Text;
   progressColour: number;
+  /** A degree title's parts, each drawn in its faculty's colour (US-039, US-040). */
+  parts?: { text: string; fill: number }[];
+}
+
+/** Each degree's colour: its (first) faculty's, made readable on the current map background (US-039). */
+function degreeHue(map: MapDoc) {
+  return new Map(Object.values(map.degrees).map((d) => [d.code, facultyColour(d.titleParts?.[0]?.colour)]));
+}
+
+/** Colour-tag a wrapped title so each part keeps its own faculty's colour across line breaks (US-040). */
+function taggedTitle(lines: string[], parts: string[]): string {
+  const partOfWord = parts.flatMap((p, i) => p.split(/\s+/).map(() => i));
+  let w = 0;
+  return lines
+    .map((line) => {
+      let out = '';
+      let cur = -1;
+      line.split(/\s+/).filter(Boolean).forEach((word, k) => {
+        const part = partOfWord[w++] ?? parts.length - 1;
+        if (part !== cur) {
+          if (cur >= 0) out += `</p${cur}>`;
+          out += `${k ? ' ' : ''}<p${part}>`;
+          cur = part;
+        } else out += ' ';
+        out += word.replace(/</g, '&lt;');
+      });
+      return cur >= 0 ? out + `</p${cur}>` : out;
+    })
+    .join('\n');
+}
+
+/** Fill and part colours for a circle's title in the current theme. */
+function titleColours(map: MapDoc, circle: LayoutCircle) {
+  const parts = map.degrees[circle.id]?.titleParts;
+  if (circle.kind !== 'degree' || !parts?.length) return { fill: canvas.clusterTitle, parts: undefined, tags: undefined };
+  const coloured = parts.map((p) => ({ text: p.text, fill: facultyColour(p.colour) }));
+  const tags = coloured.length > 1 ? Object.fromEntries(coloured.map((p, i) => [`p${i}`, { fill: p.fill }])) : undefined;
+  return { fill: coloured[0].fill, parts: coloured, tags };
 }
 
 interface Scene {
@@ -92,7 +130,20 @@ declare global {
       finished(): Record<string, 'complete' | 'planned'>;
       locked(): string[];
       ringed(): string[];
-      title(id: string): { text: string; progress: string; progressColour: number; visible: boolean; progressVisible: boolean; px: number; bottom: number; circleTop: number } | null;
+      title(id: string): {
+        text: string;
+        progress: string;
+        progressColour: number;
+        visible: boolean;
+        progressVisible: boolean;
+        px: number;
+        bottom: number;
+        circleTop: number;
+        /** The title's fill, and for a degree each part of it with its faculty colour as drawn (US-039, US-040). */
+        fill: number;
+        parts: { text: string; fill: number }[] | null;
+        tags: Record<string, number> | null;
+      } | null;
       subjectLabel(id: string): { visible: boolean; px: number } | null;
       background(): number;
     };
@@ -152,7 +203,7 @@ export function TreeCanvas() {
       const isClick = (e: { global: { x: number; y: number } }) => !!downAt && Math.hypot(e.global.x - downAt.x, e.global.y - downAt.y) <= 6;
 
       // Circles, largest first so a smaller circle sits on top and wins the click.
-      const hue = new Map(Object.keys(map.degrees).sort().map((d, i) => [d, degreeHues[i % degreeHues.length]]));
+      const hue = degreeHue(map);
       const circleLayer = new Container();
       const titleLayer = new Container();
       // Circles are picked by circleAt (smallest containing the point), not by Pixi's
@@ -163,10 +214,12 @@ export function TreeCanvas() {
         const degree = circle.kind === 'degree';
         // The title sits above the circle, in the box the layout kept free for it (already wrapped).
         const { label } = circle;
+        const colours = titleColours(map, circle);
         const title = new Text({
-          text: label.lines.join('\n'),
+          text: colours.tags ? taggedTitle(label.lines, colours.parts!.map((p) => p.text)) : label.lines.join('\n'),
           style: {
-            fill: degree ? hue.get(circle.id)! : canvas.clusterTitle,
+            fill: colours.fill,
+            tagStyles: colours.tags,
             fontSize: label.size,
             lineHeight: label.size * TITLE_LINE,
             fontFamily: 'Georgia, serif',
@@ -187,7 +240,7 @@ export function TreeCanvas() {
         });
         progress.anchor.set(0, 1);
         titleLayer.addChild(title, progress);
-        return { circle, shape, title, base, lastW, progress, progressColour: -1 };
+        return { circle, shape, title, base, lastW, progress, progressColour: -1, parts: colours.parts };
       });
       viewport.addChild(circleLayer);
 
@@ -286,7 +339,21 @@ export function TreeCanvas() {
           const bottom = s.viewport.toScreen(v.title.x, v.title.y).y;
           const circleTop = s.viewport.toScreen(v.circle.x, v.circle.y - v.circle.r).y;
           const px = v.circle.label.size * v.title.scale.y * s.viewport.scale.y;
-          return { text: v.title.text, progress: v.progress.text, progressColour: v.progressColour, visible: v.title.visible, progressVisible: v.progress.visible, px, bottom, circleTop };
+          const tagStyles = v.title.style.tagStyles;
+          const tags = tagStyles ? Object.fromEntries(Object.entries(tagStyles).map(([k, t]) => [k, Number(t.fill)])) : null;
+          return {
+            text: v.title.text,
+            progress: v.progress.text,
+            progressColour: v.progressColour,
+            visible: v.title.visible,
+            progressVisible: v.progress.visible,
+            px,
+            bottom,
+            circleTop,
+            fill: Number(v.title.style.fill),
+            parts: v.parts ?? null,
+            tags,
+          };
         },
         subjectLabel(id) {
           const s = scene.current;
@@ -407,9 +474,12 @@ function clickPointForCircle(s: Scene, c: LayoutCircle) {
 /** Colours set when things are created, redone when the theme changes (US-030). */
 function restyle(s: Scene) {
   s.app.renderer.background.color = canvas.background;
-  s.hue = new Map(Object.keys(s.map.degrees).sort().map((d, i) => [d, degreeHues[i % degreeHues.length]]));
+  s.hue = degreeHue(s.map);
   for (const v of s.circles) {
-    v.title.style.fill = v.circle.kind === 'degree' ? s.hue.get(v.circle.id)! : canvas.clusterTitle;
+    const colours = titleColours(s.map, v.circle);
+    v.title.style.fill = colours.fill;
+    if (colours.tags) v.title.style.tagStyles = colours.tags;
+    v.parts = colours.parts;
     v.progressColour = -1;
   }
   paint(s);

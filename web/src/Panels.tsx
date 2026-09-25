@@ -19,7 +19,7 @@ import {
 import type { Container, Degree, MapDoc, Program, Rule, Subject } from '../../core/model';
 import { track } from './analytics';
 import { useApp } from './store';
-import { cssColor, stateLabel, stateLook } from './theme';
+import { cssColor, facultyColour, stateLabel, stateLook } from './theme';
 import { TEXT_SIZE_MAX, TEXT_SIZE_MIN } from './view';
 
 function Dot({ state }: { state: NodeState | undefined }) {
@@ -396,7 +396,7 @@ function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
   return (
     <>
       <div className="kicker">Degree</div>
-      <h2>{degree.title}</h2>
+      <DegreeTitle degree={degree} />
       <div className="meta">
         {degree.code} · {degree.creditPoints}cp · {degree.faculty}
       </div>
@@ -441,6 +441,22 @@ function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
         </a>
       </p>
     </>
+  );
+}
+
+/** A degree's title, each part in its faculty's colour (US-039, US-040). */
+function DegreeTitle({ degree }: { degree: Degree }) {
+  useApp((s) => s.theme); // the colours are made readable per theme
+  const parts = degree.titleParts?.length ? degree.titleParts : [{ text: degree.title, faculty: degree.faculty, colour: null }];
+  return (
+    <h2 data-testid="degree-title">
+      {parts.map((p, i) => (
+        <span key={i} data-faculty={p.faculty} style={{ color: cssColor(facultyColour(p.colour)) }}>
+          {i ? ' ' : ''}
+          {p.text}
+        </span>
+      ))}
+    </h2>
   );
 }
 

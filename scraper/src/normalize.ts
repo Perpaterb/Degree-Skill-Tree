@@ -12,6 +12,7 @@ import type {
   Subject,
 } from '../../core/model.js';
 import { parseAccessConditions, type RequisiteBlock, type RuleNode } from './access.js';
+import { titleParts, type FacultyColours } from './facultyColours.js';
 import { HANDBOOK } from './handbook.js';
 
 type Json = Record<string, any>;
@@ -172,7 +173,7 @@ function legacySubject(code: string, title: string, year: string): Subject {
 }
 
 /** Build one map from degrees already pulled into `rawDir`. Shared programs and subjects exist once. */
-export async function buildMap(rawDir: string, year: string, courseCodes: string[]): Promise<MapDoc> {
+export async function buildMap(rawDir: string, year: string, courseCodes: string[], colours: FacultyColours | null = null): Promise<MapDoc> {
   const refs: Referenced = { subjects: new Map(), programs: new Map() };
   const degrees: Record<string, Degree> = {};
   for (const courseCode of courseCodes) {
@@ -188,6 +189,7 @@ export async function buildMap(rawDir: string, year: string, courseCodes: string
       structure: toContainer(course.curriculumStructure ?? {}, refs),
       studyPlans: studyPlans(course.study_plans),
     };
+    degrees[courseCode].titleParts = titleParts(colours, degrees[courseCode]);
   }
 
   // Programs, recursively (a stream can name further programs).
