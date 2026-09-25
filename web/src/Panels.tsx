@@ -16,8 +16,10 @@ import type { Degree, MapDoc, Program, Rule, Subject } from '../../core/model';
 import { track } from './analytics';
 import { useApp } from './store';
 import { cssColor, stateLabel, stateLook } from './theme';
+import { TEXT_SIZE_MAX, TEXT_SIZE_MIN } from './view';
 
 function Dot({ state }: { state: NodeState | undefined }) {
+  useApp((s) => s.theme); // colours come from the theme
   const look = stateLook[state ?? 'locked'];
   return <span className="dot" style={{ background: cssColor(look.fill), borderColor: cssColor(look.ring) }} title={stateLabel[state ?? 'locked']} />;
 }
@@ -800,6 +802,8 @@ export function TopBar() {
         ) : null}
       </div>
       <div className="top-actions">
+        <ViewSettingsButton />
+        <ThemeButton />
         <button onClick={share}>{copied ? 'Link copied' : 'Share plan'}</button>
         <button
           onClick={() => {
@@ -813,7 +817,74 @@ export function TopBar() {
   );
 }
 
+/** Switches light and dark (US-030). */
+function ThemeButton() {
+  const theme = useApp((s) => s.theme);
+  const setTheme = useApp((s) => s.setTheme);
+  const next = theme === 'dark' ? 'light' : 'dark';
+  return (
+    <button onClick={() => setTheme(next)} aria-label={`Switch to ${next} mode`} title={`Switch to ${next} mode`} data-testid="theme-toggle">
+      {theme === 'dark' ? '☀' : '☾'}
+    </button>
+  );
+}
+
+/** The view settings popup (US-029). */
+function ViewSettingsButton() {
+  const [open, setOpen] = useState(false);
+  const view = useApp((s) => s.view);
+  const setView = useApp((s) => s.setView);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onDown = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onDown);
+    };
+  }, [open]);
+  return (
+    <div className="view-settings" ref={box}>
+      <button onClick={() => setOpen(!open)} aria-expanded={open} aria-label="View settings" title="View settings" data-testid="view-settings-button">
+        ⚙
+      </button>
+      {open ? (
+        <div className="view-popup" role="dialog" aria-label="View settings" data-testid="view-settings">
+          <h4>View</h4>
+          <label className="check">
+            <input type="checkbox" checked={view.grow} onChange={(e) => setView({ grow: e.target.checked })} data-testid="view-grow" />
+            Text grows with zoom
+          </label>
+          <p className="muted small">{view.grow ? 'Grows and shrinks as you zoom, within limits.' : 'Stays the same size on screen at every zoom.'}</p>
+          <label className="slider">
+            <span>
+              Text size <b data-testid="view-size-value">{Math.round(view.textSize * 100)}%</b>
+            </span>
+            <input
+              type="range"
+              min={TEXT_SIZE_MIN * 100}
+              max={TEXT_SIZE_MAX * 100}
+              step={10}
+              value={Math.round(view.textSize * 100)}
+              onChange={(e) => setView({ textSize: Number(e.target.value) / 100 })}
+              data-testid="view-size"
+            />
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={view.showCp} onChange={(e) => setView({ showCp: e.target.checked })} data-testid="view-cp" />
+            Show credit points on titles
+          </label>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function Legend() {
+  useApp((s) => s.theme); // colours come from the theme
   const order: NodeState[] = ['completed', 'planned', 'available', 'reachable', 'locked', 'excluded', 'legacy'];
   return (
     <div className="legend">

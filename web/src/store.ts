@@ -8,14 +8,18 @@ import {
   programProgress,
   progress,
   progressStatus,
+  titleCp,
   type Fit,
   type NodeState,
   type Plan,
   type Status,
+  type TitleCp,
 } from '../../core/engine';
 import { layoutMap, type Layout } from '../../core/layout';
 import type { MapDoc } from '../../core/model';
 import { track } from './analytics';
+import { setThemeColours } from './theme';
+import { loadTheme, loadView, saveTheme, saveView, type ThemeName, type ViewSettings } from './view';
 
 export interface MapIndexEntry {
   id: string;
@@ -35,6 +39,10 @@ interface AppState {
   fits: Map<string, Fit>;
   /** How far each degree and program circle has got, for its glow (US-026). */
   finish: Map<string, Status>;
+  /** Credit points on each degree and program circle's title (US-028). */
+  titles: Map<string, TitleCp>;
+  view: ViewSettings;
+  theme: ThemeName;
   /** The subject, program or degree shown in the detail panel. */
   selected: string | null;
   hovered: string | null;
@@ -58,6 +66,8 @@ interface AppState {
   toggleProgram(code: string): void;
   setSearch(q: string): void;
   resetPlan(): void;
+  setView(patch: Partial<ViewSettings>): void;
+  setTheme(t: ThemeName): void;
 }
 
 const base = import.meta.env.BASE_URL;
@@ -108,8 +118,21 @@ function derive(map: MapDoc, plan: Plan) {
     ...Object.keys(map.degrees).map((d) => [d, progressStatus(progress(map, d, plan))] as const),
     ...Object.keys(map.programs).map((p) => [p, progressStatus(programProgress(map, p, plan))] as const),
   ]);
-  return { states: computeStates(map, plan), fits, finish };
+  const titles = new Map<string, TitleCp>();
+  for (const id of [...Object.keys(map.degrees), ...Object.keys(map.programs)]) {
+    const t = titleCp(map, id, plan);
+    if (t) titles.set(id, t);
+  }
+  return { states: computeStates(map, plan), fits, finish, titles };
 }
+
+function applyTheme(t: ThemeName) {
+  setThemeColours(t);
+  if (typeof document !== 'undefined') document.documentElement.dataset.theme = t;
+}
+
+const initialTheme = loadTheme();
+applyTheme(initialTheme);
 
 export const useApp = create<AppState>((set, get) => ({
   index: [],
@@ -119,6 +142,9 @@ export const useApp = create<AppState>((set, get) => ({
   states: new Map(),
   fits: new Map(),
   finish: new Map(),
+  titles: new Map(),
+  view: loadView(),
+  theme: initialTheme,
   selected: null,
   hovered: null,
   hoveredCircle: null,
@@ -201,7 +227,8 @@ export const useApp = create<AppState>((set, get) => ({
     if (!map) return;
     const programs = plan.programs.includes(code) ? plan.programs.filter((c) => c !== code) : [...plan.programs, code];
     const next = { ...plan, programs };
-    set({ plan: next });
+    // A chosen program changes how a degree's options are counted, so its glow too.
+    set({ plan: next, ...derive(map, next) });
     savePlan(map.id, next);
     track('program_toggled', { code });
   },
@@ -217,5 +244,17 @@ export const useApp = create<AppState>((set, get) => ({
     const p = emptyPlan();
     set({ plan: p, ...derive(map, p) });
     savePlan(map.id, p);
+  },
+
+  setView(patch) {
+    const view = { ...get().view, ...patch };
+    set({ view });
+    saveView(view);
+  },
+
+  setTheme(t) {
+    applyTheme(t);
+    set({ theme: t });
+    saveTheme(t);
   },
 }));

@@ -327,6 +327,38 @@ Stories are in [`UserStories.md`](UserStories.md).
   its dark fill and pale `#86b6ff` ring. E2E checks the drawn fill and ring of a planned copy.
 - Files: `web/src/theme.ts`, `web/src/styles.css`, `e2e/multidegree.spec.ts`.
 
+### US-028 Circle titles show progress
+- `titleCp` in `core/engine.ts`: not capped. A program counts the completed and planned subjects it
+  lists; a degree counts `compatibility(...).countingCp`, with and without the planned subjects.
+  The store (`derive` in `web/src/store.ts`) keeps a `titles` map for every degree and program.
+  `toggleProgram` now re-derives too, since a chosen program changes a degree's counting.
+- `web/src/TreeCanvas.tsx`: each circle gets a second Text (`progress`) after the last line of its
+  title (measured with `CanvasTextMetrics`), coloured by the same status as the glow, ticked when
+  complete or planned. Titles are lifted by `TITLE_LIFT` (degree 40, program 8 world units).
+- Test hook `window.__dst.title(id)`. E2E: `e2e/view.spec.ts` "US-028" (complete, planned, uncapped
+  54/48, part done, degree total, lift).
+
+### US-029 View settings
+- `web/src/view.ts`: `ViewSettings` (grow, textSize 0.5-2, showCp), stored under `dst.view` in
+  localStorage, never in the hash. `textPx(kind, natural, view)` gives the on-screen font size:
+  within `TEXT_PX` bounds while growing, a fixed size otherwise, times the text size.
+- `applyLod` in `web/src/TreeCanvas.tsx` scales every title, credit-point text and subject label to
+  its `textPx`. A subject label shows only while it fits its disc (`LABEL_FIT`), or when popped.
+- `ViewSettingsButton` in `web/src/Panels.tsx`, styles `.view-popup` in `web/src/styles.css`.
+- Tests: `web/src/view.test.ts` (vitest now includes `web/src/**/*.test.ts`), `e2e/view.spec.ts`
+  "US-029" (bounds, fixed size, 200%, credit points off, reload, not in link, labels hide, phone).
+  Both geometry tests were seen to fail with `LABEL_FIT` and `TITLE_LIFT` broken.
+
+### US-030 Light and dark mode
+- `web/src/theme.ts`: dark and light sets for `canvas`, `stateLook` and `degreeHues`, exported as
+  live `let` bindings switched by `setThemeColours`. New `selectRing` colour (was hard-coded white).
+- `web/src/styles.css`: every colour is a token on `:root`; `:root[data-theme='light']` overrides
+  them. `web/index.html` sets `data-theme` before first paint (stored choice, else system).
+- Store `theme` / `setTheme` (`dst.theme` in localStorage); `restyle` in `TreeCanvas.tsx` recolours
+  the renderer background and titles, then repaints. `ThemeButton` in `Panels.tsx`.
+- `playwright.config.ts`: tests default to a dark system (`colorScheme: 'dark'`), since Playwright
+  otherwise reports light and older tests assert dark colours. E2E: `e2e/view.spec.ts` "US-030".
+
 ### US-031 Progress on each way and heading in the outline
 - `Cp` and `Bar` in `web/src/Panels.tsx` (shared with the progress panel's rows) render "42+6/48cp"
   and the done / planned bar. `OutlineSection` puts them on every heading of the degree outline (in

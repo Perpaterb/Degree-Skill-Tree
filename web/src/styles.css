@@ -2,7 +2,9 @@
   --bg: #0b0d12;
   --panel: rgba(16, 19, 27, 0.94);
   --panel-edge: #2a3140;
+  --popup-bg: #121620;
   --text: #d7dde8;
+  --text-strong: #fff;
   --muted: #8490a6;
   --gold: #f2c75c;
   --gold-deep: #5c4414;
@@ -11,8 +13,55 @@
   --complete: #45d16b;
   --blue: #86b6ff;
   --danger: #c0504d;
+  --focus: #57e0ff;
+  --topbar-a: #141821;
+  --topbar-b: #0e1117;
+  --topbar-edge: #3a3226;
+  --input-bg: #0b0e14;
+  --button-bg: #1a1f2b;
+  --button-edge: #3d4556;
+  --note-bg: #1b1e25;
+  --note-edge: #59627a;
+  --rule-edge: #2f3645;
+  --bar-bg: #1c212c;
+  --shadow: rgba(0, 0, 0, 0.55);
+  --backdrop: rgba(5, 7, 10, 0.6);
+  --brand-glow: rgba(242, 199, 92, 0.5);
   --serif: Georgia, 'Times New Roman', serif;
   color-scheme: dark;
+}
+
+/* Light mode (US-030): set on <html> from the stored choice, else the system setting. */
+:root[data-theme='light'] {
+  --bg: #f4f1ea;
+  --panel: rgba(255, 253, 248, 0.96);
+  --panel-edge: #d6d0c2;
+  --popup-bg: #fffdf8;
+  --text: #1d2330;
+  --text-strong: #000;
+  --muted: #5d6678;
+  --gold: #8f6300;
+  --gold-deep: #f6e3b0;
+  --planned: #7a2fe0;
+  --planned-deep: #eadcff;
+  --complete: #1a8a3c;
+  --blue: #245fc0;
+  --danger: #b8322f;
+  --focus: #0090b0;
+  --topbar-a: #fbf8f1;
+  --topbar-b: #efeadf;
+  --topbar-edge: #d8c9a6;
+  --input-bg: #fff;
+  --button-bg: #fff;
+  --button-edge: #c9c3b5;
+  --note-bg: #efebe2;
+  --note-edge: #a9a18f;
+  --rule-edge: #d6d0c2;
+  --bar-bg: #e3ded2;
+  --shadow: rgba(60, 50, 30, 0.18);
+  --backdrop: rgba(40, 35, 25, 0.35);
+  --brand-glow: rgba(143, 99, 0, 0.25);
+  color-scheme: light;
 }
 
 * {
@@ -54,8 +103,8 @@ a {
   align-items: center;
   gap: 16px;
   padding: 10px 16px;
-  background: linear-gradient(#141821, #0e1117);
-  border-bottom: 1px solid #3a3226;
+  background: linear-gradient(var(--topbar-a), var(--topbar-b));
+  border-bottom: 1px solid var(--topbar-edge);
   z-index: 2;
 }
 
@@ -69,7 +118,7 @@ a {
 .brand-mark {
   font-size: 26px;
   color: var(--gold);
-  text-shadow: 0 0 12px rgba(242, 199, 92, 0.5);
+  text-shadow: 0 0 12px var(--brand-glow);
 }
 
 .brand-name {
@@ -89,7 +138,7 @@ a {
 
 .topbar select,
 .search input {
-  background: #0b0e14;
+  background: var(--input-bg);
   border: 1px solid var(--panel-edge);
   color: var(--text);
   border-radius: 6px;
@@ -111,7 +160,7 @@ a {
 }
 
 .search input:focus {
-  outline: 2px solid #57e0ff;
+  outline: 2px solid var(--focus);
   outline-offset: 0;
 }
 
@@ -129,8 +178,8 @@ a {
 .top-actions button,
 .actions button,
 .modal-actions button {
-  background: #1a1f2b;
-  border: 1px solid #3d4556;
+  background: var(--button-bg);
+  border: 1px solid var(--button-edge);
   border-radius: 6px;
   padding: 7px 12px;
 }
@@ -178,7 +227,7 @@ a {
   background: var(--panel);
   border: 1px solid var(--panel-edge);
   border-radius: 10px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 10px 40px var(--shadow);
   backdrop-filter: blur(6px);
   z-index: 1;
 }
@@ -227,8 +276,8 @@ a {
 }
 
 .note {
-  background: #1b1e25;
-  border-left: 3px solid #59627a;
+  background: var(--note-bg);
+  border-left: 3px solid var(--note-edge);
   padding: 8px 10px;
   color: var(--muted);
   border-radius: 4px;
@@ -278,7 +327,7 @@ a {
 }
 
 .link:hover {
-  color: #fff;
+  color: var(--text-strong);
   text-decoration: underline;
 }
 
@@ -295,7 +344,7 @@ a {
 .rule ul {
   margin: 2px 0 2px 4px;
   padding-left: 14px;
-  border-left: 1px solid #2f3645;
+  border-left: 1px solid var(--rule-edge);
   list-style: none;
 }
 
@@ -402,7 +451,7 @@ a {
   grid-column: 1 / -1;
   display: flex;
   height: 5px;
-  background: #1c212c;
+  background: var(--bar-bg);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -505,7 +554,7 @@ a {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(5, 7, 10, 0.6);
+  background: var(--backdrop);
 }
 
 .modal {
@@ -516,7 +565,7 @@ a {
   background: var(--panel);
   border: 1px solid var(--gold);
   border-radius: 10px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 40px var(--shadow);
 }
 
 .modal h2 {
@@ -605,4 +654,65 @@ a {
 
 .free-electives .hint:hover {
   color: var(--text);
+}
+
+/* View settings popup (US-029). */
+.view-settings {
+  position: relative;
+}
+
+.view-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: 250px;
+  padding: 12px 14px;
+  background: var(--popup-bg);
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px var(--shadow);
+}
+
+.view-popup h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.view-popup p {
+  margin: 2px 0 10px 24px;
+}
+
+.view-popup .check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-popup .slider {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.view-popup .slider b {
+  float: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.view-popup input[type='range'] {
+  width: 100%;
+  accent-color: var(--gold);
+}
+
+@media (max-width: 760px) {
+  /* The buttons wrap to the left edge on a phone, so the popup opens rightwards from them. */
+  .view-popup {
+    right: auto;
+    left: 0;
+    max-width: calc(100vw - 32px);
+  }
 }

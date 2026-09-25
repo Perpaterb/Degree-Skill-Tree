@@ -162,26 +162,26 @@ As a student, I want the degree outline to show what I have done and planned, so
 
 ### US-028 Circle titles show progress
 As a student, I want each circle's title to show how far along it is, so I can read progress straight off the map.
-- [ ] Degree and program (major, sub-major, stream) titles sit a little higher above their circle than before
-- [ ] Each title ends with completed / needed credit points (e.g. `Data Analytics 42/48cp`), with planned credit shown as the progress panel does (`42+6/48cp`)
-- [ ] The completed number is not capped: extra subjects show above what is needed (e.g. `54/48cp`). For a degree, only completed subjects that count towards it are included
-- [ ] A green tick when complete, a purple tick when the plan completes it (same status as the circle glows, US-026)
-- [ ] The credit points can be turned off in view settings (US-029)
+- [x] Degree and program (major, sub-major, stream) titles sit a little higher above their circle than before
+- [x] Each title ends with completed / needed credit points (e.g. `Data Analytics 42/48cp`), with planned credit shown as the progress panel does (`42+6/48cp`)
+- [x] The completed number is not capped: extra subjects show above what is needed (e.g. `54/48cp`). For a degree, only completed subjects that count towards it are included
+- [x] A green tick when complete, a purple tick when the plan completes it (same status as the circle glows, US-026)
+- [x] The credit points can be turned off in view settings (US-029)
 
 ### US-029 View settings
 As a student, I want to adjust how the map's text looks.
-- [ ] A Settings button at the top right opens a small popup
-- [ ] "Text grows with zoom" (on/off): on, circle titles and subject labels scale with zoom but stay between a minimum and maximum on-screen size; off, they stay one size on screen at every zoom
-- [ ] "Text size" slider as a relative percentage (50%-200%), not pixels; it works in both modes
-- [ ] "Show credit points on titles" (on/off, US-028)
-- [ ] Settings are remembered in this browser and are not part of a shared plan link
-- [ ] The US-004 pan/zoom performance target (median 55fps) still holds
+- [x] A Settings button at the top right opens a small popup (on a phone it opens rightwards so it stays on screen)
+- [x] "Text grows with zoom" (on/off): on, circle titles and subject labels scale with zoom but stay between a minimum and maximum on-screen size; off, they stay one size on screen at every zoom
+- [x] "Text size" slider as a relative percentage (50%-200%), not pixels; it works in both modes
+- [x] "Show credit points on titles" (on/off, US-028)
+- [x] Settings are remembered in this browser and are not part of a shared plan link
+- [x] The US-004 pan/zoom performance target (median 55fps) still holds. *25 Sep 2026: median 59.9fps, p95 59.5fps (`npm run test:perf`).*
 
 ### US-030 Light and dark mode
 As a student, I want to switch between light and dark.
-- [ ] A button at the top right, beside Settings, switches between light and dark
-- [ ] The first visit follows the operating system's setting; after that the choice is remembered
-- [ ] Light mode covers everything, the map included (background, circles, subject states, links, glows); every subject state stays distinguishable and text readable in both
+- [x] A button at the top right, beside Settings, switches between light and dark
+- [x] The first visit follows the operating system's setting; after that the choice is remembered
+- [ ] Light mode covers everything, the map included (background, circles, subject states, links, glows); every subject state stays distinguishable and text readable in both. *Partial: the switch of the whole app (canvas background, panels, legend) is E2E tested; that each state is distinguishable and readable was checked by eye on screenshots only, with no contrast measurement.*
 
 ### US-031 Progress on each way and heading in the outline
 As a student, I want to see how far along each way of filling a requirement is.

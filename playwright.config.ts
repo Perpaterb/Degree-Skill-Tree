@@ -15,6 +15,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     baseURL: external ?? 'http://localhost:4173/Degree-Skill-Tree/',
+    // The app follows the system theme on a first visit (US-030). Tests assert the dark colours
+    // unless they ask for light themselves; Playwright would otherwise report a light system.
+    colorScheme: 'dark',
     // Functional runs use software GL (deterministic, works anywhere). The perf run uses the real GPU.
     launchOptions: process.env.PERF
       ? { channel: 'chromium', args: ['--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=vulkan', '--enable-features=Vulkan'] }

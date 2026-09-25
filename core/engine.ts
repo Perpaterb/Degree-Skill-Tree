@@ -476,6 +476,34 @@ export function programProgress(map: MapDoc, code: string, plan: Plan): Progress
   return root;
 }
 
+/** Credit points for a circle's title (US-028). */
+export interface TitleCp {
+  done: number;
+  planned: number;
+  required: number;
+}
+
+/**
+ * Credit points shown on a degree or program circle's title. Not capped: extra subjects show above
+ * what is needed. A program counts the completed and planned subjects it lists; a degree counts the
+ * completed subjects that can count towards it (compatibility), and the planned ones the same way.
+ */
+export function titleCp(map: MapDoc, id: string, plan: Plan): TitleCp | null {
+  const cp = (c: string) => map.subjects[c]?.creditPoints ?? 0;
+  const program = map.programs[id];
+  if (program) {
+    const listed = subjectsUnder(map, program.structure);
+    const done = plan.completed.filter((c) => listed.has(c)).reduce((t, c) => t + cp(c), 0);
+    const planned = plan.planned.filter((c) => listed.has(c) && !plan.completed.includes(c)).reduce((t, c) => t + cp(c), 0);
+    return { done, planned, required: program.creditPoints };
+  }
+  const degree = map.degrees[id];
+  if (!degree) return null;
+  const done = compatibility(map, id, plan).countingCp;
+  const reach = compatibility(map, id, { ...plan, completed: [...new Set([...plan.completed, ...plan.planned])] }).countingCp;
+  return { done, planned: Math.max(0, reach - done), required: degree.creditPoints };
+}
+
 /** Subjects a degree requires outright: every item of a subjects-only container whose items add up to exactly its credit points. */
 export function compulsorySubjects(map: MapDoc, c: Container, out = new Set<string>()): Set<string> {
   const subjects = c.items.filter((i) => i.kind === 'subject');

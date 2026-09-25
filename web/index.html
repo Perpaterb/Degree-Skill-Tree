@@ -6,6 +6,13 @@
     <meta name="description" content="Plan your degree as a skill tree: see what you can take now, what unlocks what, and your progress to graduation." />
     <title>Degree Skill Tree</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='12' fill='%235c4414' stroke='%23f2c75c' stroke-width='4'/></svg>" />
+    <script>
+      // Theme before first paint (US-030): the stored choice, else the system setting. See web/src/view.ts.
+      try {
+        var t = localStorage.getItem('dst.theme');
+        document.documentElement.dataset.theme = t === 'light' || t === 'dark' ? t : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

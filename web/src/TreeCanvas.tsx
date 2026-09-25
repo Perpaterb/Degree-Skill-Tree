@@ -1,4 +1,4 @@
-import { Application, Circle, Container, Graphics, Text } from 'pixi.js';
+import { Application, CanvasTextMetrics, Circle, Container, Graphics, Text } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { useEffect, useRef } from 'react';
 import { compulsorySubjects, missingFor, subjectsUnder, unlockedBy } from '../../core/engine';
@@ -6,6 +6,7 @@ import { circleAt, TITLE_LINE, type Layout, type LayoutCircle, type LayoutNode, 
 import type { MapDoc } from '../../core/model';
 import { useApp } from './store';
 import { canvas, degreeHues, mix, stateLook } from './theme';
+import { textPx } from './view';
 
 const LABEL_MIN_SCALE = 0.42;
 /** Copies of the hovered (or selected) subject grow by at least this much, and to at least this
@@ -13,12 +14,20 @@ const LABEL_MIN_SCALE = 0.42;
 const POP = { 2: { grow: 1.4, px: 18 }, 1: { grow: 1.25, px: 14 } } as const;
 /** How close to an outline (in screen pixels) a click selects that outline's circle. */
 const RIM_PX = 10;
+/** Subject code labels are drawn at this world size, then sized on screen by the view settings (US-029). */
+const LABEL_WORLD = 13;
+/** A subject label shows only while it is no wider than this many times its disc. */
+const LABEL_FIT = 1.3;
+/** How far titles sit above the gap the layout left under them, in world units (US-028). */
+const TITLE_LIFT = { degree: 40, program: 8 } as const;
 
 interface NodeView {
   node: LayoutNode;
   root: Container;
   shape: Graphics;
   label: Text;
+  /** The label's width at world size, for deciding whether it fits its disc. */
+  labelW: number;
   /** What the last paint drew, for tests. */
   drawn: CopyLook;
   /** 2: a copy of the hovered subject, 1: of the selected one, 0: neither. */
@@ -38,6 +47,13 @@ interface CircleView {
   circle: LayoutCircle;
   shape: Graphics;
   title: Text;
+  /** Scale that fits the title in the box the layout kept for it. */
+  base: number;
+  /** Width of the title's last line at font size, so the credit points can follow it. */
+  lastW: number;
+  /** Credit points and tick after the title (US-028). */
+  progress: Text;
+  progressColour: number;
 }
 
 interface Scene {
@@ -73,6 +89,9 @@ declare global {
       zoom(): number;
       finished(): Record<string, 'complete' | 'planned'>;
       ringed(): string[];
+      title(id: string): { text: string; progress: string; progressColour: number; visible: boolean; progressVisible: boolean; px: number; bottom: number; circleTop: number } | null;
+      subjectLabel(id: string): { visible: boolean; px: number } | null;
+      background(): number;
     };
   }
 }
@@ -154,10 +173,18 @@ export function TreeCanvas() {
         });
         title.anchor.set(0.5, 1);
         // Never wider or taller than its box, whatever the font's real metrics are.
-        title.scale.set(Math.min(1, label.w / title.width, label.h / title.height));
-        title.position.set(label.x, label.y + label.h);
-        titleLayer.addChild(title);
-        return { circle, shape, title };
+        const base = Math.min(1, label.w / title.width, label.h / title.height);
+        title.scale.set(base);
+        title.position.set(label.x, label.y + label.h - TITLE_LIFT[degree ? 'degree' : 'program']);
+        const lastW = CanvasTextMetrics.measureText(label.lines[label.lines.length - 1], title.style).width;
+        const progress = new Text({
+          text: '',
+          style: { fill: canvas.clusterTitle, fontSize: label.size * 0.62, fontFamily: 'system-ui, sans-serif', fontWeight: '600' },
+          resolution: degree ? 1 : 2,
+        });
+        progress.anchor.set(0, 1);
+        titleLayer.addChild(title, progress);
+        return { circle, shape, title, base, lastW, progress, progressColour: -1 };
       });
       viewport.addChild(circleLayer);
 
@@ -185,6 +212,7 @@ export function TreeCanvas() {
           resolution: 3,
         });
         label.anchor.set(0.5);
+        const labelW = label.width;
         root.addChild(shape, label);
         root.on('pointerover', (e) => overCanvas(e) && useApp.getState().hover(node.code));
         root.on('pointerout', () => useApp.getState().hover(null));
@@ -194,7 +222,7 @@ export function TreeCanvas() {
           if (isClick(e)) useApp.getState().select(node.code);
         });
         nodeLayer.addChild(root);
-        nodes.set(node.id, { node, root, shape, label, drawn: { fill: 0, ring: 0, alpha: 1, scale: 1, halo: false }, pop: 0 });
+        nodes.set(node.id, { node, root, shape, label, labelW, drawn: { fill: 0, ring: 0, alpha: 1, scale: 1, halo: false }, pop: 0 });
       }
       viewport.on('pointerdown', (e) => (downAt = { x: e.global.x, y: e.global.y }));
       viewport.on('pointertap', (e) => {
@@ -247,6 +275,22 @@ export function TreeCanvas() {
         zoom: () => scene.current?.viewport.scale.x ?? 1,
         finished: () => scene.current?.finished ?? {},
         ringed: () => [...(scene.current?.ringed ?? [])],
+        title(id) {
+          const s = scene.current;
+          const v = s?.circles.find((c) => c.circle.id === id);
+          if (!s || !v) return null;
+          const bottom = s.viewport.toScreen(v.title.x, v.title.y).y;
+          const circleTop = s.viewport.toScreen(v.circle.x, v.circle.y - v.circle.r).y;
+          const px = v.circle.label.size * v.title.scale.y * s.viewport.scale.y;
+          return { text: v.title.text, progress: v.progress.text, progressColour: v.progressColour, visible: v.title.visible, progressVisible: v.progress.visible, px, bottom, circleTop };
+        },
+        subjectLabel(id) {
+          const s = scene.current;
+          const v = s?.nodes.get(id);
+          if (!s || !v) return null;
+          return { visible: v.label.visible, px: LABEL_WORLD * v.label.scale.y * v.root.scale.y * s.viewport.scale.y };
+        },
+        background: () => app.renderer.background.color.toNumber(),
         copies: (code) => [...(scene.current?.nodes.values() ?? [])].filter((v) => v.node.code === code).map((v) => v.node.id),
       };
 
@@ -293,6 +337,8 @@ export function TreeCanvas() {
           s.plan !== prev.plan
         )
           paint(scene.current);
+        if (s.theme !== prev.theme) restyle(scene.current);
+        if (s.view !== prev.view) paint(scene.current);
         if (s.flyTo !== prev.flyTo && s.selected) flyTo(scene.current, s.selected);
       }),
     [],
@@ -353,18 +399,43 @@ function clickPointForCircle(s: Scene, c: LayoutCircle) {
   return null;
 }
 
+/** Colours set when things are created, redone when the theme changes (US-030). */
+function restyle(s: Scene) {
+  s.app.renderer.background.color = canvas.background;
+  s.hue = new Map(Object.keys(s.map.degrees).sort().map((d, i) => [d, degreeHues[i % degreeHues.length]]));
+  for (const v of s.circles) {
+    v.title.style.fill = v.circle.kind === 'degree' ? s.hue.get(v.circle.id)! : canvas.clusterTitle;
+    v.progressColour = -1;
+  }
+  paint(s);
+}
+
+/** Sizes and visibility that depend on the zoom and the view settings (US-029). */
 function applyLod(s: Scene) {
   s.invalidate();
   const scale = s.viewport.scale.x;
+  const { view } = useApp.getState();
   for (const v of s.nodes.values()) {
-    v.label.visible = scale > LABEL_MIN_SCALE || v.pop > 0;
     const grow = v.pop ? Math.max(POP[v.pop].grow, POP[v.pop].px / (v.node.r * scale)) : 1;
     v.root.scale.set(grow);
     v.drawn.scale = grow;
+    const natural = LABEL_WORLD * scale * grow;
+    const px = textPx('subject', natural, view);
+    v.label.scale.set(px / natural);
+    // Only while the code fits its disc (roughly), unless it is the hovered or selected subject.
+    const fits = (v.labelW / LABEL_WORLD) * px <= LABEL_FIT * 2 * v.node.r * scale * grow;
+    v.label.visible = v.pop > 0 || (scale > LABEL_MIN_SCALE && fits);
   }
   for (const v of s.circles) {
+    const kind = v.circle.kind === 'degree' ? 'degree' : 'program';
+    const natural = v.circle.label.size * v.base * scale;
+    const f = textPx(kind, natural, view) / natural;
+    v.title.scale.set(v.base * f);
     // Program titles only once you are close enough to read them; degree titles always.
-    v.title.visible = v.circle.kind === 'degree' || scale > 0.12;
+    v.title.visible = kind === 'degree' || scale > 0.12;
+    v.progress.scale.set(v.base * f);
+    v.progress.position.set(v.circle.label.x + (v.lastW / 2) * v.base * f + v.circle.label.size * 0.3 * v.base * f, v.title.y);
+    v.progress.visible = v.title.visible && view.showCp && v.progress.text !== '';
   }
 }
 
@@ -380,7 +451,7 @@ function tracePath(g: Graphics, path: PathCmd[]) {
 /** Everything that depends on plan, hover, selection, glow or search. */
 function paint(s: Scene) {
   s.invalidate();
-  const { states, hovered, hoveredCircle, glow, selected, matches, plan, fits, finish } = useApp.getState();
+  const { states, hovered, hoveredCircle, glow, selected, matches, plan, fits, finish, titles, view } = useApp.getState();
   const { map, layout } = s;
   const completed = new Set(plan.completed);
   const chosen = new Set(plan.programs);
@@ -450,7 +521,14 @@ function paint(s: Scene) {
         });
       title.alpha = inSel || glowing ? 1 : 0.35;
     }
-    if (circle.id === selected) g.circle(circle.x, circle.y, circle.r + 10).stroke({ color: 0xffffff, width: 3, alpha: 0.8 });
+    if (circle.id === selected) g.circle(circle.x, circle.y, circle.r + 10).stroke({ color: canvas.selectRing, width: 3, alpha: 0.8 });
+    // Credit points after the title, with a tick coloured like the glow (US-028).
+    const t = titles.get(circle.id);
+    const text = t && view.showCp ? `${t.done}${t.planned ? `+${t.planned}` : ''}/${t.required}cp${halo !== null ? ' ✓' : ''}` : '';
+    if (v.progress.text !== text) v.progress.text = text;
+    const colour = halo ?? (circle.kind === 'degree' ? s.hue.get(circle.id)! : canvas.clusterTitle);
+    if (v.progressColour !== colour) (v.progress.style.fill = colour), (v.progressColour = colour);
+    v.progress.alpha = title.alpha;
   }
 
   // Copies inside the selected degree's circle (at any depth) stay bright; the rest fade.
@@ -501,7 +579,7 @@ function paint(s: Scene) {
     }
     if (twin) {
       g.circle(0, 0, node.r + 11).stroke({ color: canvas.glow, width: 4, alpha: 1 });
-      if (code === selected) g.circle(0, 0, node.r + 17).stroke({ color: 0xffffff, width: 2, alpha: 0.9 });
+      if (code === selected) g.circle(0, 0, node.r + 17).stroke({ color: canvas.selectRing, width: 2, alpha: 0.9 });
       s.highlighted.push(node.id);
     }
     v.pop = code === hovered ? 2 : twin ? 1 : 0;
