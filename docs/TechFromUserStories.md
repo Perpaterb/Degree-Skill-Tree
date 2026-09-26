@@ -591,3 +591,39 @@ Stories are in [`UserStories.md`](UserStories.md).
 - Only the data: the map still holds 5 degrees. Putting the whole handbook on one map needs the map
   split by faculty or loaded on demand first.
 
+
+### US-043 The whole handbook on one map (experiment, `big-map` branch)
+- The map is 15,682 subject copies, 14,897 links and 1,086 circles over a world of 184,000 x 28,000
+  units. Drawn the old way (one Pixi object tree, Pixi's culler, Pixi's hit testing, every link in
+  one shape), the main thread was 66-87% busy while panning, hover took ~125 ms and marking a
+  subject ~900 ms.
+- Renderer reworked like a game engine (26 Sep 2026):
+  - Subject codes are `BitmapText` from one shared glyph atlas, tinted per state (a canvas texture per
+    label cost gigabytes). Below 6 px across, subjects are one shape of dots.
+  - The viewport is a Pixi render group, so moving the camera changes one GPU transform instead of
+    every object's transform on the CPU.
+  - The map is cut into 2,500-unit tiles. Each tile holds its subjects and the links drawn in it;
+    `cull` shows only tiles, circles and titles whose box overlaps the screen (plus a margin), one box
+    test each. Subjects are sized for the zoom tile by tile as their tile comes on screen.
+  - Pixi's hit testing is off for the map's children (it walked every object on each pointer move,
+    including hit tests along all 14,897 links). A 200-unit grid finds the subject under the pointer
+    (`nodeAt`); circles still use `circleAt`. Nothing hovers while the map is being dragged.
+  - Copies of the hovered or selected subject move to a pop layer above every tile.
+  - Only what changed is redrawn: a subject's shape when its look key changes, a circle when its look
+    key changes, and a tile's links only when one of its link styles changes. Links lit by a hover or
+    search are drawn in a separate small shape over the faded base.
+- Measured on the whole-handbook map (`e2e/bench.tmp.spec.ts`, unminified build, real GPU: Intel Iris
+  Xe via ANGLE/Vulkan; frame timing and CPU profile on separate passes, because starting the profiler
+  stalls the page), before -> after:
+  - main thread busy while panning, far / mid / near zoom: 66% / 80% / 83% -> 27% / 31% / 16%
+  - slowest frame while panning, far / mid / near: 133 / 117 / 117 ms -> 67 / 17 / 17 ms; p95 at mid
+    and near 30 fps -> 60 fps
+  - hover to highlight 118 ms -> 35 ms; mark completed to redrawn 885 ms -> 169 ms
+  - JS heap 829 MB -> 520 MB; open to first frame 3.1 s -> 2.3 s
+- E2E on the whole-handbook map: 14 failed before the rework, 8 after; none newly failing. Of the 8,
+  four are counts from the bigger data (US-019 expects 5 degrees, the three US-020 tests expect 19
+  copies of a subject and get 107); US-027 (x2), US-037 and US-029's settings test are not yet
+  explained.
+- Files: `web/src/TreeCanvas.tsx`. Scratch measurement specs (not committed): `e2e/bench.tmp.spec.ts`,
+  `e2e/trace.tmp.spec.ts`, `e2e/perf-layers.tmp.spec.ts`, `e2e/perf-zoomed.tmp.spec.ts`,
+  `e2e/interact.tmp.spec.ts`.

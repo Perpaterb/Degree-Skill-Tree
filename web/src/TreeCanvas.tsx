@@ -1,4 +1,4 @@
-import { Application, BitmapFont, BitmapText, CanvasTextMetrics, Circle, Container, CullerPlugin, extensions, Graphics, Text } from 'pixi.js';
+import { Application, BitmapFont, BitmapText, CanvasTextMetrics, Container, Graphics, Text } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { useEffect, useRef } from 'react';
 import { compulsorySubjects, missingFor, subjectsUnder, unlockedBy } from '../../core/engine';
@@ -6,7 +6,7 @@ import { circleAt, SUBJECT_R, TITLE_LINE, type Layout, type LayoutCircle, type L
 import type { MapDoc } from '../../core/model';
 import { useApp } from './store';
 import { canvas, facultyColour, mix, stateLook } from './theme';
-import { textPx } from './view';
+import { textPx, type ViewSettings } from './view';
 
 const LABEL_MIN_SCALE = 0.42;
 /** Copies of the hovered (or selected) subject grow by at least this much, and to at least this
@@ -23,8 +23,13 @@ const SUBJECT_FONT = 'subject-code';
  * interactive objects (US-043): 15,682 objects cost the whole frame budget on the whole-handbook map.
  */
 const DOT_PX = 6;
-// Skip drawing objects marked cullable while they are off screen.
-extensions.add(CullerPlugin);
+/**
+ * The map is cut into square tiles this many world units across. Only tiles that overlap the screen
+ * are drawn, and only tiles whose links changed are rebuilt (US-043).
+ */
+const TILE = 2500;
+/** Cell size of the grid that finds the subject under the pointer. */
+const HIT_CELL = 200;
 BitmapFont.install({
   name: SUBJECT_FONT,
   style: { fontFamily: 'system-ui, sans-serif', fontSize: LABEL_WORLD * 3, fontWeight: '600', fill: 0xffffff },
@@ -49,6 +54,29 @@ interface NodeView {
   pop: 0 | 1 | 2;
   /** What the shape was last drawn for; it is redrawn only when this changes (US-043). */
   key?: string;
+  /** The tile it belongs to (it sits in the pop layer instead while popped). */
+  tile: Tile;
+}
+
+interface Box {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/** One square of the map: its subjects and the links drawn in it, shown only while on screen (US-043). */
+interface Tile {
+  /** What it draws, padded for glows and line widths. */
+  box: Box;
+  nodes: Container;
+  views: NodeView[];
+  edges: Graphics;
+  links: Layout['edges'];
+  /** The link styles it was last drawn with. */
+  edgeKey?: string;
+  /** The zoom and view its subjects' sizes were last set for. */
+  lod?: string;
 }
 
 /** How one copy of a subject was drawn. */
@@ -66,6 +94,10 @@ interface CircleView {
   title: Text;
   /** Scale that fits the title in the box the layout kept for it. */
   base: number;
+  /** What its shape was last drawn for. */
+  key?: string;
+  /** Where its title and credit points are drawn at the current zoom, for culling. */
+  titleBox?: Box;
   /** Width of the title's last line at font size, so the credit points can follow it. */
   lastW: number;
   /** Credit points and tick after the title (US-028). */
@@ -114,7 +146,6 @@ function titleColours(map: MapDoc, circle: LayoutCircle) {
 interface Scene {
   app: Application;
   viewport: Viewport;
-  edges: Graphics;
   nodes: Map<string, NodeView>;
   circles: CircleView[];
   layout: Layout;
@@ -144,6 +175,15 @@ interface Scene {
   edgesLit: Graphics;
   /** What the base links were last drawn for; rebuilt only when the plan, degree or theme changes. */
   edgesKey?: unknown[];
+  /** Base links, one shape per tile; faded as a whole while something is hovered. */
+  edgeLayer: Container;
+  tiles: Tile[];
+  /** Copies of the hovered or selected subject, raised above every tile. */
+  popLayer: Container;
+  /** Subjects by grid cell, for finding the one under the pointer. */
+  hitGrid: Map<string, NodeView[]>;
+  /** Changes whenever subject sizes need setting again (zoom, view settings, popping). */
+  lodStamp: number;
 }
 
 declare global {
@@ -224,6 +264,12 @@ export function TreeCanvas() {
         events: app.renderer.events,
       });
       viewport.drag().pinch().wheel({ smooth: 4 }).decelerate({ friction: 0.92 }).clampZoom({ minScale: 0.03, maxScale: 3 });
+      // A render group: moving the camera changes one transform on the GPU instead of every object's
+      // on the CPU (US-043).
+      viewport.isRenderGroup = true;
+      // Pixi's own hit testing walks every object on each pointer move; subjects and circles are
+      // found with a grid and circleAt instead.
+      viewport.interactiveChildren = false;
       app.stage.addChild(viewport);
 
       let downAt: { x: number; y: number } | null = null;
@@ -274,29 +320,45 @@ export function TreeCanvas() {
       });
       viewport.addChild(circleLayer);
 
-      const edges = new Graphics();
-      viewport.addChild(edges);
+      const edgeLayer = new Container();
+      viewport.addChild(edgeLayer);
       const edgesLit = new Graphics();
       viewport.addChild(edgesLit);
       const nodeLayer = new Container();
-      // Copies of the hovered or selected subject are raised above the rest.
-      nodeLayer.sortableChildren = true;
       viewport.addChild(nodeLayer);
+      const popLayer = new Container();
+      // The hovered subject's copies above the selected one's.
+      popLayer.sortableChildren = true;
+      viewport.addChild(popLayer);
       const dots = new Graphics();
       dots.visible = false;
       viewport.addChild(dots);
       viewport.addChild(titleLayer);
 
+      const tileMap = new Map<string, Tile>();
+      const tileAt = (x: number, y: number) => {
+        const k = `${Math.floor(x / TILE)},${Math.floor(y / TILE)}`;
+        let t = tileMap.get(k);
+        if (!t) {
+          t = { box: emptyBox(), nodes: new Container(), views: [], edges: new Graphics(), links: [] };
+          tileMap.set(k, t);
+        }
+        return t;
+      };
+      for (const edge of layout.edges) {
+        const b = pathBox(edge.path);
+        const t = tileAt((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2);
+        t.links.push(edge);
+        growBox(t.box, b.minX - 5, b.minY - 5, b.maxX + 5, b.maxY + 5);
+      }
+
       const nodes = new Map<string, NodeView>();
+      const hitGrid = new Map<string, NodeView[]>();
       for (const node of Object.values(layout.nodes)) {
         const root = new Container();
+        // Its id, so a popped copy can be found from the pop layer.
+        root.label = node.id;
         root.position.set(node.x, node.y);
-        root.cullable = true;
-        root.eventMode = 'static';
-        root.cursor = 'pointer';
-        // Only the subject's own disc (enlarged with it) counts for the pointer, never its glow or rings,
-        // so hover ends as soon as the pointer leaves the circle.
-        root.hitArea = new Circle(0, 0, node.r);
         const shape = new Graphics();
         // One shared glyph atlas for every subject code, tinted per state: a texture per label cost
         // gigabytes on the whole-handbook map (US-043).
@@ -304,19 +366,33 @@ export function TreeCanvas() {
         label.anchor.set(0.5);
         const labelW = label.width;
         root.addChild(shape, label);
-        root.on('pointerover', (e) => overCanvas(e) && useApp.getState().hover(node.code));
-        root.on('pointerout', () => useApp.getState().hover(null));
-        // Circles are siblings of subjects, not parents, so a press on a subject never reaches a circle.
-        root.on('pointerdown', (e) => (downAt = { x: e.global.x, y: e.global.y }));
-        root.on('pointertap', (e) => {
-          if (isClick(e)) useApp.getState().select(node.code);
-        });
-        nodeLayer.addChild(root);
-        nodes.set(node.id, { node, root, shape, label, labelW, drawn: { fill: 0, ring: 0, alpha: 1, scale: 1, halo: false }, pop: 0 });
+        const tile = tileAt(node.x, node.y);
+        // Room for the glows and rings round the disc, and a label a little wider than it.
+        const pad = node.r + 32;
+        growBox(tile.box, node.x - pad, node.y - pad, node.x + pad, node.y + pad);
+        tile.nodes.addChild(root);
+        const v: NodeView = { node, root, shape, label, labelW, drawn: { fill: 0, ring: 0, alpha: 1, scale: 1, halo: false }, pop: 0, tile };
+        tile.views.push(v);
+        nodes.set(node.id, v);
+        const cell = `${Math.floor(node.x / HIT_CELL)},${Math.floor(node.y / HIT_CELL)}`;
+        hitGrid.set(cell, [...(hitGrid.get(cell) ?? []), v]);
       }
+      const tiles = [...tileMap.values()];
+      for (const t of tiles) {
+        edgeLayer.addChild(t.edges);
+        nodeLayer.addChild(t.nodes);
+      }
+      /** The subject under a screen point: only its own disc (enlarged with it) counts, never its glow or rings. */
+      const nodeUnder = (e: { global: { x: number; y: number } }) => {
+        const s = scene.current;
+        return s ? nodeAt(s, viewport.toWorld(e.global.x, e.global.y)) : null;
+      };
       viewport.on('pointerdown', (e) => (downAt = { x: e.global.x, y: e.global.y }));
       viewport.on('pointertap', (e) => {
-        if (e.target !== viewport || !isClick(e)) return;
+        if (!isClick(e)) return;
+        const hit = nodeUnder(e);
+        // A press on a subject never reaches the circle round it.
+        if (hit) return useApp.getState().select(hit.node.code);
         const w = viewport.toWorld(e.global.x, e.global.y);
         const circle = circleAt(layout, w.x, w.y, RIM_PX / viewport.scale.x);
         const s = useApp.getState();
@@ -326,19 +402,28 @@ export function TreeCanvas() {
         s.select(circle.id);
       });
       viewport.on('pointermove', (e) => {
-        if (!overCanvas(e)) return useApp.getState().hoverCircle(null);
-        const over = e.target === viewport ? circleAt(layout, ...xy(viewport.toWorld(e.global.x, e.global.y)), RIM_PX / viewport.scale.x) : null;
-        useApp.getState().hoverCircle(over?.id ?? null);
-        viewport.cursor = over ? 'pointer' : 'grab';
+        const s = useApp.getState();
+        if (!overCanvas(e)) return s.hoverCircle(null);
+        // Nothing lights up under a pointer that is dragging the map.
+        if (e.buttons) return;
+        const hit = nodeUnder(e);
+        s.hover(hit?.node.code ?? null);
+        const over = hit ? null : circleAt(layout, ...xy(viewport.toWorld(e.global.x, e.global.y)), RIM_PX / viewport.scale.x);
+        s.hoverCircle(over?.id ?? null);
+        viewport.cursor = hit || over ? 'pointer' : 'grab';
       });
 
-      scene.current = { app, viewport, edges, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, locked: [], ringed: new Set(), invalidate, nodeLayer, dots, far: false, dotsStale: true, edgesLit };
+      scene.current = {
+        app, viewport, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, locked: [], ringed: new Set(), invalidate,
+        nodeLayer, dots, far: false, dotsStale: true, edgesLit, edgeLayer, tiles, popLayer, hitGrid, lodStamp: 0,
+      };
       // The camera moves on its own during inertia and fly-to animations, so each of these redraws.
       for (const ev of ['moved', 'zoomed', 'moved-end', 'zoomed-end'] as const) viewport.on(ev, invalidate);
       fit(viewport, layout);
       paint(scene.current);
 
       viewport.on('zoomed', () => scene.current && applyLod(scene.current));
+      viewport.on('moved', () => scene.current && cull(scene.current));
       // Pixi sends no pointer-out when the pointer leaves the canvas for a panel on top of it,
       // which would leave a circle or subject "hovered" (and glowing) indefinitely.
       app.canvas.addEventListener('pointerleave', () => {
@@ -347,6 +432,7 @@ export function TreeCanvas() {
       });
       app.renderer.on('resize', (w: number, h: number) => {
         viewport.resize(w, h);
+        if (scene.current) cull(scene.current);
         invalidate();
       });
 
@@ -398,7 +484,7 @@ export function TreeCanvas() {
         background: () => app.renderer.background.color.toNumber(),
         // TEMP (US-043 measurement): hide one layer to see what the frame time goes on.
         layer: (name: string, visible: boolean) => {
-          const l = { circles: circleLayer, edges, nodes: nodeLayer, titles: titleLayer }[name];
+          const l = { circles: circleLayer, edges: edgeLayer, nodes: nodeLayer, titles: titleLayer }[name];
           if (l) (l.visible = visible), invalidate();
         },
         copies: (code) => [...(scene.current?.nodes.values() ?? [])].filter((v) => v.node.code === code).map((v) => v.node.id),
@@ -534,16 +620,11 @@ function applyLod(s: Scene) {
   s.nodeLayer.visible = !s.far;
   s.dots.visible = s.far;
   if (s.far && s.dotsStale) drawDots(s);
-  for (const v of s.far ? [] : s.nodes.values()) {
-    const grow = v.pop ? Math.max(POP[v.pop].grow, POP[v.pop].px / (v.node.r * scale)) : 1;
-    v.root.scale.set(grow);
-    v.drawn.scale = grow;
-    const natural = LABEL_WORLD * scale * grow;
-    const px = textPx('subject', natural, view);
-    v.label.scale.set(px / natural);
-    // Only while the code fits its disc (roughly), unless it is the hovered or selected subject.
-    const fits = (v.labelW / LABEL_WORLD) * px <= LABEL_FIT * 2 * v.node.r * scale * grow;
-    v.label.visible = v.pop > 0 || (scale > LABEL_MIN_SCALE && fits);
+  // Subjects are sized tile by tile as their tiles come on screen (see cull); popped ones now.
+  s.lodStamp++;
+  for (const c of s.popLayer.children) {
+    const v = s.nodes.get(c.label)!;
+    sizeNode(v, scale, view);
   }
   for (const v of s.circles) {
     const kind = v.circle.kind === 'degree' ? 'degree' : 'program';
@@ -555,7 +636,100 @@ function applyLod(s: Scene) {
     v.progress.scale.set(v.base * f);
     v.progress.position.set(v.circle.label.x + (v.lastW / 2) * v.base * f + v.circle.label.size * 0.3 * v.base * f, v.title.y);
     v.progress.visible = v.title.visible && view.showCp && v.progress.text !== '';
+    // Measured here, once per zoom, rather than on every camera move.
+    const w = v.title.width / 2 + v.progress.width;
+    v.titleBox = { minX: v.title.x - w, minY: v.title.y - v.title.height, maxX: v.title.x + w, maxY: v.title.y };
   }
+  cull(s);
+}
+
+/** A subject's size and label for the zoom (US-029). */
+function sizeNode(v: NodeView, scale: number, view: ViewSettings) {
+  const grow = v.pop ? Math.max(POP[v.pop].grow, POP[v.pop].px / (v.node.r * scale)) : 1;
+  v.root.scale.set(grow);
+  v.drawn.scale = grow;
+  const natural = LABEL_WORLD * scale * grow;
+  const px = textPx('subject', natural, view);
+  v.label.scale.set(px / natural);
+  // Only while the code fits its disc (roughly), unless it is the hovered or selected subject.
+  const fits = (v.labelW / LABEL_WORLD) * px <= LABEL_FIT * 2 * v.node.r * scale * grow;
+  v.label.visible = v.pop > 0 || (scale > LABEL_MIN_SCALE && fits);
+}
+
+/**
+ * Show only what overlaps the screen (US-043), like a game engine: whole tiles of subjects and
+ * links, and each circle and title, are switched on or off with one box test each.
+ */
+function cull(s: Scene) {
+  const vp = s.viewport;
+  // A margin, so things are already drawn as they slide in.
+  const m = 0.15 * Math.max(vp.worldScreenWidth, vp.worldScreenHeight);
+  const view: Box = { minX: vp.left - m, minY: vp.top - m, maxX: vp.right + m, maxY: vp.bottom + m };
+  const scale = vp.scale.x;
+  const settings = useApp.getState().view;
+  const stamp = String(s.lodStamp);
+  for (const t of s.tiles) {
+    const on = overlaps(t.box, view);
+    if (t.edges.visible !== on) t.edges.visible = on;
+    const showNodes = on && !s.far;
+    if (t.nodes.visible !== showNodes) t.nodes.visible = showNodes;
+    if (showNodes && t.lod !== stamp) {
+      t.lod = stamp;
+      for (const v of t.views) if (!v.pop) sizeNode(v, scale, settings);
+    }
+  }
+  for (const v of s.circles) {
+    const c = v.circle;
+    // Halos and the selection ring reach this far outside the outline.
+    const r = c.r + 50;
+    const on = overlaps({ minX: c.x - r, minY: c.y - r, maxX: c.x + r, maxY: c.y + r }, view);
+    if (v.shape.visible !== on) v.shape.visible = on;
+    // Titles sit above their circle and can be wider than it when zoomed out.
+    const tOn = on || (!!v.titleBox && overlaps(v.titleBox, view));
+    if (v.title.renderable !== tOn) (v.title.renderable = tOn), (v.progress.renderable = tOn);
+  }
+}
+
+function emptyBox(): Box {
+  return { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+}
+
+function growBox(b: Box, minX: number, minY: number, maxX: number, maxY: number) {
+  b.minX = Math.min(b.minX, minX);
+  b.minY = Math.min(b.minY, minY);
+  b.maxX = Math.max(b.maxX, maxX);
+  b.maxY = Math.max(b.maxY, maxY);
+}
+
+const overlaps = (a: Box, b: Box) => a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+
+/** The box a link's path stays inside (arcs by their whole circle, which is enough for culling). */
+function pathBox(path: PathCmd[]): Box {
+  const b = emptyBox();
+  for (const c of path) {
+    if (c[0] === 'A') growBox(b, c[1] - c[3], c[2] - c[3], c[1] + c[3], c[2] + c[3]);
+    else for (let i = 1; i + 1 < c.length; i += 2) growBox(b, c[i] as number, c[i + 1] as number, c[i] as number, c[i + 1] as number);
+  }
+  return b;
+}
+
+/** The subject whose disc (enlarged while popped) holds a world point, or null. */
+function nodeAt(s: Scene, p: { x: number; y: number }): NodeView | null {
+  // At dot zoom subjects are too small to point at, as before (US-043).
+  if (s.far) return null;
+  // Popped copies are drawn on top, the hovered one highest.
+  let best: NodeView | null = null;
+  for (const c of s.popLayer.children) {
+    const v = s.nodes.get(c.label)!;
+    if (Math.hypot(p.x - v.node.x, p.y - v.node.y) <= v.node.r * v.root.scale.x && (!best || v.pop > best.pop)) best = v;
+  }
+  if (best) return best;
+  const cx = Math.floor(p.x / HIT_CELL);
+  const cy = Math.floor(p.y / HIT_CELL);
+  for (let i = cx - 1; i <= cx + 1; i++)
+    for (let j = cy - 1; j <= cy + 1; j++)
+      for (const v of s.hitGrid.get(`${i},${j}`) ?? []) if (Math.hypot(p.x - v.node.x, p.y - v.node.y) <= v.node.r) return v;
+  return null;
 }
 
 /** Every subject copy as a dot in its state's colour, in one shape (US-043). */
@@ -614,13 +788,25 @@ function paint(s: Scene) {
   s.locked = [];
   for (const v of s.circles) {
     const { circle, shape, title } = v;
-    const g = shape.clear();
+    // Only redrawn when its look changes: hovering a subject used to redraw all 1,086 circles (US-043).
+    const key = [
+      finish.get(circle.id),
+      glowSet.has(circle.id) || hoveredCircle === circle.id || matchSet.has(circle.id),
+      circle.kind === 'degree' ? [s.hue.get(circle.id), fits.get(circle.id)?.grey, plan.degree === circle.id, !!plan.degree] : '',
+      locks.has(circle.id),
+      chosen.has(circle.id),
+      !degree || (inDegree && circle.members.some((m) => inDegree.has(m))),
+      circle.id === selected,
+      canvas.background,
+    ].join('|');
+    const g = key === v.key ? null : shape.clear();
+    v.key = key;
     // Finished circles glow outside their outline: green when completed, blue when the plan finishes them (US-026).
     const done = finish.get(circle.id);
     const halo = done === 'complete' ? canvas.complete : done === 'planned' ? canvas.plannedGlow : null;
     if (halo !== null) {
       const band = circle.kind === 'degree' ? 26 : 12;
-      for (let i = 3; i >= 1; i--) g.circle(circle.x, circle.y, circle.r + (band * i) / 2).stroke({ color: halo, width: band, alpha: 0.18 + 0.16 * (3 - i) });
+      for (let i = 3; i >= 1; i--) g?.circle(circle.x, circle.y, circle.r + (band * i) / 2).stroke({ color: halo, width: band, alpha: 0.18 + 0.16 * (3 - i) });
       s.finished[circle.id] = done as 'complete' | 'planned';
     }
     const glowing = glowSet.has(circle.id) || hoveredCircle === circle.id || matchSet.has(circle.id);
@@ -632,7 +818,7 @@ function paint(s: Scene) {
       const isSel = plan.degree === circle.id;
       const fill = mix(hue, canvas.grey, grey);
       const other = !!plan.degree && !isSel;
-      g.circle(circle.x, circle.y, circle.r)
+      g?.circle(circle.x, circle.y, circle.r)
         .fill({ color: fill, alpha: isSel ? 0.09 : 0.05 })
         .stroke({ color: glowing ? canvas.glow : mix(hue, canvas.grey, grey * 0.8), width: isSel ? 16 : glowing ? 14 : 8, alpha: other && !glowing ? 0.3 : 1 });
       title.alpha = other ? 0.45 : 1 - grey * 0.5;
@@ -640,10 +826,10 @@ function paint(s: Scene) {
       // Locked out of the selected degree: drawn like a clashing subject, grey, red and crossed (US-037).
       s.locked.push(circle.id);
       const k = circle.r * 0.5;
-      g.circle(circle.x, circle.y, circle.r)
+      g?.circle(circle.x, circle.y, circle.r)
         .fill({ color: canvas.grey, alpha: 0.35 })
         .stroke({ color: glowing ? canvas.glow : canvas.wasted, width: glowing ? 8 : 4, alpha: 0.9 });
-      g.moveTo(circle.x - k, circle.y - k)
+      g?.moveTo(circle.x - k, circle.y - k)
         .lineTo(circle.x + k, circle.y + k)
         .moveTo(circle.x + k, circle.y - k)
         .lineTo(circle.x - k, circle.y + k)
@@ -652,7 +838,7 @@ function paint(s: Scene) {
     } else {
       const isChosen = chosen.has(circle.id);
       const inSel = !degree || (inDegree && circle.members.some((m) => inDegree.has(m)));
-      g.circle(circle.x, circle.y, circle.r)
+      g?.circle(circle.x, circle.y, circle.r)
         .fill({ color: isChosen ? canvas.chosen : canvas.programFill, alpha: glowing ? 0.12 : isChosen ? 0.08 : 0.035 })
         .stroke({
           color: glowing ? canvas.glow : isChosen ? canvas.chosen : canvas.programRing,
@@ -661,7 +847,7 @@ function paint(s: Scene) {
         });
       title.alpha = inSel || glowing ? 1 : 0.35;
     }
-    if (circle.id === selected) g.circle(circle.x, circle.y, circle.r + 10).stroke({ color: canvas.selectRing, width: 3, alpha: 0.8 });
+    if (circle.id === selected) g?.circle(circle.x, circle.y, circle.r + 10).stroke({ color: canvas.selectRing, width: 3, alpha: 0.8 });
     // Credit points after the title, with a tick coloured like the glow (US-028).
     const t = titles.get(circle.id);
     const lockedOut = locks.has(circle.id);
@@ -739,8 +925,12 @@ function paint(s: Scene) {
         if (code === selected) g.circle(0, 0, node.r + 17).stroke({ color: canvas.selectRing, width: 2, alpha: 0.9 });
       }
     }
-    v.pop = code === hovered ? 2 : twin ? 1 : 0;
-    root.zIndex = v.pop;
+    const pop = code === hovered ? 2 : twin ? 1 : 0;
+    // Popped copies move above every tile, so no neighbouring tile draws over them.
+    if (pop && !v.pop) s.popLayer.addChild(root);
+    else if (!pop && v.pop) (v.tile.nodes.addChild(root), (v.tile.lod = undefined));
+    v.pop = pop;
+    root.zIndex = pop;
     root.alpha = twin
       ? 1
       : look.alpha * (litNode(code) ? 1 : 0.22) * (marked || insideSel(node.circle) || wasted.has(code) ? 1 : 0.35) * (hollow ? 0.8 : 1);
@@ -778,13 +968,22 @@ function paint(s: Scene) {
   const edgesKey = [states, plan.degree, canvas.background];
   if (!s.edgesKey || edgesKey.some((k, i) => k !== s.edgesKey![i])) {
     s.edgesKey = edgesKey;
-    const e = s.edges.clear();
-    for (const edge of layout.edges) {
-      tracePath(e, edge.path);
-      e.stroke(style(edge, false));
+    // Only tiles with a link whose style changed are rebuilt: marking a subject used to rebuild all
+    // 14,897 links (US-043).
+    for (const t of s.tiles) {
+      if (!t.links.length) continue;
+      const styles = t.links.map((edge) => style(edge, false));
+      const key = styles.map((st) => `${st.color},${st.width},${st.alpha}`).join(';');
+      if (key === t.edgeKey) continue;
+      t.edgeKey = key;
+      const e = t.edges.clear();
+      t.links.forEach((edge, i) => {
+        tracePath(e, edge.path);
+        e.stroke(styles[i]);
+      });
     }
   }
-  s.edges.alpha = dimming ? 0.15 : 1;
+  s.edgeLayer.alpha = dimming ? 0.15 : 1;
   const lit = s.edgesLit.clear();
   if (focus || dimming)
     for (const edge of layout.edges) {

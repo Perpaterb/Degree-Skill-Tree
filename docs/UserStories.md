@@ -280,9 +280,9 @@ As a student, I want degrees from the same faculty near each other, and what the
 ### US-043 The whole handbook on one map (experiment, `big-map` branch)
 As the project owner, I want to see whether every UTS course fits on one map without lagging, as an exercise in large data visualisation.
 - [ ] All 444 courses of the 2027 handbook (161 undergraduate, 283 postgraduate), with their 957 areas of study and 3,299 subjects, on one map
-- [ ] Measured and reported against the 5-degree map, not tuned into a pass: map file size, layout build time, first load, pan and zoom frame rate (US-004's 55fps target stays), and how long marking a subject takes
+- [ ] Measured and reported against the 5-degree map, not tuned into a pass: map file size, layout build time, first load, pan and zoom frame rate (US-004's 55fps target stays), and how long marking a subject takes *Partial, 26 Sep 2026: the whole-handbook map is measured before and after a renderer rework (see TechFromUserStories US-043); the 5-degree map, file size and layout build time are not yet measured side by side.*
 - [ ] Every faculty has a colour. Assumed, 26 Sep 2026: Arts and Social Sciences degrees take Communication's uluru brown, or Education's jade green when the title says Education; TD School takes Transdisciplinary; Graduate School of Health takes Health; a Graduate Research School part takes the degree's other faculty's colour
-- [ ] The existing E2E suite runs against it; failures caused by the bigger data (counts) are separated from real breakage and reported
+- [ ] The existing E2E suite runs against it; failures caused by the bigger data (counts) are separated from real breakage and reported *Partial: 8 of 59 fail; 4 are counts from the bigger data, 4 not yet explained (see TechFromUserStories US-043).*
 
 ## Admin CMS
 
