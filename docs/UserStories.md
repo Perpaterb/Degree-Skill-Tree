@@ -27,6 +27,10 @@ academic dress; double degrees in both colours; a standard faculty-colour lookup
 built on the `big-map` branch as an experiment).
 26 Sep 2026: US-044 added (titles never pile up on the zoomed-out map, `big-map` branch).
 27 Sep 2026: US-045 noted (bug: requisite lines missing for some subjects).
+27 Sep 2026: US-046 to US-050 added on the `degree-pairs` branch (degrees chosen from their panel;
+undergraduate degrees that cannot combine are locked; double degrees built from two halves, with their
+circles removed; add-on halves locked until they have a degree to attach to; offshore degrees apart).
+US-019, US-021 and US-040 change with them (noted on each).
 
 ---
 
@@ -108,7 +112,7 @@ As a student, I want to see what my remaining plan will cost.
 
 ### US-019 Several degrees on one map
 As a student, I want several degrees on one map so I can see where my subjects could take me.
-- [x] Bachelor of Computing Science (C10476), Bachelor of Cybersecurity (C10471) and Bachelor of Business (C10026), 2027 handbook, pulled slowly alongside the Bachelor of IT (C10148) *25 Sep 2026: the Bachelor of Information Technology Bachelor of Business double degree (C10219) added the same way.*
+- [x] Bachelor of Computing Science (C10476), Bachelor of Cybersecurity (C10471) and Bachelor of Business (C10026), 2027 handbook, pulled slowly alongside the Bachelor of IT (C10148) *25 Sep 2026: the Bachelor of Information Technology Bachelor of Business double degree (C10219) added the same way.* *To change on `degree-pairs`: its circle is replaced by its two halves (US-048).*
 - [x] One map holds all four degrees; a subject or program shared between degrees exists once
 - [x] One plan covers the whole map; links made before this change (`#t=uts-2027-C10148&...`) still open with their plan
 
@@ -122,7 +126,7 @@ As a student, I want each degree, major, sub-major and stream drawn as a circle 
 
 ### US-021 Select a degree and work backwards
 As a student, I want to pick the degree I am aiming for and see what it needs.
-- [x] Clicking a degree circle selects it; it stays selected until another degree is selected or the selection is cleared
+- [x] Clicking a degree circle selects it; it stays selected until another degree is selected or the selection is cleared *To change on `degree-pairs`: chosen from the degree's panel instead (US-046).*
 - [ ] The selected degree's remaining requirements stand out: its subjects I still need are highlighted, and the other degrees' outlines dim (their compatibility shading from US-023 stays visible). *Partial: implemented (gold rings on still-needed compulsory subjects, other degrees dimmed); checked by screenshot only, no automated check.*
 - [x] The selected degree is part of the shareable link and survives a reload
 - [x] Majors and sub-majors are chosen by clicking their circles while their degree is selected (the panel offers Choose only when the selected degree offers the program). *25 Sep 2026: and not while the program is locked out (US-037).*
@@ -263,7 +267,7 @@ As a student, I want each degree coloured by its faculty, so degrees from the sa
 As a student, I want a double degree's title to show both faculties.
 - [x] A double degree's title is split into its component degrees and each part takes its own faculty's colour (e.g. "Bachelor of Information Technology" in IT blue, "Bachelor of Business" in Business grey), on the map and in its panel. The handbook lists the faculties in order
 - [x] A title that cannot be split takes its first faculty's colour whole
-- [x] An E2E test: the Bachelor of IT Bachelor of Business title is drawn in two colours, IT blue then Business grey
+- [x] An E2E test: the Bachelor of IT Bachelor of Business title is drawn in two colours, IT blue then Business grey *To change on `degree-pairs`: the double's circle goes (US-048), so the two colours are checked on the panel title only.*
 
 ### US-041 A standard faculty-colour lookup for any university
 As the project owner, I want faculty colours found the same way for every university, with where each came from.
@@ -308,6 +312,44 @@ which takes the cheapest branch of an OR. A text branch such as "Admission into 
 Certificate in ..." costs nothing, so it wins and the chain has no subjects. The links exist in the map
 data (76024 has 28 incoming); only the highlight is empty. What a subject unlocks is worked out
 separately (`unlockedBy`), which is why those lines still show.
+
+### US-046 Choose a degree, don't just click it (`degree-pairs` branch)
+As a student, I want to choose a degree deliberately, as I choose a major, rather than by clicking its circle.
+- [ ] Clicking a degree circle opens its panel; a **Choose this degree** button selects it. The top-bar picker still chooses directly, replacing the current choice even when the picked degree is locked
+- [ ] Clearing the degree (the chip or the panel) unchooses it
+- [ ] E2E (tagged US-046): clicking a degree circle opens its panel without choosing it; Choose chooses it; clearing unchooses it
+
+### US-047 Undergraduate degrees that cannot go with your choice are locked (`degree-pairs` branch)
+As a student, I want the degrees I can no longer combine with my choice locked, so the map narrows to what is still possible.
+- [ ] With an undergraduate degree chosen, every undergraduate degree that cannot combine with it is locked: grey, red outline, a cross, and Choose disabled with the reason (and a way to clear the current choice). Its double-degree partners stay open. With a double chosen, every other undergraduate degree is locked
+- [ ] Postgraduate and research courses (master's, graduate certificates, PhDs) never lock because a bachelor is chosen: they are separate courses, open to a bachelor from anywhere. Choosing a postgraduate course locks nothing. Entry requirements (ATAR, prior degrees) are out of scope
+- [ ] Clearing the choice unlocks everything
+- [ ] E2E (tagged US-047): choosing the Bachelor of Business leaves its partners open and locks a non-partner bachelor; a master's stays open; clearing unlocks
+
+### US-048 Double degrees come from choosing two stand-alone halves; their circles go (`degree-pairs` branch)
+As a student, I want to build a double degree by choosing its two degrees, in either order, and see one map with no duplicate double-degree circles.
+- [ ] Choosing two stand-alone partner degrees, in either order, makes the combined course the chosen degree; its panel shows the combined course's requirements and progress. Covers bachelor + bachelor, bachelor + master's (6 combined courses), master's + master's (3) and bachelor + diploma (2)
+- [ ] Choosing a course that cannot combine with the current choice (a postgraduate course from its panel, or any degree from the picker) replaces it, as choosing a degree does today
+- [ ] The circles of double degrees that can be built from halves are removed from the map. Education Futures + Master of Teaching in Primary Education keeps its circle (it has no halves)
+- [ ] A major or subject that only a double offers sits in the circle of the half it belongs to, locked until the other half is chosen. The half is the one whose section of the double lists it; for the 11 doubles without a section per half, the half whose faculty teaches most of its subjects. On the 2027 data about 136 majors move this way, most into Bachelor of Science (46) and Bachelor of Engineering (Honours) (11)
+- [ ] Majors chosen under one half carry over when the double offers them; otherwise they are locked, with the reason (US-037's rules)
+- [ ] Removing one half drops back to the other; removing the stand-alone half of a pair with an add-on half (US-049) removes both
+- [ ] Links that name a double's code (e.g. `d=C10219`) open with both halves chosen
+- [ ] E2E (tagged US-048): Bachelor of IT then Bachelor of Business, and Business then IT, both give C10219; removing one half leaves the other; `d=C10219` opens with both
+
+### US-049 Add-on halves: locked until there is something to attach to (`degree-pairs` branch)
+As a student, I want a degree that only exists as half of a double to wait until I have chosen a degree it can join, like a potion that needs a flask.
+- [ ] Bachelor of Sustainability and Environment, Bachelor of Creative Intelligence and Innovation and Bachelor of International Studies (Honours) each get one circle holding what is common to all their doubles, marked "Only as part of a double degree", and locked from the start
+- [ ] Once a degree it can join is chosen, it unlocks and can be added; the result is the combined course. It can never be chosen first
+- [ ] Parts that belong to one pairing only (C09155's majors, Sustainability and Environment's partner streams) stay locked unless that partner is the one chosen
+- [ ] E2E (tagged US-049): Sustainability and Environment cannot be chosen first; Business then Sustainability and Environment gives C10411
+
+### US-050 Offshore degrees in their own areas (`degree-pairs` branch)
+As a student, I want courses taught only in another country kept apart and labelled, so I never plan around one I cannot attend.
+- [ ] The 7 China (Shanghai) and 2 Vietnam degrees sit in two separate areas well off to one side of the Sydney map, titled "Offered only in Shanghai, China" and "Offered only in Vietnam"
+- [ ] Majors and subjects used only by offshore degrees sit there; subjects shared with Sydney degrees appear as copies in both
+- [ ] A general rule for any university: courses offered only in another location are laid out apart from the main campus's courses (read from the course's locations, not a list of codes)
+- [ ] Unit test on real data: every offshore-only course is inside its area, and no Sydney or online course is; E2E (tagged US-050): the two area titles show
 
 ## Admin CMS
 
