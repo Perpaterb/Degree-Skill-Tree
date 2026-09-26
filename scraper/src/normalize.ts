@@ -19,8 +19,15 @@ type Json = Record<string, any>;
 
 const num = (v: unknown) => Number(v) || 0;
 const clean = (s: unknown) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim() : '');
-/** A double degree's faculty comes as two names joined by a line break tag. */
-const faculty = (s: unknown) => clean(s).replace(/\s*<br\s*\/?>\s*/gi, ', ');
+/**
+ * A double degree's faculty comes as two names joined by a line break tag. Split on the tag, not on
+ * commas: "Design, Architecture and Building" is one faculty.
+ */
+const faculties = (s: unknown) =>
+  clean(s)
+    .split(/\s*<br\s*\/?>\s*/i)
+    .filter(Boolean);
+const faculty = (s: unknown) => faculties(s).join(', ');
 /** Container descriptions often start with an internal code, e.g. "(CBK90781) Select one of...". */
 const stripCode = (s: string) => s.replace(/^\([A-Z]{2,4}\d{4,6}\)\s*/, '');
 
@@ -189,7 +196,7 @@ export async function buildMap(rawDir: string, year: string, courseCodes: string
       structure: toContainer(course.curriculumStructure ?? {}, refs),
       studyPlans: studyPlans(course.study_plans),
     };
-    degrees[courseCode].titleParts = titleParts(colours, degrees[courseCode]);
+    degrees[courseCode].titleParts = titleParts(colours, { title: degrees[courseCode].title, faculties: faculties(course.parent_academic_org) });
   }
 
   // Programs, recursively (a stream can name further programs).
@@ -233,6 +240,14 @@ export async function buildMap(rawDir: string, year: string, courseCodes: string
     subjects[code] = raw ? toSubject(code, raw, await accessFor(code), year) : legacySubject(code, fallbackTitle, year);
   };
   for (const [code, title] of refs.subjects) await addSubject(code, title);
+  // Research degrees (and a few programs) have no coursework structure, so their root has no id.
+  // Progress is keyed by container id, so give each missing one an id from where it sits.
+  const ensureIds = (c: Container, fallback: string): void => {
+    if (!c.id) c.id = fallback;
+    c.children.forEach((ch, i) => ensureIds(ch, `${c.id}/${i}`));
+  };
+  for (const d of Object.values(degrees)) ensureIds(d.structure, `${d.code}-structure`);
+  for (const p of Object.values(programs)) ensureIds(p.structure, `${p.code}-structure`);
   for (const code of [...refs.subjects.keys()]) {
     const access = await accessFor(code);
     for (const item of access?.requisites?.items ?? []) {

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { circleAt, layoutMap, type LayoutCircle } from './layout.js';
+import { circleAt, facultiesOf, facultyOrder, layoutMap, type LayoutCircle } from './layout.js';
 import { linkQuality } from './linkQuality.js';
 import type { MapDoc } from './model.js';
 
@@ -67,7 +67,8 @@ describe('US-020: circles that never overlap, with linked copies', () => {
       for (let j = i + 1; j < nodes.length; j++)
         if (Math.hypot(nodes[i].x - nodes[j].x, nodes[i].y - nodes[j].y) < nodes[i].r + nodes[j].r) overlaps.push(`${nodes[i].id}/${nodes[j].id}`);
     expect(overlaps).toEqual([]);
-  });
+    // Every pair: about 123 million on the whole-handbook map (US-043).
+  }, 120_000);
 
   it('lists circles largest first, so contained ones are drawn on top', () => {
     const radii = layout.circles.map((c) => c.r);
@@ -77,7 +78,8 @@ describe('US-020: circles that never overlap, with linked copies', () => {
   it('is deterministic, and matches the layout stored with the map', () => {
     expect(JSON.stringify(layoutMap(bare as MapDoc))).toBe(JSON.stringify(layout));
     expect(JSON.stringify(stored)).toBe(JSON.stringify(layout));
-  });
+    // A second full layout: about 30 s on the whole-handbook map (US-043).
+  }, 180_000);
 });
 
 describe('US-020: circle titles above their circles', () => {
@@ -169,6 +171,55 @@ describe('US-024: railway-style links', () => {
 
   it('crosses only at 45 to 135 degrees, never runs two links together, and never passes over a subject', () => {
     expect(linkQuality(layout)).toMatchObject({ shallowCrossings: 0, runningTogether: 0, throughSubjects: 0 });
+  }, 120_000);
+});
+
+describe('US-042: faculty neighbourhoods', () => {
+  const top = layout.circles.filter((c) => !c.parent);
+  const b = layout.bounds;
+  const width = b.maxX - b.minX;
+  const single = (f: string) => top.filter((c) => c.kind === 'degree' && facultiesOf(map, c.id).length === 1 && facultiesOf(map, c.id)[0] === f);
+  const meanX = (cs: LayoutCircle[]) => cs.reduce((t, c) => t + c.x, 0) / cs.length;
+
+  it('spreads the map sideways: at least 1.5 times wider than tall', () => {
+    expect(width / (b.maxY - b.minY)).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it("puts the faculty with the most degrees in the middle, and the others out sideways in order of size", () => {
+    const order = facultyOrder(map).filter((o) => single(o.faculty).length);
+    const centre = (b.minX + b.maxX) / 2;
+    const distance = order.map((o) => Math.abs(meanX(single(o.faculty)) - centre));
+    expect(distance[0] / width).toBeLessThan(0.1);
+    // Each of the next faculties sits no nearer the middle than the biggest.
+    for (let i = 1; i < order.length; i++) expect(distance[i], order[i].faculty).toBeGreaterThan(distance[0]);
+  });
+
+  it('puts a program shared by two faculties between them', () => {
+    const means = new Map(facultyOrder(map).filter((o) => single(o.faculty).length).map((o) => [o.faculty, meanX(single(o.faculty))]));
+    const two = top.filter((c) => c.sharedBy && new Set(c.sharedBy.flatMap((d) => facultiesOf(map, d))).size === 2);
+    expect(two.length).toBeGreaterThan(0);
+    const outside = two.filter((c) => {
+      const fs = [...new Set(c.sharedBy!.flatMap((d) => facultiesOf(map, d)))].filter((f) => means.has(f));
+      if (fs.length < 2) return false;
+      const [lo, hi] = fs.map((f) => means.get(f)!).sort((p, q) => p - q);
+      // Between the faculties' middles, give or take the program's own size.
+      return c.x < lo - c.r || c.x > hi + c.r;
+    });
+    expect(outside.map((c) => c.id)).toEqual([]);
+  });
+
+  it('pulls programs shared by more faculties closer to the middle', () => {
+    const centre = (b.minX + b.maxX) / 2;
+    const by = new Map<number, number[]>();
+    for (const c of top.filter((c) => c.sharedBy)) {
+      const n = new Set(c.sharedBy!.flatMap((d) => facultiesOf(map, d))).size;
+      (by.get(n) ?? by.set(n, []).get(n)!).push(Math.abs(c.x - centre));
+    }
+    const avg = (xs: number[]) => xs.reduce((t, x) => t + x, 0) / xs.length;
+    // Shared by one faculty against shared by three or more.
+    const narrow = by.get(1) ?? [];
+    const wide = [...by].filter(([n]) => n >= 3).flatMap(([, xs]) => xs);
+    if (narrow.length && wide.length) expect(avg(wide)).toBeLessThan(avg(narrow));
   });
 });
 

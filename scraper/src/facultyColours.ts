@@ -8,6 +8,8 @@ export interface FacultyColours {
   source: string;
   colours: Record<string, { name: string; officialName: string | null; hex: string; hexFrom: 'published' | 'sampled' }>;
   rules: { faculty: string; title?: string; colour: string }[];
+  /** Faculties known to have no colour, with why (their degrees get the neutral colour). */
+  uncoloured?: Record<string, string>;
 }
 
 /**
@@ -34,11 +36,11 @@ export function colourFor(table: FacultyColours, faculty: string, titlePart: str
 
 /**
  * Each part of a degree's title with its faculty and colour (US-039, US-040). A double degree lists
- * its faculties in title order, comma separated; when the counts do not match, the whole title takes
- * the first faculty's colour.
+ * its faculties in title order; when the counts do not match (e.g. a research degree listing the
+ * Graduate Research School beside its faculty), the whole title takes the first faculty's colour.
  */
-export function titleParts(table: FacultyColours | null, degree: Pick<Degree, 'title' | 'faculty'>): TitlePart[] {
-  const faculties = degree.faculty.split(/,\s*/).filter(Boolean);
+export function titleParts(table: FacultyColours | null, degree: Pick<Degree, 'title'> & { faculties: string[] }): TitlePart[] {
+  const { faculties } = degree;
   let parts = splitTitle(degree.title);
   let facs = parts.map((_, i) => (faculties.length === parts.length ? faculties[i] : faculties.length === 1 ? faculties[0] : undefined));
   if (facs.some((f) => f === undefined)) {

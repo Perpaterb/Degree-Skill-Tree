@@ -178,13 +178,14 @@ async function report() {
 const TREES = 'web/public/trees';
 /** Normalise pulled degrees into one map (plus its precomputed layout) that the app reads. */
 async function normalize() {
-  const codes = process.argv.slice(3);
-  if (!codes.length) throw new Error('usage: npm run scrape -- normalize <COURSE_CODE>...');
+  // `--all`: every course in the year's listing (US-043); otherwise the codes given.
+  const codes = process.argv[3] === '--all' ? (await readList('course')).map((c) => c.code).sort() : process.argv.slice(3);
+  if (!codes.length) throw new Error('usage: npm run scrape -- normalize <COURSE_CODE>... | --all');
   // Faculty colours (US-041): data/faculty-colours/<institution>.json, found by docs/FacultyColours.md.
   const colours = JSON.parse(await readFile('data/faculty-colours/uts.json', 'utf8'));
   const map = await buildMap(RAW, YEAR, codes, colours);
   for (const d of Object.values(map.degrees))
-    for (const p of d.titleParts ?? []) if (!p.colour) console.warn(`no faculty colour for ${d.code} "${p.text}" (faculty "${p.faculty}")`);
+    for (const p of d.titleParts ?? []) if (!p.colour && !colours.uncoloured?.[p.faculty]) console.warn(`no faculty colour for ${d.code} "${p.text}" (faculty "${p.faculty}")`);
   const started = Date.now();
   map.layout = layoutMap(map);
   const copies = Object.keys(map.layout.nodes).length;

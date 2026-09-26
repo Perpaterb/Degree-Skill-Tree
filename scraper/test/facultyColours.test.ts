@@ -46,23 +46,32 @@ describe('matching a faculty to its colour (US-039)', () => {
     expect(colourFor(uts, 'Engineering and Information Technology', 'Bachelor of Engineering (Honours)')).toBe('engineering');
     expect(colourFor(uts, 'Business', 'Bachelor of Business')).toBe('business');
     expect(colourFor(uts, 'Somewhere Else', 'Bachelor of Things')).toBeNull();
+    // Anchored: "Social Sciences" is not Science, and a comma inside a faculty's name is not a split.
+    expect(colourFor(uts, 'Arts and Social Sciences', 'Bachelor of Arts in International Studies')).toBe('communication');
+    expect(colourFor(uts, 'Arts and Social Sciences', 'Bachelor of Education (Primary)')).toBe('education');
+    expect(colourFor(uts, 'Design, Architecture and Building', 'Bachelor of Design in Architecture')).toBe('dab');
+    expect(colourFor(uts, 'TD School', 'Bachelor of Creative Intelligence and Innovation')).toBe('transdisciplinary');
+    expect(colourFor(uts, 'Graduate School of Health', 'Master of Physiotherapy')).toBe('health');
   });
 
   it('colours each part of a double degree by its own faculty, and a mismatched one whole', () => {
-    expect(titleParts(uts, { title: 'Bachelor of Information Technology Bachelor of Business', faculty: 'Engineering and Information Technology, Business' })).toEqual([
+    expect(titleParts(uts, { title: 'Bachelor of Information Technology Bachelor of Business', faculties: ['Engineering and Information Technology', 'Business'] })).toEqual([
       { text: 'Bachelor of Information Technology', faculty: 'Engineering and Information Technology', colour: IT },
       { text: 'Bachelor of Business', faculty: 'Business', colour: BUSINESS },
     ]);
     // Three faculties for two parts: the title cannot be split sensibly, so it takes the first colour.
-    expect(titleParts(uts, { title: 'Bachelor of Information Technology Bachelor of Business', faculty: 'Business, Law, Science' })).toEqual([
+    expect(titleParts(uts, { title: 'Bachelor of Information Technology Bachelor of Business', faculties: ['Business', 'Law', 'Science'] })).toEqual([
       { text: 'Bachelor of Information Technology Bachelor of Business', faculty: 'Business', colour: BUSINESS },
     ]);
   });
 
-  it('every degree on the map has a colour for every part of its title', () => {
+  it('every degree on the map has a colour for every part of its title, bar faculties listed as uncoloured', () => {
     for (const d of Object.values(map.degrees)) {
       expect(d.titleParts?.length, d.code).toBeGreaterThan(0);
-      for (const p of d.titleParts!) expect(p.colour, `${d.code} ${p.text}`).toMatch(/^#[0-9a-f]{6}$/);
+      for (const p of d.titleParts!) {
+        if (uts.uncoloured?.[p.faculty]) expect(p.colour, `${d.code} ${p.text}`).toBeNull();
+        else expect(p.colour, `${d.code} ${p.text}`).toMatch(/^#[0-9a-f]{6}$/);
+      }
       expect(d.titleParts!.map((p) => p.text).join(' ')).toBe(d.title);
     }
   });

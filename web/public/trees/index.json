@@ -5,24 +5,1780 @@
   "year": "2027",
   "degrees": [
    {
-    "code": "C10148",
-    "title": "Bachelor of Information Technology"
+    "code": "C02090",
+    "title": "Doctor of Philosophy"
    },
    {
-    "code": "C10476",
-    "title": "Bachelor of Computing Science"
+    "code": "C02091",
+    "title": "Doctor of Philosophy"
    },
    {
-    "code": "C10471",
-    "title": "Bachelor of Cybersecurity"
+    "code": "C02092",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02093",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02094",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02095",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02096",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02098",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02099",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02100",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02101",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02102",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02103",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02104",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02105",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02106",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C02107",
+    "title": "Doctor of Philosophy"
+   },
+   {
+    "code": "C03001",
+    "title": "Master of Architecture (Research)"
+   },
+   {
+    "code": "C03002",
+    "title": "Master of Built Environment (Research)"
+   },
+   {
+    "code": "C03012",
+    "title": "Master of Design (Research)"
+   },
+   {
+    "code": "C03017",
+    "title": "Master of Engineering (Research)"
+   },
+   {
+    "code": "C03024",
+    "title": "Master of Laws (Research)"
+   },
+   {
+    "code": "C03025",
+    "title": "Master of Science (Research) in Computing Sciences"
+   },
+   {
+    "code": "C03026",
+    "title": "Master of Science (Research) in Mathematical Sciences"
+   },
+   {
+    "code": "C03029",
+    "title": "Master of Science (Research)"
+   },
+   {
+    "code": "C03032",
+    "title": "Master of Sustainable Futures (Research)"
+   },
+   {
+    "code": "C03048",
+    "title": "Master of Nursing (Research)"
+   },
+   {
+    "code": "C03049",
+    "title": "Master of Midwifery (Research)"
+   },
+   {
+    "code": "C03050",
+    "title": "Master of Health Services (Research)"
+   },
+   {
+    "code": "C03051",
+    "title": "Master of Analytics (Research)"
+   },
+   {
+    "code": "C03053",
+    "title": "Master of Pharmacy (Research)"
+   },
+   {
+    "code": "C03054",
+    "title": "Master of Pharmaceutical Sciences (Research)"
+   },
+   {
+    "code": "C03055",
+    "title": "Master of Sport and Exercise (Research)"
+   },
+   {
+    "code": "C03056",
+    "title": "Master of Orthoptics (Research)"
+   },
+   {
+    "code": "C03057",
+    "title": "Master of Clinical Psychology (Research)"
+   },
+   {
+    "code": "C03059",
+    "title": "Master of Physiotherapy (Research)"
+   },
+   {
+    "code": "C03061",
+    "title": "Master of Genetic Counselling (Research)"
+   },
+   {
+    "code": "C03062",
+    "title": "Master of Speech and Language Sciences (Research)"
+   },
+   {
+    "code": "C03063",
+    "title": "Master of Transdisciplinary Innovation (Research)"
+   },
+   {
+    "code": "C03064",
+    "title": "Master of Learning Analytics (Research)"
+   },
+   {
+    "code": "C03067",
+    "title": "Master of Arts (Research)"
+   },
+   {
+    "code": "C03068",
+    "title": "Master of Indigenous Health (Research)"
+   },
+   {
+    "code": "C03069",
+    "title": "Master of Business (Research)"
+   },
+   {
+    "code": "C04006",
+    "title": "Master of Project Management"
+   },
+   {
+    "code": "C04007",
+    "title": "Master of Planning"
+   },
+   {
+    "code": "C04008",
+    "title": "Master of Property Development"
+   },
+   {
+    "code": "C04018",
+    "title": "Master of Business Administration"
+   },
+   {
+    "code": "C04048",
+    "title": "Master of Finance"
+   },
+   {
+    "code": "C04143",
+    "title": "Master of Laws"
+   },
+   {
+    "code": "C04222",
+    "title": "Master of Interaction Design"
+   },
+   {
+    "code": "C04234",
+    "title": "Master of Interaction Design (Extension)"
+   },
+   {
+    "code": "C04235",
+    "title": "Master of Architecture"
+   },
+   {
+    "code": "C04236",
+    "title": "Juris Doctor"
+   },
+   {
+    "code": "C04237",
+    "title": "Master of Professional Accounting (Extension)"
+   },
+   {
+    "code": "C04238",
+    "title": "Master of Professional Accounting"
+   },
+   {
+    "code": "C04241",
+    "title": "Master of Science"
+   },
+   {
+    "code": "C04250",
+    "title": "Juris Doctor Master of Business Administration"
+   },
+   {
+    "code": "C04251",
+    "title": "Master of Intellectual Property"
+   },
+   {
+    "code": "C04252",
+    "title": "Master of Pharmacy"
+   },
+   {
+    "code": "C04255",
+    "title": "Master of Teaching in Secondary Education"
+   },
+   {
+    "code": "C04256",
+    "title": "Master of Artificial Intelligence (Online)"
+   },
+   {
+    "code": "C04258",
+    "title": "Master of Finance (Extension)"
+   },
+   {
+    "code": "C04259",
+    "title": "Master of Management (Extension)"
+   },
+   {
+    "code": "C04260",
+    "title": "Master of Human Resource Management (Extension)"
+   },
+   {
+    "code": "C04264",
+    "title": "Master of Legal Studies"
+   },
+   {
+    "code": "C04265",
+    "title": "Master of Science (Extension)"
+   },
+   {
+    "code": "C04267",
+    "title": "Master of Philosophy in Science"
+   },
+   {
+    "code": "C04271",
+    "title": "Master of Engineering"
+   },
+   {
+    "code": "C04273",
+    "title": "Master of Engineering Master of Engineering Management"
+   },
+   {
+    "code": "C04274",
+    "title": "Master of Engineering Management Master of Business Administration"
+   },
+   {
+    "code": "C04275",
+    "title": "Master of Engineering Management"
+   },
+   {
+    "code": "C04277",
+    "title": "Master of Engineering (Extension)"
+   },
+   {
+    "code": "C04283",
+    "title": "Master of Engineering Management"
+   },
+   {
+    "code": "C04285",
+    "title": "Master of Event Management"
+   },
+   {
+    "code": "C04286",
+    "title": "Master of Human Resource Management"
+   },
+   {
+    "code": "C04287",
+    "title": "Master of Management"
+   },
+   {
+    "code": "C04288",
+    "title": "Master of Social Impact and Not-for-Profit Management"
+   },
+   {
+    "code": "C04290",
+    "title": "Master of Sport Management"
+   },
+   {
+    "code": "C04294",
+    "title": "Master of Real Estate Investment"
+   },
+   {
+    "code": "C04295",
+    "title": "Master of Information Technology"
+   },
+   {
+    "code": "C04296",
+    "title": "Master of Information Technology (Extension)"
+   },
+   {
+    "code": "C04299",
+    "title": "Master of Orthoptics"
+   },
+   {
+    "code": "C04300",
+    "title": "Master of Clinical Psychology"
+   },
+   {
+    "code": "C04301",
+    "title": "Master of Good Manufacturing Practice"
+   },
+   {
+    "code": "C04305",
+    "title": "Master of TESOL and Applied Linguistics"
+   },
+   {
+    "code": "C04306",
+    "title": "Master of Physiotherapy"
+   },
+   {
+    "code": "C04308",
+    "title": "Master of Business Data Analytics (Offshore)"
+   },
+   {
+    "code": "C04309",
+    "title": "Master of Professional Engineering"
+   },
+   {
+    "code": "C04311",
+    "title": "Master of Design"
+   },
+   {
+    "code": "C04312",
+    "title": "Master of Design (Extension)"
+   },
+   {
+    "code": "C04315",
+    "title": "Master of Property Development and Investment"
+   },
+   {
+    "code": "C04316",
+    "title": "Master of Property Development and Planning"
+   },
+   {
+    "code": "C04317",
+    "title": "Master of Property Development and Project Management"
+   },
+   {
+    "code": "C04320",
+    "title": "Juris Doctor Graduate Certificate in Professional Legal Practice"
+   },
+   {
+    "code": "C04324",
+    "title": "Master of Strategic Supply Chain Management"
+   },
+   {
+    "code": "C04325",
+    "title": "Master of Strategic Supply Chain Management (Extension)"
+   },
+   {
+    "code": "C04326",
+    "title": "Master of Teaching in Primary Education"
+   },
+   {
+    "code": "C04362",
+    "title": "Master of High Performance Sport"
+   },
+   {
+    "code": "C04363",
+    "title": "Juris Doctor Master of Intellectual Property"
+   },
+   {
+    "code": "C04364",
+    "title": "Juris Doctor Graduate Certificate in Trade Mark Law and Practice"
+   },
+   {
+    "code": "C04365",
+    "title": "Master of Palliative Care"
+   },
+   {
+    "code": "C04368",
+    "title": "Master of Event Management (Extension)"
+   },
+   {
+    "code": "C04369",
+    "title": "Master of Sport Management (Extension)"
+   },
+   {
+    "code": "C04370",
+    "title": "Executive Master of Data Science and Innovation"
+   },
+   {
+    "code": "C04371",
+    "title": "Master of Social Impact and Not-for-Profit Management (Extension)"
+   },
+   {
+    "code": "C04372",
+    "title": "Master of Data Science and Innovation"
+   },
+   {
+    "code": "C04373",
+    "title": "Master of Quantitative Finance"
+   },
+   {
+    "code": "C04374",
+    "title": "Master of Genetic Counselling"
+   },
+   {
+    "code": "C04375",
+    "title": "Master of Quantitative Finance (Extension)"
+   },
+   {
+    "code": "C04379",
+    "title": "Master of Business Analytics (Extension)"
+   },
+   {
+    "code": "C04380",
+    "title": "Master of Business Analytics"
+   },
+   {
+    "code": "C04382",
+    "title": "Master of Marketing"
+   },
+   {
+    "code": "C04383",
+    "title": "Master of Marketing (Extension)"
+   },
+   {
+    "code": "C04386",
+    "title": "Master of Speech Pathology"
+   },
+   {
+    "code": "C04388",
+    "title": "Master of Medical Biotechnology (Extension)"
+   },
+   {
+    "code": "C04390",
+    "title": "Master of Medical Biotechnology"
+   },
+   {
+    "code": "C04391",
+    "title": "Master of Forensic Science"
+   },
+   {
+    "code": "C04392",
+    "title": "Master of Forensic Science (Extension)"
+   },
+   {
+    "code": "C04408",
+    "title": "Master of Advanced Nursing"
+   },
+   {
+    "code": "C04409",
+    "title": "Master of Health Services Management"
+   },
+   {
+    "code": "C04420",
+    "title": "Master of TESOL and Applied Linguistics (Extension)"
+   },
+   {
+    "code": "C04423",
+    "title": "Master of Animation and Visualisation"
+   },
+   {
+    "code": "C04424",
+    "title": "Executive Master of Business Administration"
+   },
+   {
+    "code": "C04425",
+    "title": "Master of Public Health"
+   },
+   {
+    "code": "C04426",
+    "title": "Master of Finance (Offshore)"
+   },
+   {
+    "code": "C04427",
+    "title": "Master of Education (Learning and Leadership)"
+   },
+   {
+    "code": "C04430",
+    "title": "Master of Cybersecurity"
+   },
+   {
+    "code": "C04431",
+    "title": "Master of Cybersecurity (Extension)"
+   },
+   {
+    "code": "C04432",
+    "title": "Master of International Commercial and Business Law"
+   },
+   {
+    "code": "C04433",
+    "title": "Master of International Commercial and Business Law Master of Business Administration"
+   },
+   {
+    "code": "C04434",
+    "title": "Master of Technology Management (Online)"
+   },
+   {
+    "code": "C04435",
+    "title": "Executive Master of Technology Management (Online)"
+   },
+   {
+    "code": "C04441",
+    "title": "Master of Urban Planning (Online)"
+   },
+   {
+    "code": "C04443",
+    "title": "Master of Artificial Intelligence"
+   },
+   {
+    "code": "C04444",
+    "title": "Master of Business Administration (Online)"
+   },
+   {
+    "code": "C04445",
+    "title": "Master of Property Development (Online)"
+   },
+   {
+    "code": "C04447",
+    "title": "Master of Women's and Children's Health"
+   },
+   {
+    "code": "C04449",
+    "title": "Master of Clinical Exercise Physiology"
+   },
+   {
+    "code": "C04450",
+    "title": "Master of Technology Innovation (Online)"
+   },
+   {
+    "code": "C04454",
+    "title": "Master of Strategic Communication (Online)"
+   },
+   {
+    "code": "C04455",
+    "title": "Master of International Relations"
+   },
+   {
+    "code": "C04459",
+    "title": "Master of Screen Arts and Production (Extension)"
+   },
+   {
+    "code": "C04460",
+    "title": "Master of Screen Arts and Production"
+   },
+   {
+    "code": "C04461",
+    "title": "Master of Strategic Communication"
+   },
+   {
+    "code": "C04462",
+    "title": "Master of Strategic Communication (Extension)"
+   },
+   {
+    "code": "C04467",
+    "title": "Master of Business Intelligence and AI"
+   },
+   {
+    "code": "C06006",
+    "title": "Graduate Diploma in Property Development"
+   },
+   {
+    "code": "C06009",
+    "title": "Graduate Diploma in Business Administration"
+   },
+   {
+    "code": "C06017",
+    "title": "Graduate Diploma in Event Management"
+   },
+   {
+    "code": "C06033",
+    "title": "Graduate Diploma in Local Government"
+   },
+   {
+    "code": "C06099",
+    "title": "Graduate Diploma in Intellectual Property"
+   },
+   {
+    "code": "C06100",
+    "title": "Graduate Diploma in Pharmaceutical Sciences"
+   },
+   {
+    "code": "C06108",
+    "title": "Graduate Diploma in Engineering"
+   },
+   {
+    "code": "C06110",
+    "title": "Graduate Diploma in Engineering Management"
+   },
+   {
+    "code": "C06113",
+    "title": "Graduate Diploma in Information Technology"
+   },
+   {
+    "code": "C06115",
+    "title": "Graduate Diploma in Good Manufacturing Practice"
+   },
+   {
+    "code": "C06116",
+    "title": "Graduate Diploma in Teaching"
+   },
+   {
+    "code": "C06118",
+    "title": "Graduate Diploma in Applied Human Studies"
+   },
+   {
+    "code": "C06123",
+    "title": "Graduate Diploma in Interaction Design"
+   },
+   {
+    "code": "C06124",
+    "title": "Graduate Diploma in Data Science and Innovation"
+   },
+   {
+    "code": "C06126",
+    "title": "Graduate Diploma in Construction Management"
+   },
+   {
+    "code": "C06127",
+    "title": "Graduate Diploma in Genetic Counselling"
+   },
+   {
+    "code": "C06130",
+    "title": "Graduate Diploma in Speech and Language Sciences"
+   },
+   {
+    "code": "C06141",
+    "title": "Graduate Diploma in Public Health"
+   },
+   {
+    "code": "C06142",
+    "title": "Graduate Diploma in Technology Management (Online)"
+   },
+   {
+    "code": "C06145",
+    "title": "Graduate Diploma in Urban Planning (Online)"
+   },
+   {
+    "code": "C06147",
+    "title": "Graduate Diploma in Artificial Intelligence"
+   },
+   {
+    "code": "C06148",
+    "title": "Graduate Diploma in Psychology"
+   },
+   {
+    "code": "C06149",
+    "title": "Graduate Diploma in Psychology (Advanced)"
+   },
+   {
+    "code": "C06150",
+    "title": "Graduate Diploma in Property Development (Online)"
+   },
+   {
+    "code": "C06151",
+    "title": "Graduate Diploma in Strategic Communication (Online)"
+   },
+   {
+    "code": "C06152",
+    "title": "Graduate Diploma in International Relations"
+   },
+   {
+    "code": "C06153",
+    "title": "Graduate Diploma in Strategic Communication"
+   },
+   {
+    "code": "C06155",
+    "title": "Graduate Diploma in Migration Law and Practice"
+   },
+   {
+    "code": "C07002",
+    "title": "Graduate Diploma in Planning"
+   },
+   {
+    "code": "C07004",
+    "title": "Graduate Diploma in Project Management"
+   },
+   {
+    "code": "C07018",
+    "title": "Graduate Diploma in Management"
+   },
+   {
+    "code": "C07019",
+    "title": "Graduate Diploma in Social Impact and Not-for-Profit Management"
+   },
+   {
+    "code": "C07021",
+    "title": "Graduate Diploma in Finance"
+   },
+   {
+    "code": "C07029",
+    "title": "Graduate Diploma in Sport Management"
+   },
+   {
+    "code": "C07070",
+    "title": "Graduate Diploma in Midwifery"
+   },
+   {
+    "code": "C07073",
+    "title": "Graduate Diploma in Australian Law"
+   },
+   {
+    "code": "C07111",
+    "title": "Graduate Diploma in Artificial Intelligence (Online)"
+   },
+   {
+    "code": "C07113",
+    "title": "Graduate Diploma in Human Resource Management"
+   },
+   {
+    "code": "C07122",
+    "title": "Graduate Diploma in Legal Studies"
+   },
+   {
+    "code": "C07123",
+    "title": "Graduate Diploma in Science"
+   },
+   {
+    "code": "C07129",
+    "title": "Graduate Diploma in Strategic Supply Chain Management"
+   },
+   {
+    "code": "C07130",
+    "title": "Graduate Diploma in High Performance Sport"
+   },
+   {
+    "code": "C07131",
+    "title": "Graduate Diploma in Palliative Care"
+   },
+   {
+    "code": "C07132",
+    "title": "Graduate Diploma in Quantitative Finance"
+   },
+   {
+    "code": "C07135",
+    "title": "Graduate Diploma in Marketing"
+   },
+   {
+    "code": "C07136",
+    "title": "Graduate Diploma in Medical Biotechnology"
+   },
+   {
+    "code": "C07137",
+    "title": "Graduate Diploma in Forensic Science"
+   },
+   {
+    "code": "C07138",
+    "title": "Graduate Diploma in Business Analytics"
+   },
+   {
+    "code": "C07141",
+    "title": "Graduate Diploma in Vision Science"
+   },
+   {
+    "code": "C07143",
+    "title": "Graduate Diploma in Advanced Nursing"
+   },
+   {
+    "code": "C07144",
+    "title": "Graduate Diploma in Health Services Management"
+   },
+   {
+    "code": "C07147",
+    "title": "Graduate Diploma in Architecture"
+   },
+   {
+    "code": "C07149",
+    "title": "Graduate Diploma in Business Administration (Online)"
+   },
+   {
+    "code": "C07150",
+    "title": "Graduate Diploma in Women's and Children's Health"
+   },
+   {
+    "code": "C07152",
+    "title": "Graduate Diploma in Screen Arts and Production"
+   },
+   {
+    "code": "C07153",
+    "title": "Graduate Diploma in Technology Innovation (Online)"
+   },
+   {
+    "code": "C07154",
+    "title": "Graduate Diploma in Business Analytics"
+   },
+   {
+    "code": "C09018",
+    "title": "Bachelor of Nursing (Honours)"
+   },
+   {
+    "code": "C09019",
+    "title": "Bachelor of Information Technology (Honours)"
+   },
+   {
+    "code": "C09048",
+    "title": "Bachelor of Design (Honours) in Architecture"
+   },
+   {
+    "code": "C09051",
+    "title": "Bachelor of Midwifery (Honours)"
+   },
+   {
+    "code": "C09057",
+    "title": "Bachelor of Sport and Exercise Science (Honours)"
+   },
+   {
+    "code": "C09066",
+    "title": "Bachelor of Engineering (Honours)"
+   },
+   {
+    "code": "C09067",
+    "title": "Bachelor of Engineering (Honours) Diploma in Industry Practice"
+   },
+   {
+    "code": "C09070",
+    "title": "Bachelor of Engineering (Honours) Bachelor of Business"
+   },
+   {
+    "code": "C09072",
+    "title": "Bachelor of Engineering (Honours) Bachelor of Science"
+   },
+   {
+    "code": "C09074",
+    "title": "Bachelor of Engineering (Honours) Bachelor of Medical Science"
+   },
+   {
+    "code": "C09076",
+    "title": "Bachelor of Engineering (Honours) Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C09079",
+    "title": "Bachelor of Landscape Architecture (Honours)"
+   },
+   {
+    "code": "C09083",
+    "title": "Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09084",
+    "title": "Bachelor of Business Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09085",
+    "title": "Bachelor of Science Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09086",
+    "title": "Bachelor of Medical Science Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09088",
+    "title": "Bachelor of Information Technology Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09089",
+    "title": "Bachelor of Communication in Creative Writing Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09091",
+    "title": "Bachelor of Communication in Digital and Social Media Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09093",
+    "title": "Bachelor of Communication in Journalism Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09094",
+    "title": "Bachelor of Creative Production in Media Arts Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09095",
+    "title": "Bachelor of Communication in Public Relations and Advertising Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09096",
+    "title": "Bachelor of Communication in Social and Political Sciences Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09098",
+    "title": "Bachelor of Laws (Honours) Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C09119",
+    "title": "Bachelor of Computing Science (Honours)"
+   },
+   {
+    "code": "C09120",
+    "title": "Bachelor of Economics Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09121",
+    "title": "Bachelor of Forensic Science Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C09122",
+    "title": "Bachelor of Creative Intelligence and Innovation (Honours)"
+   },
+   {
+    "code": "C09129",
+    "title": "Bachelor of Mathematical Sciences (Honours)"
+   },
+   {
+    "code": "C09130",
+    "title": "Bachelor of Creative Production (Honours)"
+   },
+   {
+    "code": "C09131",
+    "title": "Bachelor of Design (Honours)"
+   },
+   {
+    "code": "C09133",
+    "title": "Bachelor of Business Bachelor of International Studies (Honours)"
+   },
+   {
+    "code": "C09147",
+    "title": "Bachelor of Engineering (Honours) Bachelor of International Studies (Honours)"
+   },
+   {
+    "code": "C09148",
+    "title": "Bachelor of Engineering (Honours) Bachelor of International Studies (Honours) Diploma in Professional Engineering Practice"
+   },
+   {
+    "code": "C09149",
+    "title": "Bachelor of Forensic Science Bachelor of International Studies (Honours)"
+   },
+   {
+    "code": "C09153",
+    "title": "Bachelor of Management Bachelor of International Studies (Honours)"
+   },
+   {
+    "code": "C09155",
+    "title": "Bachelor of Mathematical Sciences Bachelor of International Studies (Honours)"
+   },
+   {
+    "code": "C09156",
+    "title": "Bachelor of Medical Science Bachelor of International Studies (Honours)"
+   },
+   {
+    "code": "C09160",
+    "title": "Bachelor of Science Bachelor of International Studies (Honours)"
+   },
+   {
+    "code": "C09162",
+    "title": "Bachelor of Information Technology Bachelor of International Studies (Honours)"
+   },
+   {
+    "code": "C09166",
+    "title": "Bachelor of Cybersecurity Bachelor of International Studies (Honours)"
+   },
+   {
+    "code": "C09167",
+    "title": "Bachelor of Artificial Intelligence Bachelor of International Studies (Honours)"
+   },
+   {
+    "code": "C09168",
+    "title": "Bachelor of Science (Honours)"
+   },
+   {
+    "code": "C09169",
+    "title": "Bachelor of Psychology (Honours)"
+   },
+   {
+    "code": "C09170",
+    "title": "Bachelor of Psychological Science (Honours)"
+   },
+   {
+    "code": "C09171",
+    "title": "Bachelor of Engineering (Honours) Bachelor of Sustainability and Environment"
+   },
+   {
+    "code": "C10004",
+    "title": "Bachelor of Design in Architecture"
    },
    {
     "code": "C10026",
     "title": "Bachelor of Business"
    },
    {
+    "code": "C10066",
+    "title": "Bachelor of Engineering Science"
+   },
+   {
+    "code": "C10122",
+    "title": "Bachelor of Nursing"
+   },
+   {
+    "code": "C10124",
+    "title": "Bachelor of Laws"
+   },
+   {
+    "code": "C10125",
+    "title": "Bachelor of Business Bachelor of Laws"
+   },
+   {
+    "code": "C10126",
+    "title": "Bachelor of Science Bachelor of Laws"
+   },
+   {
+    "code": "C10131",
+    "title": "Bachelor of Medical Science Bachelor of Laws"
+   },
+   {
+    "code": "C10143",
+    "title": "Bachelor of Information Technology (Co-op)"
+   },
+   {
+    "code": "C10148",
+    "title": "Bachelor of Information Technology"
+   },
+   {
+    "code": "C10162",
+    "title": "Bachelor of Science Bachelor of Business"
+   },
+   {
+    "code": "C10163",
+    "title": "Bachelor of Medical Science Bachelor of Business"
+   },
+   {
+    "code": "C10169",
+    "title": "Bachelor of Molecular Biotechnology Bachelor of Business"
+   },
+   {
+    "code": "C10172",
+    "title": "Bachelor of Molecular Biotechnology"
+   },
+   {
+    "code": "C10184",
+    "title": "Bachelor of Medical Science"
+   },
+   {
+    "code": "C10214",
+    "title": "Bachelor of Construction Project Management"
+   },
+   {
     "code": "C10219",
     "title": "Bachelor of Information Technology Bachelor of Business"
+   },
+   {
+    "code": "C10223",
+    "title": "Bachelor of Environmental Biology"
+   },
+   {
+    "code": "C10225",
+    "title": "Bachelor of Midwifery"
+   },
+   {
+    "code": "C10226",
+    "title": "Bachelor of Business (Offshore)"
+   },
+   {
+    "code": "C10228",
+    "title": "Bachelor of Marine Biology and Climate Change"
+   },
+   {
+    "code": "C10229",
+    "title": "Bachelor of Games Development"
+   },
+   {
+    "code": "C10235",
+    "title": "Bachelor of Accounting"
+   },
+   {
+    "code": "C10242",
+    "title": "Bachelor of Science"
+   },
+   {
+    "code": "C10245",
+    "title": "Bachelor of Information Technology Bachelor of Laws"
+   },
+   {
+    "code": "C10271",
+    "title": "Bachelor of Design in Interior Architecture"
+   },
+   {
+    "code": "C10276",
+    "title": "Bachelor of Creative Production in Music and Sound Design"
+   },
+   {
+    "code": "C10278",
+    "title": "Bachelor of Information Systems Bachelor of Business"
+   },
+   {
+    "code": "C10300",
+    "title": "Bachelor of Sport and Exercise Science"
+   },
+   {
+    "code": "C10301",
+    "title": "Bachelor of Sport and Exercise Management"
+   },
+   {
+    "code": "C10304",
+    "title": "Bachelor of Design in Product Design"
+   },
+   {
+    "code": "C10306",
+    "title": "Bachelor of Design in Fashion and Textiles"
+   },
+   {
+    "code": "C10308",
+    "title": "Bachelor of Design in Visual Communication"
+   },
+   {
+    "code": "C10310",
+    "title": "Bachelor of Property Economics"
+   },
+   {
+    "code": "C10321",
+    "title": "Bachelor of Design in Fashion and Textiles Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10322",
+    "title": "Bachelor of Design in Interior Architecture Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10323",
+    "title": "Bachelor of Design in Product Design Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10324",
+    "title": "Bachelor of Design in Visual Communication Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10325",
+    "title": "Bachelor of Design in Architecture Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10326",
+    "title": "Bachelor of Business Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10327",
+    "title": "Bachelor of Information Technology Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10328",
+    "title": "Bachelor of Sport and Exercise Science Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10329",
+    "title": "Bachelor of Midwifery Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10330",
+    "title": "Bachelor of Science Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10338",
+    "title": "Bachelor of Laws Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10342",
+    "title": "Bachelor of Management"
+   },
+   {
+    "code": "C10345",
+    "title": "Bachelor of Information Technology Diploma in Industry Practice"
+   },
+   {
+    "code": "C10347",
+    "title": "Bachelor of Advanced Science"
+   },
+   {
+    "code": "C10348",
+    "title": "Bachelor of Economics"
+   },
+   {
+    "code": "C10351",
+    "title": "Bachelor of Nursing Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10352",
+    "title": "Bachelor of Advanced Science Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10355",
+    "title": "Bachelor of Management Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10359",
+    "title": "Bachelor of Communication in Digital and Social Media Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10361",
+    "title": "Bachelor of Communication in Journalism"
+   },
+   {
+    "code": "C10362",
+    "title": "Bachelor of Creative Production in Media Arts"
+   },
+   {
+    "code": "C10363",
+    "title": "Bachelor of Communication in Public Relations and Advertising"
+   },
+   {
+    "code": "C10364",
+    "title": "Bachelor of Communication in Social and Political Sciences"
+   },
+   {
+    "code": "C10369",
+    "title": "Bachelor of Communication in Creative Writing"
+   },
+   {
+    "code": "C10371",
+    "title": "Bachelor of Communication in Digital and Social Media"
+   },
+   {
+    "code": "C10373",
+    "title": "Bachelor of Creative Production in Media Arts Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10374",
+    "title": "Bachelor of Communication in Public Relations and Advertising Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10375",
+    "title": "Bachelor of Communication in Social and Political Sciences Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10376",
+    "title": "Bachelor of Communication in Journalism Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10377",
+    "title": "Bachelor of Communication in Creative Writing Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10378",
+    "title": "Bachelor of Communication in Creative Writing Bachelor of Laws"
+   },
+   {
+    "code": "C10379",
+    "title": "Bachelor of Communication in Digital and Social Media Bachelor of Laws"
+   },
+   {
+    "code": "C10380",
+    "title": "Bachelor of Communication in Journalism Bachelor of Laws"
+   },
+   {
+    "code": "C10381",
+    "title": "Bachelor of Creative Production in Media Arts Bachelor of Laws"
+   },
+   {
+    "code": "C10382",
+    "title": "Bachelor of Communication in Public Relations and Advertising Bachelor of Laws"
+   },
+   {
+    "code": "C10383",
+    "title": "Bachelor of Communication in Social and Political Sciences Bachelor of Laws"
+   },
+   {
+    "code": "C10386",
+    "title": "Bachelor of Economics Bachelor of Laws"
+   },
+   {
+    "code": "C10387",
+    "title": "Bachelor of Forensic Science"
+   },
+   {
+    "code": "C10389",
+    "title": "Bachelor of Forensic Science Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10391",
+    "title": "Bachelor of Forensic Science Bachelor of Laws"
+   },
+   {
+    "code": "C10395",
+    "title": "Bachelor of Information Systems"
+   },
+   {
+    "code": "C10399",
+    "title": "Bachelor of Science Bachelor of Sustainability and Environment"
+   },
+   {
+    "code": "C10404",
+    "title": "Bachelor of Science Master of Teaching in Secondary Education"
+   },
+   {
+    "code": "C10405",
+    "title": "Bachelor of Communication in Creative Writing Master of Teaching in Secondary Education"
+   },
+   {
+    "code": "C10411",
+    "title": "Bachelor of Business Bachelor of Sustainability and Environment"
+   },
+   {
+    "code": "C10412",
+    "title": "Bachelor of Management Bachelor of Sustainability and Environment"
+   },
+   {
+    "code": "C10413",
+    "title": "Bachelor of Design in Architecture Master of Architecture"
+   },
+   {
+    "code": "C10445",
+    "title": "Bachelor of Economics Bachelor of Sustainability and Environment"
+   },
+   {
+    "code": "C10446",
+    "title": "Bachelor of Criminology"
+   },
+   {
+    "code": "C10448",
+    "title": "Bachelor of Criminology Bachelor of Forensic Science"
+   },
+   {
+    "code": "C10449",
+    "title": "Bachelor of Business Master of Teaching in Secondary Education"
+   },
+   {
+    "code": "C10450",
+    "title": "Bachelor of Economics Master of Teaching in Secondary Education"
+   },
+   {
+    "code": "C10451",
+    "title": "Bachelor of Communication in Media Business"
+   },
+   {
+    "code": "C10454",
+    "title": "Bachelor of Communication in Media Business Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10455",
+    "title": "Bachelor of Communication in Media Business Bachelor of Laws"
+   },
+   {
+    "code": "C10456",
+    "title": "Bachelor of Communication in Media Business Bachelor of Laws (Honours)"
+   },
+   {
+    "code": "C10457",
+    "title": "Bachelor of Mathematical Sciences"
+   },
+   {
+    "code": "C10460",
+    "title": "Bachelor of Creative Production in Animation"
+   },
+   {
+    "code": "C10461",
+    "title": "Bachelor of Creative Production in Animation Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10465",
+    "title": "Bachelor of Creative Production in Music and Sound Design Bachelor of Creative Intelligence and Innovation"
+   },
+   {
+    "code": "C10471",
+    "title": "Bachelor of Cybersecurity"
+   },
+   {
+    "code": "C10472",
+    "title": "Bachelor of Criminology Bachelor of Cybersecurity"
+   },
+   {
+    "code": "C10474",
+    "title": "Bachelor of Artificial Intelligence"
+   },
+   {
+    "code": "C10476",
+    "title": "Bachelor of Computing Science"
+   },
+   {
+    "code": "C10477",
+    "title": "Bachelor of Psychology"
+   },
+   {
+    "code": "C10478",
+    "title": "Bachelor of Psychology Bachelor of Criminology"
+   },
+   {
+    "code": "C10480",
+    "title": "Bachelor of Education Futures Master of Teaching in Primary Education"
+   },
+   {
+    "code": "C10481",
+    "title": "Bachelor of Medical Science (Laboratory Medicine Professional)"
+   },
+   {
+    "code": "C10482",
+    "title": "Bachelor of Food Science and Technology"
+   },
+   {
+    "code": "C10483",
+    "title": "Bachelor of Food Science and Technology Bachelor of Business"
+   },
+   {
+    "code": "C10484",
+    "title": "Bachelor of Information Technology Bachelor of Sustainability and Environment"
+   },
+   {
+    "code": "C10485",
+    "title": "Bachelor of Information Systems Bachelor of Sustainability and Environment"
+   },
+   {
+    "code": "C10486",
+    "title": "Bachelor of Fashion Business"
+   },
+   {
+    "code": "C10487",
+    "title": "Bachelor of Artificial Intelligence (Offshore)"
+   },
+   {
+    "code": "C10488",
+    "title": "Bachelor of Information Technology (Offshore)"
+   },
+   {
+    "code": "C11005",
+    "title": "Graduate Certificate in Project Management"
+   },
+   {
+    "code": "C11008",
+    "title": "Graduate Certificate in Business Administration"
+   },
+   {
+    "code": "C11021",
+    "title": "Graduate Certificate in Management"
+   },
+   {
+    "code": "C11024",
+    "title": "Graduate Certificate in Social Impact and Not-for-Profit Management"
+   },
+   {
+    "code": "C11027",
+    "title": "Graduate Certificate in Finance"
+   },
+   {
+    "code": "C11037",
+    "title": "Graduate Certificate in Sport Management"
+   },
+   {
+    "code": "C11038",
+    "title": "Graduate Certificate in Event Management"
+   },
+   {
+    "code": "C11053",
+    "title": "Graduate Certificate in Local Government"
+   },
+   {
+    "code": "C11115",
+    "title": "Graduate Certificate in Diabetes Education and Management"
+   },
+   {
+    "code": "C11130",
+    "title": "Graduate Certificate in Trade Mark Law and Practice"
+   },
+   {
+    "code": "C11142",
+    "title": "Graduate Certificate in Information Technology"
+   },
+   {
+    "code": "C11191",
+    "title": "Graduate Certificate in Artificial Intelligence (Online)"
+   },
+   {
+    "code": "C11198",
+    "title": "Graduate Certificate in Human Resource Management"
+   },
+   {
+    "code": "C11199",
+    "title": "Graduate Certificate in Strategic Supply Chain Management"
+   },
+   {
+    "code": "C11206",
+    "title": "Graduate Certificate in Professional Accounting"
+   },
+   {
+    "code": "C11211",
+    "title": "Graduate Certificate in Australian Law"
+   },
+   {
+    "code": "C11216",
+    "title": "Graduate Certificate in Science"
+   },
+   {
+    "code": "C11222",
+    "title": "Graduate Certificate in Learning Design and Technology"
+   },
+   {
+    "code": "C11229",
+    "title": "Graduate Certificate in Intellectual Property"
+   },
+   {
+    "code": "C11230",
+    "title": "Graduate Certificate in Pharmaceutical Sciences"
+   },
+   {
+    "code": "C11232",
+    "title": "Graduate Certificate in Professional Legal Practice"
+   },
+   {
+    "code": "C11236",
+    "title": "Graduate Certificate in Engineering"
+   },
+   {
+    "code": "C11238",
+    "title": "Graduate Certificate in Engineering Studies"
+   },
+   {
+    "code": "C11239",
+    "title": "Graduate Certificate in Engineering Management"
+   },
+   {
+    "code": "C11247",
+    "title": "Graduate Certificate in Information Technology Studies"
+   },
+   {
+    "code": "C11249",
+    "title": "Graduate Certificate in Good Manufacturing Practice"
+   },
+   {
+    "code": "C11254",
+    "title": "Graduate Certificate in TESOL"
+   },
+   {
+    "code": "C11256",
+    "title": "Graduate Certificate in Business Data Analytics (Offshore)"
+   },
+   {
+    "code": "C11260",
+    "title": "Graduate Certificate in Applied Human Studies"
+   },
+   {
+    "code": "C11264",
+    "title": "Graduate Certificate in Legal Studies"
+   },
+   {
+    "code": "C11265",
+    "title": "Graduate Certificate in Laws"
+   },
+   {
+    "code": "C11266",
+    "title": "Graduate Certificate in Engineering Management"
+   },
+   {
+    "code": "C11267",
+    "title": "Graduate Certificate in High Performance Sport"
+   },
+   {
+    "code": "C11268",
+    "title": "Graduate Certificate in Palliative Care"
+   },
+   {
+    "code": "C11270",
+    "title": "Graduate Certificate in Planning"
+   },
+   {
+    "code": "C11271",
+    "title": "Graduate Certificate in Property Development"
+   },
+   {
+    "code": "C11272",
+    "title": "Graduate Certificate in Interaction Design"
+   },
+   {
+    "code": "C11274",
+    "title": "Graduate Certificate in Data Science and Innovation"
+   },
+   {
+    "code": "C11276",
+    "title": "Graduate Certificate in Construction Management"
+   },
+   {
+    "code": "C11277",
+    "title": "Graduate Certificate in Genetic Counselling"
+   },
+   {
+    "code": "C11280",
+    "title": "Graduate Certificate in Business Analytics"
+   },
+   {
+    "code": "C11282",
+    "title": "Graduate Certificate in Marketing"
+   },
+   {
+    "code": "C11283",
+    "title": "Graduate Certificate in Speech and Language Sciences"
+   },
+   {
+    "code": "C11292",
+    "title": "Graduate Certificate in Vision Science"
+   },
+   {
+    "code": "C11302",
+    "title": "Graduate Certificate in Designated Registered Nurse Prescribing"
+   },
+   {
+    "code": "C11303",
+    "title": "Graduate Certificate in Advanced Nursing"
+   },
+   {
+    "code": "C11304",
+    "title": "Graduate Certificate in Health Services Management"
+   },
+   {
+    "code": "C11306",
+    "title": "Graduate Certificate in Digital Marketing"
+   },
+   {
+    "code": "C11308",
+    "title": "Graduate Certificate in Quantitative Finance"
+   },
+   {
+    "code": "C11326",
+    "title": "Graduate Certificate in Animation and Visualisation"
+   },
+   {
+    "code": "C11327",
+    "title": "Graduate Certificate in Leadership and Strategy"
+   },
+   {
+    "code": "C11328",
+    "title": "Graduate Certificate in Public Health"
+   },
+   {
+    "code": "C11331",
+    "title": "Graduate Certificate in Critical Care"
+   },
+   {
+    "code": "C11334",
+    "title": "Graduate Certificate in Finance (Offshore)"
+   },
+   {
+    "code": "C11336",
+    "title": "Graduate Certificate in Education (Learning and Leadership)"
+   },
+   {
+    "code": "C11337",
+    "title": "Graduate Certificate in Organisational and Workplace Learning"
+   },
+   {
+    "code": "C11339",
+    "title": "Graduate Certificate in Artificial Intelligence Management (Online)"
+   },
+   {
+    "code": "C11340",
+    "title": "Graduate Certificate in Cybersecurity Management (Online)"
+   },
+   {
+    "code": "C11341",
+    "title": "Graduate Certificate in Technology Management (Online)"
+   },
+   {
+    "code": "C11343",
+    "title": "Graduate Certificate in Urban Planning and Design (Online)"
+   },
+   {
+    "code": "C11346",
+    "title": "Graduate Certificate in Architecture"
+   },
+   {
+    "code": "C11350",
+    "title": "Graduate Certificate in Data Visualisation and Storytelling"
+   },
+   {
+    "code": "C11351",
+    "title": "Graduate Certificate in Nursing Education"
+   },
+   {
+    "code": "C11352",
+    "title": "Graduate Certificate in Psychology"
+   },
+   {
+    "code": "C11353",
+    "title": "Graduate Certificate in Business Administration (Online)"
+   },
+   {
+    "code": "C11356",
+    "title": "Graduate Certificate in Property Development (Online)"
+   },
+   {
+    "code": "C11357",
+    "title": "Graduate Certificate in Acute Care Nursing"
+   },
+   {
+    "code": "C11358",
+    "title": "Graduate Certificate in Child and Family Health"
+   },
+   {
+    "code": "C11362",
+    "title": "Graduate Certificate in Women's and Children's Health"
+   },
+   {
+    "code": "C11371",
+    "title": "Graduate Certificate in Writing, Editing and Publishing"
+   },
+   {
+    "code": "C11372",
+    "title": "Graduate Certificate in Strategic Communication (Online)"
+   },
+   {
+    "code": "C11373",
+    "title": "Graduate Certificate in Corporate Communication (Online)"
+   },
+   {
+    "code": "C11374",
+    "title": "Graduate Certificate in International Relations"
+   },
+   {
+    "code": "C11376",
+    "title": "Graduate Certificate in Applied Artificial Intelligence for Finance"
+   },
+   {
+    "code": "C11378",
+    "title": "Graduate Certificate in Screen Arts and Production: Documentary"
+   },
+   {
+    "code": "C11379",
+    "title": "Graduate Certificate in Screen Arts and Production: Drama"
+   },
+   {
+    "code": "C11383",
+    "title": "Graduate Certificate in Higher Education Teaching and Learning"
+   },
+   {
+    "code": "C11384",
+    "title": "Graduate Certificate in Technology Innovation (Online)"
+   },
+   {
+    "code": "C11385",
+    "title": "Graduate Certificate in Business Intelligence and AI"
+   },
+   {
+    "code": "C11386",
+    "title": "Graduate Certificate in Pharmacist Prescribing"
+   },
+   {
+    "code": "C20056",
+    "title": "Diploma in Industry Practice"
+   },
+   {
+    "code": "C20060",
+    "title": "Diploma in Innovation"
+   },
+   {
+    "code": "C20061",
+    "title": "Diploma in Fashion and Sustainability"
+   },
+   {
+    "code": "C22033",
+    "title": "Undergraduate Certificate in Science"
+   },
+   {
+    "code": "C22035",
+    "title": "Undergraduate Certificate in Engineering"
+   },
+   {
+    "code": "C22036",
+    "title": "Undergraduate Certificate in Computing"
    }
   ]
  }

@@ -57,16 +57,15 @@ export function linkQuality(layout: Layout, step = 4): LinkQuality {
   };
   const angles: number[] = [];
   const together = new Set<string>();
-  const seen = new Set<string>();
+  // Each segment sits in exactly one grid cell and the nine cells around it are distinct, so every
+  // pair (i < j) is visited once: no record of visited pairs is needed (at 444 degrees there are
+  // more pairs than a Set can hold).
   for (let i = 0; i < segs.length; i++) {
     for (const j of neighbours(i)) {
       if (j <= i) continue;
       const A = segs[i];
       const B = segs[j];
       if (A.e === B.e) continue;
-      const key = `${i},${j}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
       const ea = layout.edges[A.e];
       const eb = layout.edges[B.e];
       // Lines meeting at the same subject touch there by design, like lines at a station.

@@ -5,28 +5,128 @@
   "source": "https://www.uts.edu.au/for-students/current-students/managing-your-course/graduation/academic-dress-and-history/academic-dress-photo-gallery",
   "notes": "UTS publishes no faculty brand colours (the brand is UTS blue and red). Its academic dress gives each faculty a hood colour. Six are named in the gallery's image descriptions; four are shown only in photos. Every hex is the median colour of the hood fabric in the official Bachelor hood photo on the source page, so all are approximations of the fabric.",
   "colours": {
-    "it": { "name": "Information Technology", "officialName": null, "hex": "#269fdb", "hexFrom": "sampled", "photo": "/sites/default/files/2023-01/Bachelor-IT.jpg" },
-    "engineering": { "name": "Engineering", "officialName": "scarlet", "hex": "#f7373c", "hexFrom": "sampled", "photo": "/sites/default/files/media/gallery/Bachelor-Engineering.jpg" },
-    "business": { "name": "Business", "officialName": "eau de nil grey", "hex": "#bedbe0", "hexFrom": "sampled", "photo": "/sites/default/files/media/gallery/Bachelor-Business.jpg" },
-    "law": { "name": "Law", "officialName": null, "hex": "#6561c3", "hexFrom": "sampled", "photo": "/sites/default/files/2023-01/Bachelor-Law.jpg" },
-    "science": { "name": "Science", "officialName": null, "hex": "#edd96c", "hexFrom": "sampled", "photo": "/sites/default/files/2023-01/Bachelor-Science.jpg" },
-    "health": { "name": "Health", "officialName": "fuchsia", "hex": "#dd56bb", "hexFrom": "sampled", "photo": "/sites/default/files/media/gallery/Bachelor-Health.jpg" },
-    "communication": { "name": "Communication", "officialName": "uluru brown", "hex": "#dc5a2f", "hexFrom": "sampled", "photo": "/sites/default/files/media/gallery/Bachelor_Communication_0.jpg" },
-    "education": { "name": "Education", "officialName": "jade green", "hex": "#56d0d1", "hexFrom": "sampled", "photo": "/sites/default/files/media/gallery/Bachelor-Education.jpg" },
-    "dab": { "name": "Design, Architecture and Building", "officialName": "chartreuse", "hex": "#e7db8a", "hexFrom": "sampled", "photo": "/sites/default/files/media/gallery/Bachelor-DAB.jpg" },
-    "transdisciplinary": { "name": "Transdisciplinary Innovation", "officialName": null, "hex": "#c57858", "hexFrom": "sampled", "photo": "/sites/default/files/2023-01/Transdisciplinary-Bachelor%20combined%20degree_0.JPG" }
+    "it": {
+      "name": "Information Technology",
+      "officialName": null,
+      "hex": "#269fdb",
+      "hexFrom": "sampled",
+      "photo": "/sites/default/files/2023-01/Bachelor-IT.jpg"
+    },
+    "engineering": {
+      "name": "Engineering",
+      "officialName": "scarlet",
+      "hex": "#f7373c",
+      "hexFrom": "sampled",
+      "photo": "/sites/default/files/media/gallery/Bachelor-Engineering.jpg"
+    },
+    "business": {
+      "name": "Business",
+      "officialName": "eau de nil grey",
+      "hex": "#bedbe0",
+      "hexFrom": "sampled",
+      "photo": "/sites/default/files/media/gallery/Bachelor-Business.jpg"
+    },
+    "law": {
+      "name": "Law",
+      "officialName": null,
+      "hex": "#6561c3",
+      "hexFrom": "sampled",
+      "photo": "/sites/default/files/2023-01/Bachelor-Law.jpg"
+    },
+    "science": {
+      "name": "Science",
+      "officialName": null,
+      "hex": "#edd96c",
+      "hexFrom": "sampled",
+      "photo": "/sites/default/files/2023-01/Bachelor-Science.jpg"
+    },
+    "health": {
+      "name": "Health",
+      "officialName": "fuchsia",
+      "hex": "#dd56bb",
+      "hexFrom": "sampled",
+      "photo": "/sites/default/files/media/gallery/Bachelor-Health.jpg"
+    },
+    "communication": {
+      "name": "Communication",
+      "officialName": "uluru brown",
+      "hex": "#dc5a2f",
+      "hexFrom": "sampled",
+      "photo": "/sites/default/files/media/gallery/Bachelor_Communication_0.jpg"
+    },
+    "education": {
+      "name": "Education",
+      "officialName": "jade green",
+      "hex": "#56d0d1",
+      "hexFrom": "sampled",
+      "photo": "/sites/default/files/media/gallery/Bachelor-Education.jpg"
+    },
+    "dab": {
+      "name": "Design, Architecture and Building",
+      "officialName": "chartreuse",
+      "hex": "#e7db8a",
+      "hexFrom": "sampled",
+      "photo": "/sites/default/files/media/gallery/Bachelor-DAB.jpg"
+    },
+    "transdisciplinary": {
+      "name": "Transdisciplinary Innovation",
+      "officialName": null,
+      "hex": "#c57858",
+      "hexFrom": "sampled",
+      "photo": "/sites/default/files/2023-01/Transdisciplinary-Bachelor%20combined%20degree_0.JPG"
+    }
   },
   "rules": [
-    { "faculty": "Engineering and Information Technology", "title": "Engineering", "colour": "engineering" },
-    { "faculty": "Engineering and Information Technology", "colour": "it" },
-    { "faculty": "Business", "colour": "business" },
-    { "faculty": "Law", "colour": "law" },
-    { "faculty": "Health", "colour": "health" },
-    { "faculty": "Science", "colour": "science" },
-    { "faculty": "Transdisciplinary", "colour": "transdisciplinary" },
-    { "faculty": "Design|Arts and Social Sciences|Communication", "title": "Communication|Media|Journalism|Writing|Public Relations", "colour": "communication" },
-    { "faculty": "Design|Arts and Social Sciences|Education", "title": "Education|Teaching", "colour": "education" },
-    { "faculty": "Design|Architecture|Building", "colour": "dab" }
+    {
+      "faculty": "^Engineering and Information Technology$",
+      "title": "Engineering",
+      "colour": "engineering"
+    },
+    {
+      "faculty": "^Engineering and Information Technology$",
+      "colour": "it"
+    },
+    {
+      "faculty": "^Business$",
+      "colour": "business"
+    },
+    {
+      "faculty": "^Law$",
+      "colour": "law"
+    },
+    {
+      "faculty": "^(Graduate School of )?Health$",
+      "colour": "health"
+    },
+    {
+      "faculty": "^Science$",
+      "colour": "science"
+    },
+    {
+      "faculty": "^(TD School|Transdisciplinary Innovation)$",
+      "colour": "transdisciplinary"
+    },
+    {
+      "faculty": "^(Arts and Social Sciences|Design)$",
+      "title": "Education|Teaching",
+      "colour": "education"
+    },
+    {
+      "faculty": "^(Arts and Social Sciences|Design)$",
+      "title": "Communication|Media|Journalism|Writing|Public Relations",
+      "colour": "communication"
+    },
+    {
+      "faculty": "^Arts and Social Sciences$",
+      "colour": "communication"
+    },
+    {
+      "faculty": "^(Design, Architecture and Building|Design|Architecture and Building)$",
+      "colour": "dab"
+    }
   ],
-  "rulesNote": "Rules are tried in order: the first whose faculty pattern matches the handbook's faculty (and whose title pattern, if any, matches that part of the degree's title) gives the colour. Only the Engineering and IT and Business rules have been checked against degrees on the map; the others match UTS faculty names as the gallery groups them and are unverified against handbook data."
+  "rulesNote": "Rules are tried in order, patterns anchored to the whole faculty name: the first whose faculty pattern matches the handbook's faculty (and whose title pattern, if any, matches that part of the degree's title) gives the colour. Checked against all 444 courses of the 2027 handbook (26 Sep 2026). Assumed, approved 26 Sep 2026: Arts and Social Sciences degrees take Communication's colour, or Education's when the title says Education; TD School takes Transdisciplinary; Graduate School of Health takes Health.",
+  "uncoloured": {
+    "Vice-Chancellor": "Research degrees (Doctor of Philosophy, research masters) owned by the Vice-Chancellor's office rather than a faculty. UTS PhD dress is the same red gown for every faculty, and red means a clash on the map, so they take the neutral colour."
+  }
 }

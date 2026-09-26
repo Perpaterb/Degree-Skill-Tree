@@ -23,6 +23,8 @@ US-022 and US-027 changed to match. Later: US-037 and US-038 added (majors and s
 no longer fit are crossed out; a chosen one that cannot count is shown as such); US-021, US-026 and
 US-028 changed to match. Later: US-039 to US-041 added (degrees coloured by faculty, from UTS
 academic dress; double degrees in both colours; a standard faculty-colour lookup for any university).
+26 Sep 2026: US-042 and US-043 added (faculty neighbourhoods; the whole 2027 handbook on one map,
+built on the `big-map` branch as an experiment).
 
 ---
 
@@ -266,6 +268,21 @@ As the project owner, I want faculty colours found the same way for every univer
 - [x] `docs/FacultyColours.md` sets the procedure, in order: (1) official faculty brand colours if the university publishes them; (2) academic dress hood colours; (3) a fallback palette. Each colour records its source URL, date, official name, hex, and whether the hex was published or sampled from a photo
 - [x] `data/faculty-colours/uts.json` holds UTS's ten faculty colours (six named officially, four from photos only; all hex values sampled from the official photos, 25 Sep 2026) and the rules matching a handbook faculty (and, for Engineering and IT, the degree title) to a colour
 - [x] The data build attaches the colour to each degree (to each part of a double degree); a unit test fails if a degree on the map has no faculty colour
+
+### US-042 Faculty neighbourhoods
+As a student, I want degrees from the same faculty near each other, and what they share placed between them, so the map reads like a city of faculties.
+- [ ] Degrees are grouped by faculty. The faculty with the most degrees sits in the centre; the others spread out left and right from it in order of size. The map is wider than tall (at least 1.5:1)
+- [ ] Anything offered by more than one degree sits outside all of them (as US-020). It is pulled towards every degree that offers it, so a program shared by two faculties lands between them, and towards the centre in proportion to how many faculties share it (e.g. International Studies)
+- [ ] A double degree sits between its two faculties
+- [ ] Circles never overlap; the same data always gives the same map
+- [ ] Unit tests on real data: the width to height ratio, the biggest faculty's degrees around the centre, and programs shared by two faculties lying horizontally between those faculties
+
+### US-043 The whole handbook on one map (experiment, `big-map` branch)
+As the project owner, I want to see whether every UTS course fits on one map without lagging, as an exercise in large data visualisation.
+- [ ] All 444 courses of the 2027 handbook (161 undergraduate, 283 postgraduate), with their 957 areas of study and 3,299 subjects, on one map
+- [ ] Measured and reported against the 5-degree map, not tuned into a pass: map file size, layout build time, first load, pan and zoom frame rate (US-004's 55fps target stays), and how long marking a subject takes
+- [ ] Every faculty has a colour. Assumed, 26 Sep 2026: Arts and Social Sciences degrees take Communication's uluru brown, or Education's jade green when the title says Education; TD School takes Transdisciplinary; Graduate School of Health takes Health; a Graduate Research School part takes the degree's other faculty's colour
+- [ ] The existing E2E suite runs against it; failures caused by the bigger data (counts) are separated from real breakage and reported
 
 ## Admin CMS
 

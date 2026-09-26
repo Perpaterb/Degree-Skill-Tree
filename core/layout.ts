@@ -1,3 +1,4 @@
+import { forceCollide, forceSimulation, forceX, forceY, type SimulationNodeDatum } from 'd3-force';
 import { packEnclose, packSiblings } from 'd3-hierarchy';
 import type { Container, MapDoc, Rule } from './model.js';
 
@@ -539,10 +540,7 @@ export function layoutMap(map: MapDoc): Layout {
     b.sharedBy = [...(offeredBy.get(p) ?? [])].sort();
     tops.push(b);
   }
-  const placed = tops.map((b) => ({ r: b.outer.r + TOP_GAP / 2, box: b, x: 0, y: 0 }));
-  // Degrees first and largest first, so they settle in the middle with shared programs around them.
-  placed.sort((a, b) => Number(b.box.kind === 'degree') - Number(a.box.kind === 'degree') || b.r - a.r || a.box.id.localeCompare(b.box.id));
-  packSiblings(placed);
+  const placed = placeTops(map, tops);
 
   const nodes: Record<string, LayoutNode> = {};
   const circles: LayoutCircle[] = [];
@@ -582,6 +580,147 @@ export function layoutMap(map: MapDoc): Layout {
     maxY: Math.max(...circles.map((c) => c.y + c.r)) + 40,
   };
   return { nodes, circles, edges, bounds };
+}
+
+/** The faculties a degree belongs to: one, or one per part of a double degree. */
+export function facultiesOf(map: MapDoc, degree: string): string[] {
+  const d = map.degrees[degree];
+  const named = [...new Set((d.titleParts ?? []).map((p) => p.faculty).filter(Boolean))];
+  return named.length ? named : [d.faculty || 'Unknown'];
+}
+
+/** Faculties by number of degrees (a double degree counts half to each), most first; ties by name. */
+export function facultyOrder(map: MapDoc): { faculty: string; degrees: number }[] {
+  const count = new Map<string, number>();
+  for (const code of Object.keys(map.degrees)) {
+    const fs = facultiesOf(map, code);
+    for (const f of fs) count.set(f, (count.get(f) ?? 0) + 1 / fs.length);
+  }
+  return [...count].map(([faculty, degrees]) => ({ faculty, degrees })).sort((a, b) => b.degrees - a.degrees || a.faculty.localeCompare(b.faculty));
+}
+
+/**
+ * Faculty neighbourhoods (US-042). Each faculty gets an anchor on a horizontal line: the faculty with
+ * the most degrees in the middle, the others alternately right and left in order of size, spaced by
+ * how much room their degrees need. Degrees are pulled to their faculty's anchor (a double degree to
+ * the midpoint of its two); anything shared by several degrees is pulled to where those degrees are,
+ * and towards the centre the more faculties share it. A strong pull to the horizontal line and a weak
+ * one along it spread the map sideways. Circles (with their titles) never overlap. Deterministic.
+ */
+function placeTops(map: MapDoc, tops: Box[]): (Packed & { box: Box })[] {
+  type Item = SimulationNodeDatum & { box: Box; r: number; tx: number; faculties: string[]; degrees: string[] };
+  const order = facultyOrder(map);
+  // Room a faculty needs along the line: the width of a disc holding its degrees' circles.
+  const room = new Map(order.map((o) => [o.faculty, 0]));
+  for (const b of tops)
+    if (b.kind === 'degree') {
+      const fs = facultiesOf(map, b.id);
+      for (const f of fs) room.set(f, room.get(f)! + (b.outer.r + TOP_GAP / 2) ** 2 / fs.length);
+    }
+  const width = (f: string) => 2 * Math.sqrt(room.get(f)! / 0.6);
+  const anchor = new Map<string, number>();
+  let right = 0;
+  let left = 0;
+  order.forEach(({ faculty }, i) => {
+    const w = width(faculty);
+    if (i === 0) {
+      anchor.set(faculty, 0);
+      right = w / 2;
+      left = -w / 2;
+    } else if (i % 2) {
+      anchor.set(faculty, right + w / 2);
+      right += w;
+    } else {
+      anchor.set(faculty, left - w / 2);
+      left -= w;
+    }
+  });
+  const mean = (xs: number[]) => xs.reduce((t, x) => t + x, 0) / Math.max(1, xs.length);
+
+  const items: Item[] = tops.map((box) => {
+    const degrees = box.kind === 'degree' ? [box.id] : (box.sharedBy ?? []);
+    const faculties = [...new Set(degrees.flatMap((d) => facultiesOf(map, d)))];
+    const tx = mean(degrees.flatMap((d) => facultiesOf(map, d).map((f) => anchor.get(f)!)));
+    return { box, r: box.outer.r + TOP_GAP / 2, tx, faculties, degrees };
+  });
+  // Start on a deterministic spiral around each item's target, so no two start on the same spot.
+  items
+    .sort((a, b) => a.box.id.localeCompare(b.box.id))
+    .forEach((it, i) => {
+      const a = i * 2.39996;
+      const d = 40 * Math.sqrt(i);
+      it.x = it.tx + d * Math.cos(a);
+      it.y = d * Math.sin(a);
+    });
+  const byDegree = new Map(items.filter((it) => it.box.kind === 'degree').map((it) => [it.box.id, it]));
+  const total = order.length;
+
+  // Shared programs: towards the degrees offering them (where they are now), and towards the centre
+  // in proportion to how many faculties share them.
+  const toSharers = (alpha: number) => {
+    for (const it of items) {
+      if (it.box.kind === 'degree' || !it.degrees.length) continue;
+      const at = it.degrees.map((d) => byDegree.get(d)).filter((d): d is Item => !!d);
+      if (!at.length) continue;
+      const k = 0.12 * alpha;
+      it.vx! += (mean(at.map((d) => d.x!)) - it.x!) * k;
+      it.vy! += (mean(at.map((d) => d.y!)) - it.y!) * k;
+      const pull = total > 1 ? (0.08 * alpha * (it.faculties.length - 1)) / (total - 1) : 0;
+      it.vx! -= it.x! * pull;
+      it.vy! -= it.y! * pull;
+    }
+  };
+
+  const sim = forceSimulation<Item>(items)
+    .randomSource(() => 0.5)
+    .force('x', forceX<Item>((d) => d.tx).strength((d) => (d.box.kind === 'degree' ? 0.05 : 0.01)))
+    .force('y', forceY<Item>(0).strength(0.09))
+    .force('shared', toSharers)
+    .force('collide', forceCollide<Item>((d) => d.r).strength(1).iterations(4))
+    .stop();
+  const ticks = Math.ceil(Math.log(sim.alphaMin()) / Math.log(1 - sim.alphaDecay()));
+  for (let i = 0; i < ticks; i++) sim.tick();
+
+  // The simulation leaves small overlaps; push apart until none remain.
+  separate(items);
+  return items.map((it) => ({ box: it.box, r: it.r, x: it.x!, y: it.y! }));
+}
+
+/** Push overlapping discs apart (bigger ones move less) until none overlap. */
+function separate(items: { r: number; x?: number; y?: number }[]) {
+  const cell = 2 * Math.max(...items.map((it) => it.r));
+  for (let pass = 0; pass < 500; pass++) {
+    const grid = new Map<string, number[]>();
+    items.forEach((it, i) => {
+      const key = `${Math.floor(it.x! / cell)},${Math.floor(it.y! / cell)}`;
+      (grid.get(key) ?? grid.set(key, []).get(key)!).push(i);
+    });
+    let moved = false;
+    items.forEach((a, i) => {
+      const gx = Math.floor(a.x! / cell);
+      const gy = Math.floor(a.y! / cell);
+      for (let dx = -1; dx <= 1; dx++)
+        for (let dy = -1; dy <= 1; dy++)
+          for (const j of grid.get(`${gx + dx},${gy + dy}`) ?? []) {
+            if (j <= i) continue;
+            const b = items[j];
+            let ex = b.x! - a.x!;
+            let ey = b.y! - a.y!;
+            let d = Math.hypot(ex, ey);
+            const need = a.r + b.r + 0.5;
+            if (d >= need) continue;
+            if (d < 1e-6) (ex = 1), (ey = 0), (d = 1);
+            const push = need - d;
+            const wa = b.r ** 2 / (a.r ** 2 + b.r ** 2);
+            a.x! -= (ex / d) * push * wa;
+            a.y! -= (ey / d) * push * wa;
+            b.x! += (ex / d) * push * (1 - wa);
+            b.y! += (ey / d) * push * (1 - wa);
+            moved = true;
+          }
+    });
+    if (!moved) return;
+  }
 }
 
 function shift(c: PathCmd, dx: number, dy: number): PathCmd {
