@@ -25,6 +25,7 @@ US-028 changed to match. Later: US-039 to US-041 added (degrees coloured by facu
 academic dress; double degrees in both colours; a standard faculty-colour lookup for any university).
 26 Sep 2026: US-042 and US-043 added (faculty neighbourhoods; the whole 2027 handbook on one map,
 built on the `big-map` branch as an experiment).
+26 Sep 2026: US-044 added (titles never pile up on the zoomed-out map, `big-map` branch).
 
 ---
 
@@ -283,6 +284,18 @@ As the project owner, I want to see whether every UTS course fits on one map wit
 - [ ] Measured and reported against the 5-degree map, not tuned into a pass: map file size, layout build time, first load, pan and zoom frame rate (US-004's 55fps target stays), and how long marking a subject takes *Partial, 26 Sep 2026: the whole-handbook map is measured before and after a renderer rework (see TechFromUserStories US-043); the 5-degree map, file size and layout build time are not yet measured side by side.*
 - [ ] Every faculty has a colour. Assumed, 26 Sep 2026: Arts and Social Sciences degrees take Communication's uluru brown, or Education's jade green when the title says Education; TD School takes Transdisciplinary; Graduate School of Health takes Health; a Graduate Research School part takes the degree's other faculty's colour
 - [ ] The existing E2E suite runs against it; failures caused by the bigger data (counts) are separated from real breakage and reported *Partial: 8 of 59 fail; 4 are counts from the bigger data, 4 not yet explained (see TechFromUserStories US-043).*
+
+### US-044 Titles never pile up (`big-map` branch)
+As a student, I want circle titles to stay readable at every zoom, so the zoomed-out map is not a wall of overlapping text.
+- [x] No two titles on screen overlap; a title's credit points count as part of it
+- [ ] Where two would overlap, the more important one shows: the selected degree, then a glowing circle (hovered, or a search match), then degrees before programs, then the circle that is bigger on screen *Partial: all four are built; E2E covers the selected degree and a hovered circle, not yet degrees before programs or bigger first.*
+- [x] The selected degree's title and any glowing circle's title always show
+- [x] Which titles show is decided across the whole map for each zoom, so panning never makes a title appear or disappear; a hidden title comes back as you zoom in and there is room for it
+- [x] US-004's 55fps target still holds; the far zoom is measured before and after with the existing benchmark *26 Sep 2026: median 59.9fps at every zoom; far zoom 27-28% busy and slowest frame 67 ms, unchanged.*
+- [x] E2E (tagged US-044): at the far zoom no two visible titles' screen boxes overlap; the selected degree's title is visible there; a title hidden at the far zoom is visible after zooming in on it. *Also: panning leaves the shown titles unchanged, and hovering a circle shows its hidden title.*
+
+Not in scope yet (26 Sep 2026): if hiding degree names at the far zoom looks poor, a cloud per faculty
+naming it, covering its degrees and fading out once all its degree names show.
 
 ## Admin CMS
 

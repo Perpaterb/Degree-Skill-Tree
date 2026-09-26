@@ -627,3 +627,25 @@ Stories are in [`UserStories.md`](UserStories.md).
 - Files: `web/src/TreeCanvas.tsx`. Scratch measurement specs (not committed): `e2e/bench.tmp.spec.ts`,
   `e2e/trace.tmp.spec.ts`, `e2e/perf-layers.tmp.spec.ts`, `e2e/perf-zoomed.tmp.spec.ts`,
   `e2e/interact.tmp.spec.ts`.
+
+### US-044 Titles never pile up (`big-map` branch)
+- `declutter` in `web/src/TreeCanvas.tsx` runs after each zoom (from `applyLod`, which also runs at the
+  end of every paint). Every readable title (program titles only above zoom 0.12, as before) is
+  ranked: selected degree, glowing circle, degree, program, then bigger circle first. Titles are
+  placed greedily in that order; one that would overlap an already placed title (with 4 px of air)
+  is hidden, except the selected degree and glowing circles, which always show. Placed boxes sit in a
+  grid of 300-screen-pixel cells, so each check looks at a handful of boxes.
+- Decided for the whole map rather than the screen, so panning never changes which titles show.
+- The title box includes the credit points when they are drawn, and is measured once per zoom
+  (`CircleView.titleBox`), shared with culling.
+- Test hook `__dst.titles()`: every circle's title with whether it is shown, its screen box and its
+  circle's centre.
+- Tests: `e2e/titles.spec.ts` (US-044): no overlaps at the far zoom and the selected degree shown; a
+  hidden title shows after zooming in on it; panning leaves the shown set unchanged; hovering a
+  circle shows its hidden title. Each was seen to fail with the behaviour broken (placing every
+  title; deciding per screen and again on every pan; ignoring hover).
+- Measured (`e2e/bench.tmp.spec.ts`, three runs): far zoom 27-28% busy, slowest frame 67-83 ms;
+  mid 29-31%, 33-67 ms; near 17-18%, 17 ms. Within run-to-run noise of before.
+- E2E: 6 of 61 fail, none newly; US-027 (compulsory block) and US-037 passed this run after failing
+  in the last two.
+- Files: `web/src/TreeCanvas.tsx`, `e2e/titles.spec.ts`, `docs/UserStories.md`.

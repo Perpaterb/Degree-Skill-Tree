@@ -96,8 +96,14 @@ interface CircleView {
   base: number;
   /** What its shape was last drawn for. */
   key?: string;
-  /** Where its title and credit points are drawn at the current zoom, for culling. */
+  /** Where its title and credit points are drawn at the current zoom, for culling and decluttering. */
   titleBox?: Box;
+  /** Close enough to read (program titles hide when zoomed out). */
+  readable?: boolean;
+  /** Credit points are drawn after the title. */
+  cp?: boolean;
+  /** Not covered by a more important title (US-044). */
+  shown?: boolean;
   /** Width of the title's last line at font size, so the credit points can follow it. */
   lastW: number;
   /** Credit points and tick after the title (US-028). */
@@ -215,6 +221,8 @@ declare global {
       } | null;
       subjectLabel(id: string): { visible: boolean; px: number } | null;
       background(): number;
+      /** Every circle's title: whether it is drawn, its box and its circle's centre in screen pixels (US-044). */
+      titles(): { id: string; kind: string; shown: boolean; box: Box; centre: { x: number; y: number } }[];
       layer?(name: string, visible: boolean): void;
     };
   }
@@ -482,6 +490,18 @@ export function TreeCanvas() {
           return { visible: v.label.visible, px: LABEL_WORLD * v.label.scale.y * v.root.scale.y * s.viewport.scale.y };
         },
         background: () => app.renderer.background.color.toNumber(),
+        titles() {
+          const s = scene.current;
+          if (!s) return [];
+          return s.circles
+            .filter((v) => v.titleBox)
+            .map((v) => {
+              const a = s.viewport.toScreen(v.titleBox!.minX, v.titleBox!.minY);
+              const b = s.viewport.toScreen(v.titleBox!.maxX, v.titleBox!.maxY);
+              const centre = s.viewport.toScreen(v.circle.x, v.circle.y);
+              return { id: v.circle.id, kind: v.circle.kind, shown: v.title.visible, box: { minX: a.x, minY: a.y, maxX: b.x, maxY: b.y }, centre: { x: centre.x, y: centre.y } };
+            });
+        },
         // TEMP (US-043 measurement): hide one layer to see what the frame time goes on.
         layer: (name: string, visible: boolean) => {
           const l = { circles: circleLayer, edges: edgeLayer, nodes: nodeLayer, titles: titleLayer }[name];
@@ -631,16 +651,59 @@ function applyLod(s: Scene) {
     const natural = v.circle.label.size * v.base * scale;
     const f = textPx(kind, natural, view) / natural;
     v.title.scale.set(v.base * f);
-    // Program titles only once you are close enough to read them; degree titles always.
-    v.title.visible = kind === 'degree' || scale > 0.12;
+    // Program titles only once you are close enough to read them; which of the rest show is up to declutter.
+    v.readable = kind === 'degree' || scale > 0.12;
     v.progress.scale.set(v.base * f);
     v.progress.position.set(v.circle.label.x + (v.lastW / 2) * v.base * f + v.circle.label.size * 0.3 * v.base * f, v.title.y);
-    v.progress.visible = v.title.visible && view.showCp && v.progress.text !== '';
-    // Measured here, once per zoom, rather than on every camera move.
-    const w = v.title.width / 2 + v.progress.width;
-    v.titleBox = { minX: v.title.x - w, minY: v.title.y - v.title.height, maxX: v.title.x + w, maxY: v.title.y };
+    const cp = view.showCp && v.progress.text !== '';
+    // Measured here, once per zoom, rather than on every camera move. The credit points count as part of the title.
+    v.titleBox = {
+      minX: v.title.x - v.title.width / 2,
+      minY: v.title.y - Math.max(v.title.height, cp ? v.progress.height : 0),
+      maxX: Math.max(v.title.x + v.title.width / 2, cp ? v.progress.x + v.progress.width : -Infinity),
+      maxY: v.title.y,
+    };
+    v.cp = cp;
   }
+  declutter(s);
   cull(s);
+}
+
+/**
+ * Which titles show at this zoom, so none overlap (US-044). Placed greedily in order of importance,
+ * across the whole map rather than just the screen, so panning never changes which titles show.
+ */
+function declutter(s: Scene) {
+  const { plan } = useApp.getState();
+  const glowing = new Set(s.glowing);
+  const scale = s.viewport.scale.x;
+  const rank = (v: CircleView) =>
+    v.circle.id === plan.degree ? 0 : glowing.has(v.circle.id) ? 1 : v.circle.kind === 'degree' ? 2 : 3;
+  const order = s.circles.filter((v) => v.readable).sort((a, b) => rank(a) - rank(b) || b.circle.r - a.circle.r);
+  // A little air between titles, in screen pixels.
+  const gap = 4 / scale;
+  // Placed titles by grid cell; cells a few hundred pixels across keep each check to a handful of boxes.
+  const cell = 300 / scale;
+  const placed = new Map<string, Box[]>();
+  const cells = (b: Box, f: (k: string) => void) => {
+    for (let i = Math.floor(b.minX / cell); i <= Math.floor(b.maxX / cell); i++)
+      for (let j = Math.floor(b.minY / cell); j <= Math.floor(b.maxY / cell); j++) f(`${i},${j}`);
+  };
+  for (const v of s.circles) v.shown = false;
+  for (const v of order) {
+    const b = v.titleBox!;
+    const box = { minX: b.minX - gap, minY: b.minY - gap, maxX: b.maxX + gap, maxY: b.maxY + gap };
+    let free = true;
+    // The selected degree and glowing circles always show, whatever they cover.
+    if (rank(v) > 1) cells(box, (k) => (free &&= !(placed.get(k) ?? []).some((p) => overlaps(p, box))));
+    if (!free) continue;
+    v.shown = true;
+    cells(box, (k) => placed.set(k, [...(placed.get(k) ?? []), box]));
+  }
+  for (const v of s.circles) {
+    v.title.visible = !!v.shown;
+    v.progress.visible = !!(v.shown && v.cp);
+  }
 }
 
 /** A subject's size and label for the zoom (US-029). */
