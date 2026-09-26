@@ -21,7 +21,7 @@ test('US-019: the degrees share one map, and pre-map links still open with their
   await expect(page.getByTestId('progress-total')).toHaveText('6/144cp');
 });
 
-test('US-020: clicking a program circle opens it, and clicking a degree circle selects the degree', async ({ page }) => {
+test('US-020: clicking a program circle opens it, and clicking a degree circle opens its panel to choose it from', async ({ page }) => {
   await openTree(page);
   await goTo(page, 'MAJ03444'); // flies to the circle
   await page.getByRole('button', { name: 'Close' }).click();
@@ -34,8 +34,10 @@ test('US-020: clicking a program circle opens it, and clicking a degree circle s
   await page.getByRole('button', { name: 'Close' }).click();
   await page.getByTestId('degree-picker').selectOption(''); // nothing selected yet
   await clickCircle(page, 'C10476');
-  await expect(page.getByTestId('degree-picker')).toHaveValue('C10476');
   await expect(page.getByTestId('detail-panel').locator('h2')).toHaveText('Bachelor of Computing Science');
+  // Chosen from its panel (US-046).
+  await page.getByTestId('choose-degree').click();
+  await expect(page.getByTestId('degree-picker')).toHaveValue('C10476');
 });
 
 test('US-020: hovering a circle makes it glow', async ({ page }) => {
@@ -102,6 +104,7 @@ test('US-023: with no degree selected, a greyed degree can still be clicked and 
   await goTo(page, 'C10476');
   await page.getByRole('button', { name: 'Close' }).click();
   await clickCircle(page, 'C10476');
+  await page.getByTestId('choose-degree').click();
   await expect(page.getByTestId('degree-picker')).toHaveValue('C10476');
 });
 

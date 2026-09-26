@@ -126,7 +126,7 @@ As a student, I want each degree, major, sub-major and stream drawn as a circle 
 
 ### US-021 Select a degree and work backwards
 As a student, I want to pick the degree I am aiming for and see what it needs.
-- [x] Clicking a degree circle selects it; it stays selected until another degree is selected or the selection is cleared *To change on `degree-pairs`: chosen from the degree's panel instead (US-046).*
+- [x] Clicking a degree circle selects it; it stays selected until another degree is selected or the selection is cleared *Changed 27 Sep 2026 on `degree-pairs`: clicking opens the degree's panel, and it is chosen there (US-046).*
 - [ ] The selected degree's remaining requirements stand out: its subjects I still need are highlighted, and the other degrees' outlines dim (their compatibility shading from US-023 stays visible). *Partial: implemented (gold rings on still-needed compulsory subjects, other degrees dimmed); checked by screenshot only, no automated check.*
 - [x] The selected degree is part of the shareable link and survives a reload
 - [x] Majors and sub-majors are chosen by clicking their circles while their degree is selected (the panel offers Choose only when the selected degree offers the program). *25 Sep 2026: and not while the program is locked out (US-037).*
@@ -315,9 +315,9 @@ separately (`unlockedBy`), which is why those lines still show.
 
 ### US-046 Choose a degree, don't just click it (`degree-pairs` branch)
 As a student, I want to choose a degree deliberately, as I choose a major, rather than by clicking its circle.
-- [ ] Clicking a degree circle opens its panel; a **Choose this degree** button selects it. The top-bar picker still chooses directly, replacing the current choice even when the picked degree is locked
-- [ ] Clearing the degree (the chip or the panel) unchooses it
-- [ ] E2E (tagged US-046): clicking a degree circle opens its panel without choosing it; Choose chooses it; clearing unchooses it
+- [ ] Clicking a degree circle opens its panel; a **Choose this degree** button selects it. The top-bar picker still chooses directly, replacing the current choice even when the picked degree is locked *Partial: built and tested except the locked case, which comes with US-047.*
+- [x] Clearing the degree (the chip or the panel) unchooses it
+- [x] E2E (tagged US-046): clicking a degree circle opens its panel without choosing it; Choose chooses it; clearing unchooses it
 
 ### US-047 Undergraduate degrees that cannot go with your choice are locked (`degree-pairs` branch)
 As a student, I want the degrees I can no longer combine with my choice locked, so the map narrows to what is still possible.

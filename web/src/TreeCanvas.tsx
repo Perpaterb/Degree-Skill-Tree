@@ -435,7 +435,7 @@ export function TreeCanvas() {
         const s = useApp.getState();
         // Empty space outside every circle closes the detail panel; the selected degree stays.
         if (!circle) return s.select(null);
-        if (circle.kind === 'degree') s.selectDegree(circle.id);
+        // A degree is chosen from its panel, not by clicking it (US-046).
         s.select(circle.id);
       });
       viewport.on('pointermove', (e) => {

@@ -676,3 +676,13 @@ Stories are in [`UserStories.md`](UserStories.md).
 - Files: `core/model.ts`, `core/layout.ts`, `core/layout.test.ts`, `scraper/src/normalize.ts`,
   `scraper/src/cli.ts`, `data/locations/uts.json`, `web/src/TreeCanvas.tsx`, `web/src/view.ts`,
   `e2e/offshore.spec.ts`, `e2e/titles.spec.ts`, `web/public/trees/uts-2027.json`.
+
+### US-046 Choose a degree, don't just click it (`degree-pairs` branch)
+- `web/src/TreeCanvas.tsx`: a click on a degree circle only opens its panel (`select`), no longer
+  `selectDegree`. `web/src/Panels.tsx`: the degree panel's button reads "Choose this degree" /
+  "✓ Chosen (clear)" (`data-testid="choose-degree"`). The picker, the chip's clear button and the
+  program panel's "select a degree that offers it" links are unchanged.
+- Tests: `e2e/degreepairs.spec.ts` (US-046: click opens without choosing; Choose; clear from the panel
+  and the chip). Seen to fail with click-to-choose restored. `e2e/multidegree.spec.ts`: the two tests
+  that chose a degree by clicking its circle now click Choose in its panel.
+- Files: `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`, `e2e/degreepairs.spec.ts`, `e2e/multidegree.spec.ts`.

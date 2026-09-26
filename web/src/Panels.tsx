@@ -408,8 +408,8 @@ function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
         <Bar p={root} />
       </div>
       <div className="actions">
-        <button className={isSel ? 'on' : ''} onClick={() => selectDegree(isSel ? null : degree.code)}>
-          {isSel ? '✓ Working towards this (clear)' : 'Work towards this degree'}
+        <button className={isSel ? 'on' : ''} onClick={() => selectDegree(isSel ? null : degree.code)} data-testid="choose-degree">
+          {isSel ? '✓ Chosen (clear)' : 'Choose this degree'}
         </button>
       </div>
       {noMajor ? <p className="muted small">Choose a major: hover "Major" in the outline to see them, then click one of the glowing circles.</p> : null}
