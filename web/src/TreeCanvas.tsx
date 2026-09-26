@@ -1,8 +1,8 @@
-import { Application, CanvasTextMetrics, Circle, Container, Graphics, Text } from 'pixi.js';
+import { Application, BitmapFont, BitmapText, CanvasTextMetrics, Circle, Container, CullerPlugin, extensions, Graphics, Text } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { useEffect, useRef } from 'react';
 import { compulsorySubjects, missingFor, subjectsUnder, unlockedBy } from '../../core/engine';
-import { circleAt, TITLE_LINE, type Layout, type LayoutCircle, type LayoutNode, type PathCmd } from '../../core/layout';
+import { circleAt, SUBJECT_R, TITLE_LINE, type Layout, type LayoutCircle, type LayoutNode, type PathCmd } from '../../core/layout';
 import type { MapDoc } from '../../core/model';
 import { useApp } from './store';
 import { canvas, facultyColour, mix, stateLook } from './theme';
@@ -16,6 +16,21 @@ const POP = { 2: { grow: 1.4, px: 18 }, 1: { grow: 1.25, px: 14 } } as const;
 const RIM_PX = 10;
 /** Subject code labels are drawn at this world size, then sized on screen by the view settings (US-029). */
 const LABEL_WORLD = 13;
+/** Subject codes use one bitmap font (drawn large, so it stays crisp when a subject is enlarged). */
+const SUBJECT_FONT = 'subject-code';
+/**
+ * Below this many pixels across, subjects are drawn as dots in one shape instead of as separate
+ * interactive objects (US-043): 15,682 objects cost the whole frame budget on the whole-handbook map.
+ */
+const DOT_PX = 6;
+// Skip drawing objects marked cullable while they are off screen.
+extensions.add(CullerPlugin);
+BitmapFont.install({
+  name: SUBJECT_FONT,
+  style: { fontFamily: 'system-ui, sans-serif', fontSize: LABEL_WORLD * 3, fontWeight: '600', fill: 0xffffff },
+  chars: [['0', '9'], ['A', 'Z'], ['a', 'z'], '-'],
+  resolution: 1,
+});
 /** A subject label shows only while it is no wider than this many times its disc. */
 const LABEL_FIT = 1.3;
 /** How far titles sit above the gap the layout left under them, in world units (US-028). */
@@ -25,13 +40,15 @@ interface NodeView {
   node: LayoutNode;
   root: Container;
   shape: Graphics;
-  label: Text;
+  label: BitmapText;
   /** The label's width at world size, for deciding whether it fits its disc. */
   labelW: number;
   /** What the last paint drew, for tests. */
   drawn: CopyLook;
   /** 2: a copy of the hovered subject, 1: of the selected one, 0: neither. */
   pop: 0 | 1 | 2;
+  /** What the shape was last drawn for; it is redrawn only when this changes (US-043). */
+  key?: string;
 }
 
 /** How one copy of a subject was drawn. */
@@ -115,6 +132,18 @@ interface Scene {
   ringed: Set<string>;
   /** Ask for one redraw on the next frame. */
   invalidate(): void;
+  /** The separate subject objects, shown when zoomed in. */
+  nodeLayer: Container;
+  /** Every subject as a dot in one shape, shown when zoomed out (US-043). */
+  dots: Graphics;
+  /** Zoomed out far enough that subjects are dots. */
+  far: boolean;
+  /** The dots need redrawing before they are next shown. */
+  dotsStale: boolean;
+  /** Links highlighted over the (faded) base links while a subject is hovered or matched. */
+  edgesLit: Graphics;
+  /** What the base links were last drawn for; rebuilt only when the plan, degree or theme changes. */
+  edgesKey?: unknown[];
 }
 
 declare global {
@@ -146,6 +175,7 @@ declare global {
       } | null;
       subjectLabel(id: string): { visible: boolean; px: number } | null;
       background(): number;
+      layer?(name: string, visible: boolean): void;
     };
   }
 }
@@ -246,27 +276,31 @@ export function TreeCanvas() {
 
       const edges = new Graphics();
       viewport.addChild(edges);
+      const edgesLit = new Graphics();
+      viewport.addChild(edgesLit);
       const nodeLayer = new Container();
       // Copies of the hovered or selected subject are raised above the rest.
       nodeLayer.sortableChildren = true;
       viewport.addChild(nodeLayer);
+      const dots = new Graphics();
+      dots.visible = false;
+      viewport.addChild(dots);
       viewport.addChild(titleLayer);
 
       const nodes = new Map<string, NodeView>();
       for (const node of Object.values(layout.nodes)) {
         const root = new Container();
         root.position.set(node.x, node.y);
+        root.cullable = true;
         root.eventMode = 'static';
         root.cursor = 'pointer';
         // Only the subject's own disc (enlarged with it) counts for the pointer, never its glow or rings,
         // so hover ends as soon as the pointer leaves the circle.
         root.hitArea = new Circle(0, 0, node.r);
         const shape = new Graphics();
-        const label = new Text({
-          text: node.code,
-          style: { fill: canvas.label, fontSize: 13, fontFamily: 'system-ui, sans-serif', fontWeight: '600', align: 'center' },
-          resolution: 3,
-        });
+        // One shared glyph atlas for every subject code, tinted per state: a texture per label cost
+        // gigabytes on the whole-handbook map (US-043).
+        const label = new BitmapText({ text: node.code, style: { fontFamily: SUBJECT_FONT, fontSize: LABEL_WORLD } });
         label.anchor.set(0.5);
         const labelW = label.width;
         root.addChild(shape, label);
@@ -298,7 +332,7 @@ export function TreeCanvas() {
         viewport.cursor = over ? 'pointer' : 'grab';
       });
 
-      scene.current = { app, viewport, edges, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, locked: [], ringed: new Set(), invalidate };
+      scene.current = { app, viewport, edges, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, locked: [], ringed: new Set(), invalidate, nodeLayer, dots, far: false, dotsStale: true, edgesLit };
       // The camera moves on its own during inertia and fly-to animations, so each of these redraws.
       for (const ev of ['moved', 'zoomed', 'moved-end', 'zoomed-end'] as const) viewport.on(ev, invalidate);
       fit(viewport, layout);
@@ -362,6 +396,11 @@ export function TreeCanvas() {
           return { visible: v.label.visible, px: LABEL_WORLD * v.label.scale.y * v.root.scale.y * s.viewport.scale.y };
         },
         background: () => app.renderer.background.color.toNumber(),
+        // TEMP (US-043 measurement): hide one layer to see what the frame time goes on.
+        layer: (name: string, visible: boolean) => {
+          const l = { circles: circleLayer, edges, nodes: nodeLayer, titles: titleLayer }[name];
+          if (l) (l.visible = visible), invalidate();
+        },
         copies: (code) => [...(scene.current?.nodes.values() ?? [])].filter((v) => v.node.code === code).map((v) => v.node.id),
       };
 
@@ -490,7 +529,12 @@ function applyLod(s: Scene) {
   s.invalidate();
   const scale = s.viewport.scale.x;
   const { view } = useApp.getState();
-  for (const v of s.nodes.values()) {
+  // Zoomed out: one shape of dots instead of every subject object (US-043).
+  s.far = SUBJECT_R * 2 * scale < DOT_PX;
+  s.nodeLayer.visible = !s.far;
+  s.dots.visible = s.far;
+  if (s.far && s.dotsStale) drawDots(s);
+  for (const v of s.far ? [] : s.nodes.values()) {
     const grow = v.pop ? Math.max(POP[v.pop].grow, POP[v.pop].px / (v.node.r * scale)) : 1;
     v.root.scale.set(grow);
     v.drawn.scale = grow;
@@ -512,6 +556,13 @@ function applyLod(s: Scene) {
     v.progress.position.set(v.circle.label.x + (v.lastW / 2) * v.base * f + v.circle.label.size * 0.3 * v.base * f, v.title.y);
     v.progress.visible = v.title.visible && view.showCp && v.progress.text !== '';
   }
+}
+
+/** Every subject copy as a dot in its state's colour, in one shape (US-043). */
+function drawDots(s: Scene) {
+  const g = s.dots.clear();
+  for (const v of s.nodes.values()) g.rect(v.node.x - v.node.r, v.node.y - v.node.r, v.node.r * 2, v.node.r * 2).fill({ color: v.drawn.ring, alpha: v.drawn.alpha });
+  s.dotsStale = false;
 }
 
 function tracePath(g: Graphics, path: PathCmd[]) {
@@ -555,7 +606,7 @@ function paint(s: Scene) {
   }
   const matchSet = new Set(matches);
   const dimming = !!(hovered && map.subjects[hovered]) || matchSet.size > 0;
-  const lit = (id: string) =>
+  const litNode = (id: string) =>
     !dimming || id === focus || path.has(id) || unlocks.has(id) || matchSet.has(id) || (hovered && !matchSet.size && completed.has(id));
 
   s.glowing = [];
@@ -635,7 +686,6 @@ function paint(s: Scene) {
   for (const v of s.nodes.values()) {
     const { node, shape, root } = v;
     const code = node.code;
-    const g = shape.clear();
     const state = states.get(code) ?? 'locked';
     const look = stateLook[state];
     // Every copy of a subject the student has marked looks the same, entry copies included.
@@ -643,68 +693,105 @@ function paint(s: Scene) {
     const hollow = node.entry && !marked;
     // Every copy of the hovered (or selected) subject pops out, so it is obvious they are one subject.
     const twin = code === hovered || code === selected;
-    if (twin) {
-      g.circle(0, 0, node.r + 30).fill({ color: canvas.glow, alpha: 0.1 });
-      g.circle(0, 0, node.r + 22).fill({ color: canvas.glow, alpha: 0.16 });
-      g.circle(0, 0, node.r + 15).fill({ color: canvas.glow, alpha: 0.28 });
-    } else if (look.glow && !hollow) g.circle(0, 0, node.r + 7).fill({ color: look.glow, alpha: 0.16 });
-    if (matchSet.has(code) || glowSet.has(code)) {
-      g.circle(0, 0, node.r + 10).stroke({ color: canvas.glow, width: 3, alpha: 0.9 });
-      s.ringed.add(code);
-    }
-    if (path.has(code)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgePath, width: 3 });
-    if (unlocks.has(code)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgeUnlock, width: 3 });
-    if (needed.has(code) && insideSel(node.circle)) g.circle(0, 0, node.r + 5).stroke({ color: canvas.needed, width: 2, alpha: 0.85 });
-    if (wasted.has(code)) g.circle(0, 0, node.r + 8).stroke({ color: canvas.wasted, width: 4 });
-    if (hollow) {
-      // An entry copy: a prerequisite from outside this circle. Hollow, so it reads as a doorway.
-      g.circle(0, 0, node.r - 2).fill({ color: canvas.background, alpha: 0.9 }).stroke({ color: look.ring, width: 2, alpha: 0.8 });
-    } else {
-      g.circle(0, 0, node.r).fill(look.fill).stroke({ color: look.ring, width: look.ringWidth });
-      // A marked entry copy keeps a thin outer line, so it still reads as a doorway.
-      if (node.entry) g.circle(0, 0, node.r + 4).stroke({ color: look.ring, width: 1, alpha: 0.6 });
-    }
-    if (state === 'excluded') {
-      const k = node.r * 0.45;
-      g.moveTo(-k, -k).lineTo(k, k).moveTo(k, -k).lineTo(-k, k).stroke({ color: look.ring, width: 2, alpha: 0.7 });
-    }
-    if (twin) {
-      g.circle(0, 0, node.r + 11).stroke({ color: canvas.glow, width: 4, alpha: 1 });
-      if (code === selected) g.circle(0, 0, node.r + 17).stroke({ color: canvas.selectRing, width: 2, alpha: 0.9 });
-      s.highlighted.push(node.id);
+    const ring = matchSet.has(code) || glowSet.has(code);
+    if (ring) s.ringed.add(code);
+    if (twin) s.highlighted.push(node.id);
+    // Redraw the shape only when something it draws has changed: with 15,682 copies on the
+    // whole-handbook map, redrawing them all on every hover took a second (US-043).
+    const key = [
+      state,
+      twin ? (code === selected ? 2 : 1) : 0,
+      ring,
+      path.has(code),
+      unlocks.has(code),
+      needed.has(code) && insideSel(node.circle),
+      wasted.has(code),
+      canvas.background,
+    ].join('|');
+    const redraw = key !== v.key;
+    v.key = key;
+    if (redraw) {
+      const g = shape.clear();
+      if (twin) {
+        g.circle(0, 0, node.r + 30).fill({ color: canvas.glow, alpha: 0.1 });
+        g.circle(0, 0, node.r + 22).fill({ color: canvas.glow, alpha: 0.16 });
+        g.circle(0, 0, node.r + 15).fill({ color: canvas.glow, alpha: 0.28 });
+      } else if (look.glow && !hollow) g.circle(0, 0, node.r + 7).fill({ color: look.glow, alpha: 0.16 });
+      if (ring) g.circle(0, 0, node.r + 10).stroke({ color: canvas.glow, width: 3, alpha: 0.9 });
+      if (path.has(code)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgePath, width: 3 });
+      if (unlocks.has(code)) g.circle(0, 0, node.r + 6).stroke({ color: canvas.edgeUnlock, width: 3 });
+      if (needed.has(code) && insideSel(node.circle)) g.circle(0, 0, node.r + 5).stroke({ color: canvas.needed, width: 2, alpha: 0.85 });
+      if (wasted.has(code)) g.circle(0, 0, node.r + 8).stroke({ color: canvas.wasted, width: 4 });
+      if (hollow) {
+        // An entry copy: a prerequisite from outside this circle. Hollow, so it reads as a doorway.
+        g.circle(0, 0, node.r - 2).fill({ color: canvas.background, alpha: 0.9 }).stroke({ color: look.ring, width: 2, alpha: 0.8 });
+      } else {
+        g.circle(0, 0, node.r).fill(look.fill).stroke({ color: look.ring, width: look.ringWidth });
+        // A marked entry copy keeps a thin outer line, so it still reads as a doorway.
+        if (node.entry) g.circle(0, 0, node.r + 4).stroke({ color: look.ring, width: 1, alpha: 0.6 });
+      }
+      if (state === 'excluded') {
+        const k = node.r * 0.45;
+        g.moveTo(-k, -k).lineTo(k, k).moveTo(k, -k).lineTo(-k, k).stroke({ color: look.ring, width: 2, alpha: 0.7 });
+      }
+      if (twin) {
+        g.circle(0, 0, node.r + 11).stroke({ color: canvas.glow, width: 4, alpha: 1 });
+        if (code === selected) g.circle(0, 0, node.r + 17).stroke({ color: canvas.selectRing, width: 2, alpha: 0.9 });
+      }
     }
     v.pop = code === hovered ? 2 : twin ? 1 : 0;
     root.zIndex = v.pop;
     root.alpha = twin
       ? 1
-      : look.alpha * (lit(code) ? 1 : 0.22) * (marked || insideSel(node.circle) || wasted.has(code) ? 1 : 0.35) * (hollow ? 0.8 : 1);
-    v.label.style.fill = state === 'locked' || state === 'legacy' || hollow ? canvas.labelDim : canvas.label;
+      : look.alpha * (litNode(code) ? 1 : 0.22) * (marked || insideSel(node.circle) || wasted.has(code) ? 1 : 0.35) * (hollow ? 0.8 : 1);
+    v.label.tint = state === 'locked' || state === 'legacy' || hollow ? canvas.labelDim : canvas.label;
     v.drawn = { fill: hollow ? canvas.background : look.fill, ring: look.ring, alpha: root.alpha, scale: 1, halo: twin };
   }
 
-  const e = s.edges.clear();
-  for (const edge of layout.edges) {
+  // The dots show the same states; redraw them now if they are showing, else when they next are.
+  if (s.far) drawDots(s);
+  else s.dotsStale = true;
+
+  // Links in two layers (US-043): the base, which depends only on the plan, degree and theme and is
+  // rebuilt only when they change; and on top, the links a hover or search lights up. While
+  // something is hovered or matched, the base fades as a whole.
+  const style = (edge: Layout['edges'][number], focused: boolean) => {
     const from = edge.fromCode;
     const to = edge.toCode;
+    const onPath = focused && focus && (path.has(from) || from === focus) && (path.has(to) || to === focus);
+    const unlocking = focused && focus && from === focus && unlocks.has(to);
+    let alpha = 1;
     let color: number;
     let width: number;
-    let alpha = 1;
-    const bothDone = completed.has(from) && completed.has(to);
-    const onPath = focus && (path.has(from) || from === focus) && (path.has(to) || to === focus);
-    const unlocking = focus && from === focus && unlocks.has(to);
     if (onPath) (color = canvas.edgePath), (width = 5);
     else if (unlocking) (color = canvas.edgeUnlock), (width = 4);
-    else if (bothDone) (color = canvas.edgeDone), (width = 5);
+    else if (completed.has(from) && completed.has(to)) (color = canvas.edgeDone), (width = 5);
     else if (completed.has(from) && states.get(to) === 'available') (color = canvas.edgeOpen), (width = 3);
     else {
       color = edge.kind === 'alt' ? canvas.edgeAlt : canvas.edgeBase;
       width = edge.kind === 'alt' ? 1.5 : 2.5;
       alpha = 0.75;
     }
-    if (dimming && !(onPath || unlocking || (lit(from) && lit(to)))) alpha *= 0.15;
     if (!insideSel(layout.nodes[edge.from].circle) && !onPath && !unlocking) alpha *= 0.3;
-    tracePath(e, edge.path);
-    e.stroke({ color, width, alpha, cap: 'round', join: 'round' });
+    return { color, width, alpha, cap: 'round' as const, join: 'round' as const, lit: !!(onPath || unlocking) };
+  };
+  const edgesKey = [states, plan.degree, canvas.background];
+  if (!s.edgesKey || edgesKey.some((k, i) => k !== s.edgesKey![i])) {
+    s.edgesKey = edgesKey;
+    const e = s.edges.clear();
+    for (const edge of layout.edges) {
+      tracePath(e, edge.path);
+      e.stroke(style(edge, false));
+    }
   }
+  s.edges.alpha = dimming ? 0.15 : 1;
+  const lit = s.edgesLit.clear();
+  if (focus || dimming)
+    for (const edge of layout.edges) {
+      const st = style(edge, true);
+      if (!(st.lit || (dimming && litNode(edge.fromCode) && litNode(edge.toCode)))) continue;
+      tracePath(lit, edge.path);
+      lit.stroke(st);
+    }
   applyLod(s);
 }
