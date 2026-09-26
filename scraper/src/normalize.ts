@@ -7,6 +7,7 @@ import type {
   ProgramKind,
   Rule,
   Degree,
+  LocationTable,
   MapDoc,
   StudyPlan,
   Subject,
@@ -180,7 +181,13 @@ function legacySubject(code: string, title: string, year: string): Subject {
 }
 
 /** Build one map from degrees already pulled into `rawDir`. Shared programs and subjects exist once. */
-export async function buildMap(rawDir: string, year: string, courseCodes: string[], colours: FacultyColours | null = null): Promise<MapDoc> {
+export async function buildMap(
+  rawDir: string,
+  year: string,
+  courseCodes: string[],
+  colours: FacultyColours | null = null,
+  locations: LocationTable | null = null,
+): Promise<MapDoc> {
   const refs: Referenced = { subjects: new Map(), programs: new Map() };
   const degrees: Record<string, Degree> = {};
   for (const courseCode of courseCodes) {
@@ -195,6 +202,7 @@ export async function buildMap(rawDir: string, year: string, courseCodes: string
       url: `${HANDBOOK}/course/${year}/${courseCode}`,
       structure: toContainer(course.curriculumStructure ?? {}, refs),
       studyPlans: studyPlans(course.study_plans),
+      locations: [...new Set<string>((course.availabilities ?? []).map((a: { location?: string }) => clean(a.location ?? '')).filter(Boolean))].sort(),
     };
     degrees[courseCode].titleParts = titleParts(colours, { title: degrees[courseCode].title, faculties: faculties(course.parent_academic_org) });
   }
@@ -264,5 +272,6 @@ export async function buildMap(rawDir: string, year: string, courseCodes: string
     degrees,
     programs,
     subjects,
+    ...(locations ? { locations } : {}),
   };
 }

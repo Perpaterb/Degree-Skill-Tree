@@ -346,10 +346,10 @@ As a student, I want a degree that only exists as half of a double to wait until
 
 ### US-050 Offshore degrees in their own areas (`degree-pairs` branch)
 As a student, I want courses taught only in another country kept apart and labelled, so I never plan around one I cannot attend.
-- [ ] The 7 China (Shanghai) and 2 Vietnam degrees sit in two separate areas well off to one side of the Sydney map, titled "Offered only in Shanghai, China" and "Offered only in Vietnam"
-- [ ] Majors and subjects used only by offshore degrees sit there; subjects shared with Sydney degrees appear as copies in both
-- [ ] A general rule for any university: courses offered only in another location are laid out apart from the main campus's courses (read from the course's locations, not a list of codes)
-- [ ] Unit test on real data: every offshore-only course is inside its area, and no Sydney or online course is; E2E (tagged US-050): the two area titles show
+- [x] The 7 China and 2 Vietnam degrees sit in two separate areas well off to one side of the Sydney map, titled "Offered only in China" and "Offered only in Ho Chi Minh City, Vietnam". *Changed 27 Sep 2026: only 5 of the 7 China courses name Shanghai (Shanghai University); 2 only say "offered offshore", so the area names the country. Both Vietnam courses name Ho Chi Minh City University of Technology.*
+- [x] Majors and subjects used only by offshore degrees sit there; subjects shared with Sydney degrees appear as copies in both
+- [x] A general rule for any university: courses offered only in another location are laid out apart from the main campus's courses (read from the course's locations, not a list of codes; which locations are home is set per university in `data/locations/<institution>.json`)
+- [x] Unit test on real data: every offshore-only course is inside its area, and no Sydney or online course is; E2E (tagged US-050): the two area titles show
 
 ## Admin CMS
 

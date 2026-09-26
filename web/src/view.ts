@@ -16,10 +16,11 @@ export const defaultView: ViewSettings = { grow: true, textSize: 1, showCp: true
 export const TEXT_SIZE_MIN = 0.5;
 export const TEXT_SIZE_MAX = 2;
 
-export type TextKind = 'degree' | 'program' | 'subject';
+export type TextKind = 'area' | 'degree' | 'program' | 'subject';
 
 /** On-screen font sizes in CSS pixels, at 100%: the bounds while growing with zoom, and the size when not. */
 export const TEXT_PX: Record<TextKind, { min: number; max: number; fixed: number }> = {
+  area: { min: 22, max: 110, fixed: 30 },
   degree: { min: 16, max: 72, fixed: 26 },
   program: { min: 10, max: 34, fixed: 15 },
   subject: { min: 6, max: 22, fixed: 12 },

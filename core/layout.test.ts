@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { circleAt, facultiesOf, facultyOrder, layoutMap, type LayoutCircle } from './layout.js';
+import { awayArea, circleAt, facultiesOf, facultyOrder, layoutMap, type LayoutCircle } from './layout.js';
 import { linkQuality } from './linkQuality.js';
 import type { MapDoc } from './model.js';
 
@@ -220,6 +220,56 @@ describe('US-042: faculty neighbourhoods', () => {
     const narrow = by.get(1) ?? [];
     const wide = [...by].filter(([n]) => n >= 3).flatMap(([, xs]) => xs);
     if (narrow.length && wide.length) expect(avg(wide)).toBeLessThan(avg(narrow));
+  });
+});
+
+describe('US-050: courses offered only in another location are laid out apart', () => {
+  const areas = layout.areas ?? [];
+  const area = (id: string) => areas.find((a) => a.id === id)!;
+  // Read from each course's locations, not a list of codes.
+  const away = Object.keys(map.degrees).filter((d) => awayArea(map, d));
+  const within = (c: LayoutCircle, a: { x: number; y: number; w: number; h: number }) =>
+    c.x - c.r >= a.x && c.x + c.r <= a.x + a.w && c.y - c.r >= a.y && c.y + c.r <= a.y + a.h;
+
+  it('finds the 7 China and 2 Vietnam courses from their locations', () => {
+    expect(away.filter((d) => awayArea(map, d) === 'China')).toHaveLength(7);
+    expect(away.filter((d) => awayArea(map, d) === 'Vietnam')).toHaveLength(2);
+    expect(awayArea(map, 'C10148')).toBeNull();
+    expect(areas.map((a) => [a.id, a.title])).toEqual([
+      ['China', 'Offered only in China'],
+      ['Vietnam', 'Offered only in Ho Chi Minh City, Vietnam'],
+    ]);
+  });
+
+  it('puts every offshore-only course, with its title, inside its own area', () => {
+    const out = away.filter((d) => {
+      const c = circle(d);
+      const a = area(awayArea(map, d)!);
+      return !within(c, a) || c.label.x - c.label.w / 2 < a.x || c.label.x + c.label.w / 2 > a.x + a.w || c.label.y < a.y;
+    });
+    expect(out).toEqual([]);
+  });
+
+  it('puts majors and subjects used only by offshore courses inside their area too', () => {
+    const at = (c: LayoutCircle): string | null => (c.parent ? at(circle(c.parent)) : map.degrees[c.id] ? awayArea(map, c.id) : null);
+    // Programs whose circle sits under an offshore course, and subject copies drawn there.
+    const offshorePrograms = layout.circles.filter((c) => map.programs[c.id] && at(c));
+    expect(offshorePrograms.length).toBeGreaterThanOrEqual(5);
+    const outside = offshorePrograms.filter((c) => !within(c, area(at(c)!)));
+    expect(outside.map((c) => c.id)).toEqual([]);
+    const copies = nodes.filter((n) => at(circle(n.circle)));
+    expect(copies.length).toBeGreaterThan(100);
+    expect(copies.filter((n) => !within({ ...circle(n.circle), x: n.x, y: n.y, r: n.r }, area(at(circle(n.circle))!))).map((n) => n.id)).toEqual([]);
+  });
+
+  it('keeps every other circle out of the areas, and the areas to the right of the main map', () => {
+    expect(areas).toHaveLength(2);
+    const intruders = layout.circles.filter((c) => !c.parent && !away.includes(c.id) && areas.some((a) => c.x + c.r > a.x && c.x - c.r < a.x + a.w && c.y + c.r > a.y && c.y - c.r < a.y + a.h));
+    expect(intruders.map((c) => c.id)).toEqual([]);
+    const mainRight = Math.max(...layout.circles.filter((c) => !c.parent && !away.includes(c.id)).map((c) => c.x + c.r));
+    for (const a of areas) expect(a.x, a.id).toBeGreaterThan(mainRight);
+    // Titles sit above their frame.
+    for (const a of areas) expect(a.label.y + a.label.h, a.id).toBeLessThanOrEqual(a.y);
   });
 });
 

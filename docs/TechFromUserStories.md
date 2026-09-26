@@ -649,3 +649,30 @@ Stories are in [`UserStories.md`](UserStories.md).
 - E2E: 6 of 61 fail, none newly; US-027 (compulsory block) and US-037 passed this run after failing
   in the last two.
 - Files: `web/src/TreeCanvas.tsx`, `e2e/titles.spec.ts`, `docs/UserStories.md`.
+
+### US-050 Offshore degrees in their own areas (`degree-pairs` branch)
+- Data: `Degree.locations` (the handbook's `availabilities[].location`, deduplicated) and
+  `MapDoc.locations` (a `LocationTable`: home locations, and away locations each with an area title),
+  read in `buildMap` from `data/locations/uts.json`. The build warns for a location in neither list.
+  UTS home: City campus, Moore Park Precinct, Online campus. Away: China ("Offered only in China";
+  5 of its 7 courses name Shanghai University, 2 only say "offered offshore") and Vietnam ("Offered only
+  in Ho Chi Minh City, Vietnam"). Map rebuilt with `HANDBOOK_YEAR=2027 npm run scrape -- normalize --all`.
+- `awayArea(map, degree)` in `core/layout.ts`: the location a degree is offered only in, when every one
+  of its locations is away. `layoutMap` places everything else as before, then each away location's
+  courses (and programs offered only by them) with `placeTops(..., together = true)` (one centre, not
+  spread by faculty), to the right of the main map; `Layout.areas` holds each frame and its one-line title.
+- Canvas: each area is a rounded frame behind the circles and a title that always shows, sized by a new
+  `area` text kind (`web/src/view.ts`). Area titles are placed first in decluttering (US-044), so other
+  titles make way for them. Test hook `__dst.areas()`.
+- Tests: `core/layout.test.ts` (US-050, on real data: 7 China and 2 Vietnam courses found from their
+  locations; each inside its area with its title; offshore-only programs and subject copies inside;
+  nothing else inside an area; areas right of the main map, titles above their frames). Seen to fail
+  with areas switched off. `e2e/offshore.spec.ts`: both titles, and the offshore Bachelor of Business
+  inside the China frame once zoomed out.
+- `e2e/titles.spec.ts`: the US-044 panning test's drag cut from 30 steps to 5, because it hit the 45 s
+  limit under software GL with 4 workers; still fails with per-screen decluttering.
+- E2E: 8 of 64 fail; the US-044 panning timeout is fixed as above, US-027's compulsory block test flips
+  between runs, and the other 6 are the known ones (US-043).
+- Files: `core/model.ts`, `core/layout.ts`, `core/layout.test.ts`, `scraper/src/normalize.ts`,
+  `scraper/src/cli.ts`, `data/locations/uts.json`, `web/src/TreeCanvas.tsx`, `web/src/view.ts`,
+  `e2e/offshore.spec.ts`, `e2e/titles.spec.ts`, `web/public/trees/uts-2027.json`.

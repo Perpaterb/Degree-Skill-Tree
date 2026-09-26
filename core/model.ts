@@ -16,6 +16,17 @@ export interface MapDoc {
   subjects: Record<string, Subject>;
   /** Precomputed positions (see core/layout.ts). Absent means the app computes them. */
   layout?: import('./layout.js').Layout;
+  /** Where the institution teaches (US-050). Absent means every course is laid out together. */
+  locations?: LocationTable;
+}
+
+/**
+ * Which course locations are the institution's home (its campuses and online), and the others, each
+ * with the title of the map area that holds the courses offered only there (US-050).
+ */
+export interface LocationTable {
+  home: string[];
+  away: Record<string, { title: string }>;
 }
 
 export interface Degree {
@@ -29,6 +40,8 @@ export interface Degree {
   studyPlans: StudyPlan[];
   /** The title in parts (one per component of a double degree), each with its faculty's colour (US-039, US-040). */
   titleParts?: TitlePart[];
+  /** Where it is offered, from the handbook's intakes (e.g. "City campus", "China"); empty when none are listed. */
+  locations?: string[];
 }
 
 export interface TitlePart {

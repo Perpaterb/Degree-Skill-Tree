@@ -46,7 +46,7 @@ test('US-044: panning at one zoom never changes which titles show', async ({ pag
   const before = await shownIds();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
   await page.mouse.down();
-  await page.mouse.move(b.x + b.width / 2 - 500, b.y + b.height / 2 - 200, { steps: 30 });
+  await page.mouse.move(b.x + b.width / 2 - 500, b.y + b.height / 2 - 200, { steps: 5 });
   await page.mouse.up();
   await page.waitForTimeout(1500); // inertia
   expect(await shownIds()).toEqual(before);

@@ -183,7 +183,11 @@ async function normalize() {
   if (!codes.length) throw new Error('usage: npm run scrape -- normalize <COURSE_CODE>... | --all');
   // Faculty colours (US-041): data/faculty-colours/<institution>.json, found by docs/FacultyColours.md.
   const colours = JSON.parse(await readFile('data/faculty-colours/uts.json', 'utf8'));
-  const map = await buildMap(RAW, YEAR, codes, colours);
+  // Home and away locations (US-050): data/locations/<institution>.json.
+  const locations = JSON.parse(await readFile('data/locations/uts.json', 'utf8'));
+  const map = await buildMap(RAW, YEAR, codes, colours, { home: locations.home, away: locations.away });
+  for (const d of Object.values(map.degrees))
+    for (const l of d.locations ?? []) if (!locations.home.includes(l) && !locations.away[l]) console.warn(`location "${l}" of ${d.code} is neither home nor away in data/locations/uts.json`);
   for (const d of Object.values(map.degrees))
     for (const p of d.titleParts ?? []) if (!p.colour && !colours.uncoloured?.[p.faculty]) console.warn(`no faculty colour for ${d.code} "${p.text}" (faculty "${p.faculty}")`);
   const started = Date.now();

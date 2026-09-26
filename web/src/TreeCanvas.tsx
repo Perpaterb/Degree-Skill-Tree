@@ -2,7 +2,7 @@ import { Application, BitmapFont, BitmapText, CanvasTextMetrics, Container, Grap
 import { Viewport } from 'pixi-viewport';
 import { useEffect, useRef } from 'react';
 import { compulsorySubjects, missingFor, subjectsUnder, unlockedBy } from '../../core/engine';
-import { circleAt, SUBJECT_R, TITLE_LINE, type Layout, type LayoutCircle, type LayoutNode, type PathCmd } from '../../core/layout';
+import { circleAt, SUBJECT_R, TITLE_LINE, type Layout, type LayoutArea, type LayoutCircle, type LayoutNode, type PathCmd } from '../../core/layout';
 import type { MapDoc } from '../../core/model';
 import { useApp } from './store';
 import { canvas, facultyColour, mix, stateLook } from './theme';
@@ -149,8 +149,18 @@ function titleColours(map: MapDoc, circle: LayoutCircle) {
   return { fill: coloured[0].fill, parts: coloured, tags };
 }
 
+/** An area for courses offered only somewhere else, with its frame and title (US-050). */
+interface AreaView {
+  area: LayoutArea;
+  frame: Graphics;
+  title: Text;
+  /** Scale that fits the title in the box the layout kept for it. */
+  base: number;
+}
+
 interface Scene {
   app: Application;
+  areas: AreaView[];
   viewport: Viewport;
   nodes: Map<string, NodeView>;
   circles: CircleView[];
@@ -221,6 +231,8 @@ declare global {
       } | null;
       subjectLabel(id: string): { visible: boolean; px: number } | null;
       background(): number;
+      /** Each offshore area's title and frame in screen pixels, and whether the title is drawn (US-050). */
+      areas(): { id: string; title: string; shown: boolean; titleBox: Box; frame: Box }[];
       /** Every circle's title: whether it is drawn, its box and its circle's centre in screen pixels (US-044). */
       titles(): { id: string; kind: string; shown: boolean; box: Box; centre: { x: number; y: number } }[];
       layer?(name: string, visible: boolean): void;
@@ -326,6 +338,23 @@ export function TreeCanvas() {
         titleLayer.addChild(title, progress);
         return { circle, shape, title, base, lastW, progress, progressColour: -1, parts: colours.parts };
       });
+      // Offshore areas (US-050): a frame behind everything, and a title that always shows.
+      const areas: AreaView[] = (layout.areas ?? []).map((area) => {
+        const frame = new Graphics();
+        const { label } = area;
+        const title = new Text({
+          text: label.lines.join('\n'),
+          style: { fill: canvas.clusterTitle, fontSize: label.size, lineHeight: label.size * TITLE_LINE, fontFamily: 'Georgia, serif', align: 'center' },
+          resolution: 1,
+        });
+        title.anchor.set(0.5, 1);
+        const base = Math.min(1, label.w / title.width, label.h / title.height);
+        title.scale.set(base);
+        title.position.set(label.x, label.y + label.h);
+        titleLayer.addChild(title);
+        return { area, frame, title, base };
+      });
+      for (const a of areas) viewport.addChild(a.frame);
       viewport.addChild(circleLayer);
 
       const edgeLayer = new Container();
@@ -422,12 +451,13 @@ export function TreeCanvas() {
       });
 
       scene.current = {
-        app, viewport, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, locked: [], ringed: new Set(), invalidate,
+        app, viewport, areas, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, locked: [], ringed: new Set(), invalidate,
         nodeLayer, dots, far: false, dotsStale: true, edgesLit, edgeLayer, tiles, popLayer, hitGrid, lodStamp: 0,
       };
       // The camera moves on its own during inertia and fly-to animations, so each of these redraws.
       for (const ev of ['moved', 'zoomed', 'moved-end', 'zoomed-end'] as const) viewport.on(ev, invalidate);
       fit(viewport, layout);
+      areas.forEach(drawArea);
       paint(scene.current);
 
       viewport.on('zoomed', () => scene.current && applyLod(scene.current));
@@ -490,6 +520,22 @@ export function TreeCanvas() {
           return { visible: v.label.visible, px: LABEL_WORLD * v.label.scale.y * v.root.scale.y * s.viewport.scale.y };
         },
         background: () => app.renderer.background.color.toNumber(),
+        areas() {
+          const s = scene.current;
+          if (!s) return [];
+          const box = (x0: number, y0: number, x1: number, y1: number) => {
+            const a = s.viewport.toScreen(x0, y0);
+            const b = s.viewport.toScreen(x1, y1);
+            return { minX: a.x, minY: a.y, maxX: b.x, maxY: b.y };
+          };
+          return s.areas.map(({ area, title }) => ({
+            id: area.id,
+            title: title.text,
+            shown: title.visible && title.renderable && title.alpha > 0,
+            titleBox: box(title.x - title.width / 2, title.y - title.height, title.x + title.width / 2, title.y),
+            frame: box(area.x, area.y, area.x + area.w, area.y + area.h),
+          }));
+        },
         titles() {
           const s = scene.current;
           if (!s) return [];
@@ -616,9 +662,21 @@ function clickPointForCircle(s: Scene, c: LayoutCircle) {
   return null;
 }
 
+/** An area's frame in the current theme's colours (US-050). */
+function drawArea(a: AreaView) {
+  const { x, y, w, h } = a.area;
+  a.frame
+    .clear()
+    .roundRect(x, y, w, h, 600)
+    .fill({ color: canvas.clusterHalo, alpha: 0.6 })
+    .stroke({ color: canvas.clusterTitle, width: 60, alpha: 0.5 });
+  a.title.style.fill = canvas.clusterTitle;
+}
+
 /** Colours set when things are created, redone when the theme changes (US-030). */
 function restyle(s: Scene) {
   s.app.renderer.background.color = canvas.background;
+  s.areas.forEach(drawArea);
   s.hue = degreeHue(s.map);
   for (const v of s.circles) {
     const colours = titleColours(s.map, v.circle);
@@ -645,6 +703,10 @@ function applyLod(s: Scene) {
   for (const c of s.popLayer.children) {
     const v = s.nodes.get(c.label)!;
     sizeNode(v, scale, view);
+  }
+  for (const a of s.areas) {
+    const natural = a.area.label.size * a.base * scale;
+    a.title.scale.set((a.base * textPx('area', natural, view)) / natural);
   }
   for (const v of s.circles) {
     const kind = v.circle.kind === 'degree' ? 'degree' : 'program';
@@ -689,6 +751,12 @@ function declutter(s: Scene) {
     for (let i = Math.floor(b.minX / cell); i <= Math.floor(b.maxX / cell); i++)
       for (let j = Math.floor(b.minY / cell); j <= Math.floor(b.maxY / cell); j++) f(`${i},${j}`);
   };
+  // Area titles always show (US-050), so they are placed first and other titles make way for them.
+  for (const a of s.areas) {
+    const t = a.title;
+    const box = { minX: t.x - t.width / 2 - gap, minY: t.y - t.height - gap, maxX: t.x + t.width / 2 + gap, maxY: t.y + gap };
+    cells(box, (k) => placed.set(k, [...(placed.get(k) ?? []), box]));
+  }
   for (const v of s.circles) v.shown = false;
   for (const v of order) {
     const b = v.titleBox!;

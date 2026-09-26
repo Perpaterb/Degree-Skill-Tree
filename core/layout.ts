@@ -67,11 +67,27 @@ export interface LayoutEdge {
   path: PathCmd[];
 }
 
+/** A part of the map set apart for courses offered only in one other location (US-050). */
+export interface LayoutArea {
+  /** The location, as the handbook names it (e.g. "China"). */
+  id: string;
+  title: string;
+  /** Its frame: top-left corner and size, in world units. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Its title's box, above the frame. */
+  label: CircleLabel;
+}
+
 export interface Layout {
   nodes: Record<string, LayoutNode>;
   /** Largest first, so drawing in order puts contained circles on top. */
   circles: LayoutCircle[];
   edges: LayoutEdge[];
+  /** Areas for courses offered only somewhere else; absent on maps built before US-050. */
+  areas?: LayoutArea[];
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
@@ -84,9 +100,15 @@ const SPREAD = 5; // between parallel spokes leaving or entering one subject
 const PAD = 34; // circle rim beyond its contents
 const CHILD_GAP = 26; // between packed circles
 const TOP_GAP = 140; // between top-level circles
+// Areas for courses offered only somewhere else (US-050): how far from the main map, padding inside
+// the frame, and their titles' size.
+const AREA_GAP = 0.06; // of the main map's width
+const AREA_PAD = 1200;
+const AREA_TITLE = 420;
+const AREA_TITLE_GAP = 120;
 
 // Circle titles sit above their circle, in space the packing keeps free. Sizes are world units.
-export const TITLE_SIZE = { degree: 160, program: 28 } as const;
+export const TITLE_SIZE = { degree: 160, program: 28, area: AREA_TITLE } as const;
 export const TITLE_LINE = 1.2; // line height, as a multiple of the size
 const TITLE_GAP = { degree: 30, program: 8 } as const; // between the title and its circle's outline
 const CHAR_W = 0.6; // generous average glyph width for the title font, as a multiple of the size
@@ -540,7 +562,40 @@ export function layoutMap(map: MapDoc): Layout {
     b.sharedBy = [...(offeredBy.get(p) ?? [])].sort();
     tops.push(b);
   }
-  const placed = placeTops(map, tops);
+  // Courses offered only in another location go in that location's own area, well to the right of
+  // the main map, with programs offered only by them (US-050). Everything else is placed together.
+  const area = (b: Box) => {
+    const by = b.kind === 'degree' ? [b.id] : (b.sharedBy ?? []);
+    const at = new Set(by.map((d) => awayArea(map, d)));
+    return by.length && at.size === 1 ? ([...at][0] ?? '') : '';
+  };
+  const placed = placeTops(map, tops.filter((b) => !area(b)));
+  const areas: LayoutArea[] = [];
+  const extent = (ps: (Packed & { box: Box })[]) => ({
+    minX: Math.min(...ps.map((p) => p.x - p.r)),
+    maxX: Math.max(...ps.map((p) => p.x + p.r)),
+    minY: Math.min(...ps.map((p) => p.y - p.r)),
+    maxY: Math.max(...ps.map((p) => p.y + p.r)),
+  });
+  const main = placed.length ? extent(placed) : { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  let right = main.maxX + Math.max(AREA_PAD * 4, (main.maxX - main.minX) * AREA_GAP);
+  for (const [loc, { title }] of Object.entries(map.locations?.away ?? {})) {
+    const group = tops.filter((b) => area(b) === loc);
+    if (!group.length) continue;
+    const ps = placeTops(map, group, true);
+    const e = extent(ps);
+    // Left edge of the frame at `right`, centred on the main map's horizontal line.
+    const dx = right + AREA_PAD - e.minX;
+    const dy = -(e.minY + e.maxY) / 2;
+    for (const p of ps) placed.push({ ...p, x: p.x + dx, y: p.y + dy });
+    const w = e.maxX - e.minX + 2 * AREA_PAD;
+    const h = e.maxY - e.minY + 2 * AREA_PAD;
+    const frame = { x: round(right), y: round(-h / 2), w: Math.ceil(w), h: Math.ceil(h) };
+    // One line, however narrow the area: a wrapped title reads as two labels.
+    const t = titleBox(title, AREA_TITLE, Infinity);
+    areas.push({ id: loc, title, ...frame, label: { lines: t.lines, size: AREA_TITLE, x: round(frame.x + w / 2), y: round(frame.y - AREA_TITLE_GAP - t.h), w: t.w, h: t.h } });
+    right += w + Math.max(AREA_PAD * 4, (main.maxX - main.minX) * AREA_GAP * 0.5);
+  }
 
   const nodes: Record<string, LayoutNode> = {};
   const circles: LayoutCircle[] = [];
@@ -574,12 +629,23 @@ export function layoutMap(map: MapDoc): Layout {
   circles.sort((a, b) => b.r - a.r || a.id.localeCompare(b.id));
 
   const bounds = {
-    minX: Math.min(...circles.map((c) => Math.min(c.x - c.r, c.label.x - c.label.w / 2))) - 40,
-    minY: Math.min(...circles.map((c) => c.label.y)) - 40,
-    maxX: Math.max(...circles.map((c) => Math.max(c.x + c.r, c.label.x + c.label.w / 2))) + 40,
-    maxY: Math.max(...circles.map((c) => c.y + c.r)) + 40,
+    minX: Math.min(...circles.map((c) => Math.min(c.x - c.r, c.label.x - c.label.w / 2)), ...areas.map((a) => a.x)) - 40,
+    minY: Math.min(...circles.map((c) => c.label.y), ...areas.map((a) => a.label.y)) - 40,
+    maxX: Math.max(...circles.map((c) => Math.max(c.x + c.r, c.label.x + c.label.w / 2)), ...areas.map((a) => a.x + a.w)) + 40,
+    maxY: Math.max(...circles.map((c) => c.y + c.r), ...areas.map((a) => a.y + a.h)) + 40,
   };
-  return { nodes, circles, edges, bounds };
+  return { nodes, circles, edges, ...(areas.length ? { areas } : {}), bounds };
+}
+
+/**
+ * The location a degree is offered only in, when that is somewhere other than the institution's home
+ * campuses and online (US-050); null when it is offered at home, or its locations are not listed.
+ */
+export function awayArea(map: MapDoc, degree: string): string | null {
+  const table = map.locations;
+  const at = map.degrees[degree]?.locations ?? [];
+  if (!table || !at.length || at.some((l) => !table.away[l])) return null;
+  return at[0];
 }
 
 /** The faculties a degree belongs to: one, or one per part of a double degree. */
@@ -607,7 +673,7 @@ export function facultyOrder(map: MapDoc): { faculty: string; degrees: number }[
  * and towards the centre the more faculties share it. A strong pull to the horizontal line and a weak
  * one along it spread the map sideways. Circles (with their titles) never overlap. Deterministic.
  */
-function placeTops(map: MapDoc, tops: Box[]): (Packed & { box: Box })[] {
+function placeTops(map: MapDoc, tops: Box[], together = false): (Packed & { box: Box })[] {
   type Item = SimulationNodeDatum & { box: Box; r: number; tx: number; faculties: string[]; degrees: string[] };
   const order = facultyOrder(map);
   // Room a faculty needs along the line: the width of a disc holding its degrees' circles.
@@ -640,7 +706,8 @@ function placeTops(map: MapDoc, tops: Box[]): (Packed & { box: Box })[] {
   const items: Item[] = tops.map((box) => {
     const degrees = box.kind === 'degree' ? [box.id] : (box.sharedBy ?? []);
     const faculties = [...new Set(degrees.flatMap((d) => facultiesOf(map, d)))];
-    const tx = mean(degrees.flatMap((d) => facultiesOf(map, d).map((f) => anchor.get(f)!)));
+    // Together (an area, US-050): one small group round a single centre, not spread by faculty.
+    const tx = together ? 0 : mean(degrees.flatMap((d) => facultiesOf(map, d).map((f) => anchor.get(f)!)));
     return { box, r: box.outer.r + TOP_GAP / 2, tx, faculties, degrees };
   });
   // Start on a deterministic spiral around each item's target, so no two start on the same spot.

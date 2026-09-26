@@ -1,0 +1,10 @@
+{
+  "institution": "University of Technology Sydney",
+  "retrieved": "2026-09-27",
+  "notes": "Location names are the handbook's course availabilities (availabilities[].location). Home: taught in Sydney or online. Away: courses offered only there are laid out in their own area (US-050). China: 5 of its 7 courses name Shanghai University; 2 only say 'offered offshore', so the area names the country. Vietnam: both courses name Ho Chi Minh City University of Technology.",
+  "home": ["City campus", "Moore Park Precinct", "Online campus"],
+  "away": {
+    "China": { "title": "Offered only in China" },
+    "Vietnam": { "title": "Offered only in Ho Chi Minh City, Vietnam" }
+  }
+}
