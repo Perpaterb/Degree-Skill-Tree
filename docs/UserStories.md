@@ -294,8 +294,8 @@ As a student, I want circle titles to stay readable at every zoom, so the zoomed
 - [x] US-004's 55fps target still holds; the far zoom is measured before and after with the existing benchmark *26 Sep 2026: median 59.9fps at every zoom; far zoom 27-28% busy and slowest frame 67 ms, unchanged.*
 - [x] E2E (tagged US-044): at the far zoom no two visible titles' screen boxes overlap; the selected degree's title is visible there; a title hidden at the far zoom is visible after zooming in on it. *Also: panning leaves the shown titles unchanged, and hovering a circle shows its hidden title.*
 
-Not in scope yet (26 Sep 2026): if hiding degree names at the far zoom looks poor, a cloud per faculty
-naming it, covering its degrees and fading out once all its degree names show.
+Considered and dropped (26 Sep 2026): a cloud per faculty naming it at the far zoom. With the
+titles decluttered the zoomed-out map reads well enough without it.
 
 ## Admin CMS
 
