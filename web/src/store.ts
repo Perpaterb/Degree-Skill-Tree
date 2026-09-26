@@ -18,6 +18,7 @@ import {
   type TitleCp,
 } from '../../core/engine';
 import { layoutMap, type Layout } from '../../core/layout';
+import { degreeLocks, pairingLocks } from '../../core/pairs';
 import type { MapDoc } from '../../core/model';
 import { track } from './analytics';
 import { setThemeColours } from './theme';
@@ -43,8 +44,10 @@ interface AppState {
   finish: Map<string, Status>;
   /** Credit points on each degree and program circle's title (US-028). */
   titles: Map<string, TitleCp>;
-  /** Majors and sub-majors that can no longer count towards the selected degree, and why (US-037). */
+  /** Majors and sub-majors that can no longer count towards the selected degree, and why (US-037, US-048). */
   locks: Map<string, Lock>;
+  /** Degrees that cannot be chosen with the current choice, and why (US-047, US-049). */
+  degreeLocks: Map<string, string>;
   view: ViewSettings;
   theme: ThemeName;
   /** The subject, program or degree shown in the detail panel. */
@@ -118,7 +121,11 @@ function matchesFor(map: MapDoc, q: string): string[] {
 
 function derive(map: MapDoc, plan: Plan) {
   const fits = new Map(Object.keys(map.degrees).map((d) => [d, compatibility(map, d, plan)]));
-  const locks = plan.degree && map.degrees[plan.degree] ? programLocks(map, plan.degree, plan).locks : new Map<string, Lock>();
+  const locks = new Map<string, Lock>([
+    ...(plan.degree && map.degrees[plan.degree] ? programLocks(map, plan.degree, plan).locks : []),
+    // What a double adds to a half, until that double is chosen; programs the chosen double drops (US-048).
+    ...pairingLocks(map, plan),
+  ]);
   const finish = new Map<string, Status>([
     ...Object.keys(map.degrees).map((d) => [d, progressStatus(progress(map, d, plan))] as const),
     // A program locked out of the selected degree never glows, however much of it is done (US-037).
@@ -129,7 +136,7 @@ function derive(map: MapDoc, plan: Plan) {
     const t = titleCp(map, id, plan);
     if (t) titles.set(id, t);
   }
-  return { states: computeStates(map, plan), fits, finish, titles, locks };
+  return { states: computeStates(map, plan), fits, finish, titles, locks, degreeLocks: degreeLocks(map, plan.degree) };
 }
 
 function applyTheme(t: ThemeName) {
@@ -150,6 +157,7 @@ export const useApp = create<AppState>((set, get) => ({
   finish: new Map(),
   titles: new Map(),
   locks: new Map(),
+  degreeLocks: new Map(),
   view: loadView(),
   theme: initialTheme,
   selected: null,

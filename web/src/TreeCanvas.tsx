@@ -2,6 +2,7 @@ import { Application, BitmapFont, BitmapText, CanvasTextMetrics, Container, Grap
 import { Viewport } from 'pixi-viewport';
 import { useEffect, useRef } from 'react';
 import { compulsorySubjects, missingFor, subjectsUnder, unlockedBy } from '../../core/engine';
+import { chosenDegrees } from '../../core/pairs';
 import { circleAt, SUBJECT_R, TITLE_LINE, type Layout, type LayoutArea, type LayoutCircle, type LayoutNode, type PathCmd } from '../../core/layout';
 import type { MapDoc } from '../../core/model';
 import { useApp } from './store';
@@ -214,6 +215,8 @@ declare global {
       zoom(): number;
       finished(): Record<string, 'complete' | 'planned'>;
       locked(): string[];
+      /** Why each locked program is locked: 'room', 'overlap', 'clash' (US-037) or 'pairing' (US-048). */
+      lockReasons(): Record<string, string>;
       ringed(): string[];
       title(id: string): {
         text: string;
@@ -489,6 +492,7 @@ export function TreeCanvas() {
         zoom: () => scene.current?.viewport.scale.x ?? 1,
         finished: () => scene.current?.finished ?? {},
         locked: () => scene.current?.locked ?? [],
+        lockReasons: () => Object.fromEntries([...useApp.getState().locks].map(([code, l]) => [code, l.why])),
         ringed: () => [...(scene.current?.ringed ?? [])],
         title(id) {
           const s = scene.current;
@@ -637,7 +641,9 @@ function flyTo(s: Scene, id: string) {
     s.viewport.animate({ position: { x: n.x, y: n.y }, scale: Math.max(s.viewport.scale.x, 0.9), time: 650, ease: 'easeInOutSine' });
     return;
   }
-  const c = s.layout.circles.find((k) => k.id === id);
+  // A double built from halves has no circle: fly to its first half (US-048).
+  const target = s.map.degrees[id]?.halves?.[0] ?? id;
+  const c = s.layout.circles.find((k) => k.id === target);
   if (!c) return;
   const scale = Math.min(s.viewport.screenWidth, s.viewport.screenHeight) / (c.r * 2.4);
   s.viewport.animate({ position: { x: c.x, y: c.y }, scale: Math.min(Math.max(scale, 0.03), 1.2), time: 650, ease: 'easeInOutSine' });
@@ -882,11 +888,12 @@ function tracePath(g: Graphics, path: PathCmd[]) {
 /** Everything that depends on plan, hover, selection, glow or search. */
 function paint(s: Scene) {
   s.invalidate();
-  const { states, hovered, hoveredCircle, glow, selected, matches, plan, fits, finish, titles, view, locks } = useApp.getState();
+  const { states, hovered, hoveredCircle, glow, selected, matches, plan, fits, finish, titles, view, locks, degreeLocks } = useApp.getState();
   const { map, layout } = s;
   const completed = new Set(plan.completed);
   const chosen = new Set(plan.programs);
   const degree = plan.degree ? map.degrees[plan.degree] : null;
+  const chosenDegs = chosenDegrees(map, plan.degree);
   const glowSet = new Set(glow);
 
   // The selected degree: which subjects belong to it, which it still needs, which will not count.
@@ -923,8 +930,8 @@ function paint(s: Scene) {
     const key = [
       finish.get(circle.id),
       glowSet.has(circle.id) || hoveredCircle === circle.id || matchSet.has(circle.id),
-      circle.kind === 'degree' ? [s.hue.get(circle.id), fits.get(circle.id)?.grey, plan.degree === circle.id, !!plan.degree] : '',
-      locks.has(circle.id),
+      circle.kind === 'degree' ? [s.hue.get(circle.id), fits.get(circle.id)?.grey, chosenDegs.includes(circle.id), chosenDegs.length] : '',
+      locks.has(circle.id) || degreeLocks.has(circle.id),
       chosen.has(circle.id),
       !degree || (inDegree && circle.members.some((m) => inDegree.has(m))),
       circle.id === selected,
@@ -942,18 +949,21 @@ function paint(s: Scene) {
     }
     const glowing = glowSet.has(circle.id) || hoveredCircle === circle.id || matchSet.has(circle.id);
     if (glowing) s.glowing.push(circle.id);
-    if (circle.kind === 'degree') {
+    // A degree that cannot go with the current choice is drawn locked, like a program (US-047).
+    const lockedOut = locks.has(circle.id) || degreeLocks.has(circle.id);
+    if (circle.kind === 'degree' && !lockedOut) {
       const hue = s.hue.get(circle.id)!;
       const fit = fits.get(circle.id);
       const grey = fit?.grey ?? 0;
-      const isSel = plan.degree === circle.id;
+      // Both halves of a chosen double degree look chosen (US-048).
+      const isSel = chosenDegs.includes(circle.id);
       const fill = mix(hue, canvas.grey, grey);
-      const other = !!plan.degree && !isSel;
+      const other = chosenDegs.length > 0 && !isSel;
       g?.circle(circle.x, circle.y, circle.r)
         .fill({ color: fill, alpha: isSel ? 0.09 : 0.05 })
         .stroke({ color: glowing ? canvas.glow : mix(hue, canvas.grey, grey * 0.8), width: isSel ? 16 : glowing ? 14 : 8, alpha: other && !glowing ? 0.3 : 1 });
       title.alpha = other ? 0.45 : 1 - grey * 0.5;
-    } else if (locks.has(circle.id)) {
+    } else if (lockedOut) {
       // Locked out of the selected degree: drawn like a clashing subject, grey, red and crossed (US-037).
       s.locked.push(circle.id);
       const k = circle.r * 0.5;
@@ -981,7 +991,6 @@ function paint(s: Scene) {
     if (circle.id === selected) g?.circle(circle.x, circle.y, circle.r + 10).stroke({ color: canvas.selectRing, width: 3, alpha: 0.8 });
     // Credit points after the title, with a tick coloured like the glow (US-028).
     const t = titles.get(circle.id);
-    const lockedOut = locks.has(circle.id);
     const mark = lockedOut ? ' ✗' : halo !== null ? ' ✓' : '';
     const text = t && view.showCp ? `${t.done}${t.planned ? `+${t.planned}` : ''}/${t.required}cp${mark}` : lockedOut ? '✗' : '';
     if (v.progress.text !== text) v.progress.text = text;
@@ -994,7 +1003,8 @@ function paint(s: Scene) {
   const inside = new Map<string, boolean>();
   const insideSel = (circleId: string) => {
     if (!degree) return true;
-    if (!inside.has(circleId)) inside.set(circleId, within(layout, circleId, degree.code));
+    // A chosen double has no circle: inside either of its halves (US-048).
+    if (!inside.has(circleId)) inside.set(circleId, chosenDegs.some((h) => within(layout, circleId, h)));
     return inside.get(circleId)!;
   };
 

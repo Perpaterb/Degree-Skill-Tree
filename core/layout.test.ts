@@ -13,7 +13,8 @@ const inside = (x: number, y: number, r: number, c: LayoutCircle) => Math.hypot(
 
 describe('US-020: circles that never overlap, with linked copies', () => {
   it('draws a circle for every degree and program', () => {
-    for (const d of Object.keys(map.degrees)) expect(circle(d)?.kind, d).toBe('degree');
+    // A double built from two halves is drawn as its halves, not a circle of its own (US-048).
+    for (const d of Object.keys(map.degrees)) expect(circle(d)?.kind, d).toBe(map.degrees[d].halves ? undefined : 'degree');
     for (const p of Object.keys(map.programs)) expect(circle(p)?.kind, p).toBe('program');
   });
 
@@ -53,7 +54,12 @@ describe('US-020: circles that never overlap, with linked copies', () => {
       for (const i of c.items) if (i.kind === 'program') (listers.get(i.code) ?? listers.set(i.code, new Set()).get(i.code)!).add(owner);
       c.children.forEach((ch) => walk(owner, ch));
     };
-    for (const [id, d] of Object.entries(map.degrees)) walk(id, d.structure);
+    // Listed by the degrees drawn as circles, including the groups of what their doubles add (US-048).
+    for (const [id, d] of Object.entries(map.degrees)) {
+      if (d.halves) continue;
+      walk(id, d.structure);
+      for (const x of d.extras ?? []) (listers.get(x) ?? listers.set(x, new Set()).get(x)!).add(id);
+    }
     for (const [id, p] of Object.entries(map.programs)) walk(id, p.structure);
     for (const [p, who] of listers) {
       if (who.size === 1) expect(circle(p).parent, p).toBe([...who][0]);
@@ -187,7 +193,9 @@ describe('US-042: faculty neighbourhoods', () => {
 
   it("puts the faculty with the most degrees in the middle, and the others out sideways in order of size", () => {
     const order = facultyOrder(map).filter((o) => single(o.faculty).length);
-    const centre = (b.minX + b.maxX) / 2;
+    // The main map's centre: the offshore areas sit apart, to its right (US-050).
+    const main = top.filter((c) => !(layout.areas ?? []).some((a) => c.x >= a.x && c.x <= a.x + a.w));
+    const centre = (Math.min(...main.map((c) => c.x - c.r)) + Math.max(...main.map((c) => c.x + c.r))) / 2;
     const distance = order.map((o) => Math.abs(meanX(single(o.faculty)) - centre));
     expect(distance[0] / width).toBeLessThan(0.1);
     // Each of the next faculties sits no nearer the middle than the biggest.

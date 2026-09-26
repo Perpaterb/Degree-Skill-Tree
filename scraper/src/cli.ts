@@ -5,6 +5,7 @@ import { BlockedError } from './http.js';
 import { fetchItem, listItems, type ContentType, type ListedItem } from './handbook.js';
 import { buildMap } from './normalize.js';
 import { layoutMap } from '../../core/layout.js';
+import { pairDegrees } from '../../core/pairs.js';
 import { linkQuality } from '../../core/linkQuality.js';
 
 const YEAR = process.env.HANDBOOK_YEAR ?? '2026';
@@ -190,6 +191,8 @@ async function normalize() {
     for (const l of d.locations ?? []) if (!locations.home.includes(l) && !locations.away[l]) console.warn(`location "${l}" of ${d.code} is neither home nor away in data/locations/uts.json`);
   for (const d of Object.values(map.degrees))
     for (const p of d.titleParts ?? []) if (!p.colour && !colours.uncoloured?.[p.faculty]) console.warn(`no faculty colour for ${d.code} "${p.text}" (faculty "${p.faculty}")`);
+  // Double degrees from two halves, add-on halves, and what each double adds (US-048, US-049).
+  pairDegrees(map);
   const started = Date.now();
   map.layout = layoutMap(map);
   const copies = Object.keys(map.layout.nodes).length;

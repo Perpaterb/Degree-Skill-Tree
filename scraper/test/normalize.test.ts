@@ -16,7 +16,9 @@ function allItems(c: Container, out: Container['items'] = []): Container['items'
 
 describe('US-019: several degrees on one map', () => {
   it('holds every 2027 course (US-043), the five first pulled among them', () => {
-    expect(Object.keys(map.degrees).length).toBe(444);
+    // Every course, plus the 3 add-on halves that exist only inside double degrees (US-049).
+    expect(Object.values(map.degrees).filter((d) => !d.addOn).length).toBe(444);
+    expect(Object.values(map.degrees).filter((d) => d.addOn).length).toBe(3);
     expect(Object.keys(map.degrees)).toEqual(expect.arrayContaining(['C10026', 'C10148', 'C10219', 'C10471', 'C10476']));
   });
 

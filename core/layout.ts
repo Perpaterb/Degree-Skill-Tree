@@ -500,12 +500,21 @@ interface Box {
 type Packed = { r: number; x: number; y: number };
 
 export function layoutMap(map: MapDoc): Layout {
-  const degreeCodes = Object.keys(map.degrees).sort();
+  // A double degree built from two halves has no circle of its own: its halves do (US-048).
+  const degreeCodes = Object.keys(map.degrees)
+    .filter((d) => !map.degrees[d].halves)
+    .sort();
+  // A degree's circle also holds the groups of what its doubles add to it (US-048).
+  const structureOf = (id: string, kind: 'degree' | 'program'): Container => {
+    if (kind === 'program') return map.programs[id].structure;
+    const d = map.degrees[id];
+    return d.extras?.length ? { ...d.structure, items: [...d.structure.items, ...d.extras.map((code) => ({ kind: 'program' as const, code }))] } : d.structure;
+  };
 
   // Who lists each program directly. One lister: nest inside it. Several: place it at the top level.
   const parents = new Map<string, string[]>();
   const listers: [string, Container][] = [
-    ...degreeCodes.map((d) => [d, map.degrees[d].structure] as [string, Container]),
+    ...degreeCodes.map((d) => [d, structureOf(d, 'degree')] as [string, Container]),
     ...Object.keys(map.programs)
       .sort()
       .map((p) => [p, map.programs[p].structure] as [string, Container]),
@@ -518,14 +527,14 @@ export function layoutMap(map: MapDoc): Layout {
     (offeredBy.get(p) ?? offeredBy.set(p, new Set()).get(p)!).add(d);
     for (const q of directPrograms(map, map.programs[p].structure)) offer(q, d, seen);
   };
-  for (const d of degreeCodes) for (const p of directPrograms(map, map.degrees[d].structure)) offer(p, d, new Set());
+  for (const d of degreeCodes) for (const p of directPrograms(map, structureOf(d, 'degree'))) offer(p, d, new Set());
 
   const topLevel = new Set(Object.keys(map.programs).filter((p) => (parents.get(p)?.length ?? 0) !== 1));
   const built = new Set<string>();
 
   function build(id: string, kind: 'degree' | 'program', stack: string[]): Box {
     built.add(id);
-    const structure = kind === 'degree' ? map.degrees[id].structure : map.programs[id].structure;
+    const structure = structureOf(id, kind);
     const disc = buildDisc(map, directSubjects(map, structure));
     const kids = [...directPrograms(map, structure)]
       .filter((p) => !topLevel.has(p) && !stack.includes(p) && !built.has(p))
@@ -538,7 +547,7 @@ export function layoutMap(map: MapDoc): Layout {
     const e = packEnclose(items)!;
     const r = e.r + PAD;
     const size = TITLE_SIZE[kind];
-    const box = titleBox(kind === 'degree' ? map.degrees[id].title : map.programs[id].title, size, Math.max(size * 10, r * 1.6));
+    const box = titleBox(kind === 'degree' ? degreeTitle(map, id) : map.programs[id].title, size, Math.max(size * 10, r * 1.6));
     const gap = TITLE_GAP[kind];
     const top = -r - gap - box.h;
     const corners = [-1, 1].flatMap((sx) => [top, -r - gap].map((y) => ({ x: (sx * box.w) / 2, y, r: 0 })));
@@ -601,11 +610,11 @@ export function layoutMap(map: MapDoc): Layout {
   const circles: LayoutCircle[] = [];
   const edges: LayoutEdge[] = [];
   const emit = (b: Box, x: number, y: number, parent: string | null) => {
-    const structure = b.kind === 'degree' ? map.degrees[b.id].structure : map.programs[b.id].structure;
+    const structure = structureOf(b.id, b.kind);
     circles.push({
       id: b.id,
       kind: b.kind,
-      title: b.kind === 'degree' ? map.degrees[b.id].title : map.programs[b.id].title,
+      title: b.kind === 'degree' ? degreeTitle(map, b.id) : map.programs[b.id].title,
       label: { lines: b.title.lines, size: b.title.size, x: round(x), y: round(y - b.r - b.title.gap - b.title.h), w: b.title.w, h: b.title.h },
       x: round(x),
       y: round(y),
@@ -648,6 +657,9 @@ export function awayArea(map: MapDoc, degree: string): string | null {
   return at[0];
 }
 
+/** A degree's title on the map; an add-on half says it is only part of a double degree (US-049). */
+const degreeTitle = (map: MapDoc, id: string) => (map.degrees[id].addOn ? `${map.degrees[id].title} (only as part of a double degree)` : map.degrees[id].title);
+
 /** The faculties a degree belongs to: one, or one per part of a double degree. */
 export function facultiesOf(map: MapDoc, degree: string): string[] {
   const d = map.degrees[degree];
@@ -658,7 +670,8 @@ export function facultiesOf(map: MapDoc, degree: string): string[] {
 /** Faculties by number of degrees (a double degree counts half to each), most first; ties by name. */
 export function facultyOrder(map: MapDoc): { faculty: string; degrees: number }[] {
   const count = new Map<string, number>();
-  for (const code of Object.keys(map.degrees)) {
+  // Only degrees drawn as circles: a double built from halves is drawn as its halves (US-048).
+  for (const code of Object.keys(map.degrees).filter((d) => !map.degrees[d].halves)) {
     const fs = facultiesOf(map, code);
     for (const f of fs) count.set(f, (count.get(f) ?? 0) + 1 / fs.length);
   }

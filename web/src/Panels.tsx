@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import {
   missingFor,
@@ -16,6 +16,7 @@ import {
   type WayPartProgress,
   type WayProgress,
 } from '../../core/engine';
+import { chosenDegrees, partnersOf } from '../../core/pairs';
 import type { Container, Degree, MapDoc, Program, Rule, Subject } from '../../core/model';
 import { track } from './analytics';
 import { useApp } from './store';
@@ -345,8 +346,8 @@ function ProgramDetail({ program, map }: { program: Program; map: MapDoc }) {
         {program.code} {program.creditPoints ? `· ${program.creditPoints}cp` : ''}
       </div>
       {program.legacy ? <p className="note">Named by a degree but not published in the {map.year} handbook.</p> : null}
-      {lock ? <LockNote lock={lock} degree={map.degrees[degree!]} chosen={chosen} /> : null}
-      {offered || chosen ? (
+      {lock ? <LockNote lock={lock} degree={degree ? map.degrees[degree] : undefined} chosen={chosen} /> : null}
+      {program.onlyWith ? null : offered || chosen ? (
         <div className="actions">
           {chosen && lock ? (
             <button onClick={() => toggle(program.code)} data-testid="unchoose">
@@ -385,6 +386,79 @@ function ProgramDetail({ program, map }: { program: Program; map: MapDoc }) {
   );
 }
 
+/**
+ * Choosing a degree (US-046), adding a second to make a double (US-048), an add-on half waiting for a
+ * degree to join (US-049), and a degree locked by the current choice (US-047).
+ */
+function DegreeActions({ degree, map }: { degree: Degree; map: MapDoc }) {
+  const current = useApp((s) => s.plan.degree);
+  const lock = useApp((s) => s.degreeLocks.get(degree.code));
+  const selectDegree = useApp((s) => s.selectDegree);
+  const chosen = chosenDegrees(map, current);
+  const now = current ? map.degrees[current] : null;
+  const made = current && !now?.halves ? partnersOf(map, current).get(degree.code) : undefined;
+  const pairs = degree.addOn ? [...partnersOf(map, degree.code).keys()].map((c) => map.degrees[c]) : [];
+  let button: ReactElement;
+  if (current === degree.code) {
+    button = (
+      <button className="on" onClick={() => selectDegree(null)} data-testid="choose-degree">
+        ✓ Chosen (clear)
+      </button>
+    );
+  } else if (chosen.includes(degree.code)) {
+    // One half of the chosen double: removing it leaves the other, unless that is an add-on half.
+    const other = now!.halves!.find((h) => h !== degree.code)!;
+    button = (
+      <button className="on" onClick={() => selectDegree(map.degrees[other].addOn ? null : other)} data-testid="choose-degree">
+        ✓ Chosen, part of {now!.title} (remove)
+      </button>
+    );
+  } else if (lock) {
+    button = (
+      <button disabled data-testid="choose-degree">
+        Locked
+      </button>
+    );
+  } else if (made) {
+    button = (
+      <button onClick={() => selectDegree(made)} data-testid="choose-degree">
+        Add to make {map.degrees[made].title}
+      </button>
+    );
+  } else {
+    button = (
+      <button onClick={() => selectDegree(degree.code)} data-testid="choose-degree">
+        Choose this degree
+      </button>
+    );
+  }
+  return (
+    <>
+      {degree.halves ? (
+        <p className="note" data-testid="double-halves">
+          A double degree: choose {map.degrees[degree.halves[0]].title} and {map.degrees[degree.halves[1]].title}, in either order.
+        </p>
+      ) : null}
+      {degree.addOn ? (
+        <p className="note" data-testid="add-on-note">
+          Only as part of a double degree. It pairs with: {pairs.map((d) => d.title).join(', ')}.
+        </p>
+      ) : null}
+      {lock ? (
+        <div className="note lock-note" data-testid="degree-lock-note">
+          <b>✗ Locked.</b> {lock}{' '}
+          {current ? (
+            <button className="link" onClick={() => selectDegree(null)}>
+              Clear {now!.title}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="actions">{button}</div>
+    </>
+  );
+}
+
 function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
   const plan = useApp((s) => s.plan);
   const fit = useApp((s) => s.fits.get(degree.code));
@@ -407,11 +481,7 @@ function DegreeDetail({ degree, map }: { degree: Degree; map: MapDoc }) {
         </b>
         <Bar p={root} />
       </div>
-      <div className="actions">
-        <button className={isSel ? 'on' : ''} onClick={() => selectDegree(isSel ? null : degree.code)} data-testid="choose-degree">
-          {isSel ? '✓ Chosen (clear)' : 'Choose this degree'}
-        </button>
-      </div>
+      <DegreeActions degree={degree} map={map} />
       {noMajor ? <p className="muted small">Choose a major: hover "Major" in the outline to see them, then click one of the glowing circles.</p> : null}
       {fit && fit.completedCp > 0 ? (
         <section data-testid="degree-fit">
@@ -461,11 +531,21 @@ function DegreeTitle({ degree }: { degree: Degree }) {
 }
 
 /** Why a program can no longer count towards the selected degree, and what is in the way (US-037, US-038). */
-function LockNote({ lock, degree, chosen }: { lock: Lock; degree: Degree; chosen: boolean }) {
+function LockNote({ lock, degree, chosen }: { lock: Lock; degree: Degree | undefined; chosen: boolean }) {
   const map = useApp((s) => s.map)!;
   return (
     <div className="note lock-note" data-testid="lock-note" data-why={lock.why}>
-      <b>✗ {chosen ? `Chosen, but cannot count towards ${degree.title}.` : `Cannot count towards ${degree.title}.`}</b> {lock.text}
+      <b>
+        ✗{' '}
+        {lock.why === 'pairing' || !degree
+          ? chosen
+            ? 'Chosen, but locked.'
+            : 'Locked.'
+          : chosen
+            ? `Chosen, but cannot count towards ${degree.title}.`
+            : `Cannot count towards ${degree.title}.`}
+      </b>{' '}
+      {lock.text}
       {lock.blockers.length ? (
         <ul className="plain">
           {lock.blockers.map((b) => (
@@ -855,7 +935,7 @@ export function DegreeChip() {
   const select = useApp((s) => s.select);
   const selectDegree = useApp((s) => s.selectDegree);
   const root = useMemo(() => (map && plan.degree ? progress(map, plan.degree, plan) : null), [map, plan]);
-  const glow = useGlowOn(plan.degree ? [plan.degree] : []);
+  const glow = useGlowOn(map ? chosenDegrees(map, plan.degree) : []);
   if (!map || !root || !plan.degree || selected === plan.degree) return null;
   return (
     <div className="panel degree-chip" data-testid="degree-chip">
@@ -904,7 +984,7 @@ export function TopBar() {
           <div className="brand-name">Degree Skill Tree</div>
           {map ? (
             <div className="brand-sub">
-              {map.institution} {map.year} · {Object.keys(map.degrees).length} degrees
+              {map.institution} {map.year} · {Object.values(map.degrees).filter((d) => !d.addOn).length} degrees
             </div>
           ) : null}
         </div>
@@ -921,6 +1001,8 @@ export function TopBar() {
         >
           <option value="">Any degree (explore)</option>
           {Object.values(map.degrees)
+            // An add-on half is never chosen first (US-049).
+            .filter((d) => !d.addOn)
             .sort((a, b) => a.title.localeCompare(b.title))
             .map((d) => (
             <option key={d.code} value={d.code}>

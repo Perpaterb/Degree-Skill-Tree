@@ -273,7 +273,12 @@ test('US-036: a major counting under one requirement is not listed under another
 
 test('US-037: choosing 2 majors crosses out every other major and sub-major, and unchoosing one brings them back', async ({ page }) => {
   const program = (panel: ReturnType<Page['getByTestId']>, code: string) => panel.locator(`[data-testid="outline-program"][data-code="${code}"]`).first();
-  const locked = () => page.evaluate(() => window.__dst!.locked().sort());
+  // Programs crossed out by US-037's rules; not locked degrees (US-047) or what only a double offers (US-048).
+  const locked = () =>
+    page.evaluate(() => {
+      const why = window.__dst!.lockReasons();
+      return window.__dst!.locked().filter((c) => why[c] && why[c] !== 'pairing').sort();
+    });
   // Nothing locked with one major.
   let panel = await outline(page, 'm=MAJ02081');
   await openWay(panel, 1);
@@ -321,9 +326,17 @@ test('US-037: a completed sub-major locked out by the major that shares its subj
   await expect(note).toHaveAttribute('data-why', 'overlap');
   await expect(note).toContainText('Data Analytics (major)');
 
-  // With no degree selected, nothing is locked and it glows green on its own again.
+  // With no degree selected, no program is crossed out by US-037's rules (add-on halves and what only a
+  // double offers stay locked: US-048, US-049), and it glows green on its own again.
   await page.getByTestId('degree-picker').selectOption('');
-  await expect.poll(() => page.evaluate(() => window.__dst!.locked())).toEqual([]);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const why = window.__dst!.lockReasons();
+        return window.__dst!.locked().filter((c) => why[c] && why[c] !== 'pairing');
+      }),
+    )
+    .toEqual([]);
   expect(await page.evaluate(() => window.__dst!.finished()['SMJ02065'])).toBe('complete');
 });
 

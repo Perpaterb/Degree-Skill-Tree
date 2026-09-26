@@ -186,17 +186,10 @@ test.describe('faculty colours (US-039, US-040)', () => {
     expect(lum(light)).toBeLessThan(lum(BUSINESS));
   });
 
-  test('US-040: the IT and Business double degree title is drawn in both faculty colours, on the map and in its panel', async ({ page }) => {
+  test('US-040: the IT and Business double degree title is drawn in both faculty colours in its panel', async ({ page }) => {
     await openTree(page, 't=uts-2027');
-    const t = await title(page, 'C10219');
-    expect(t.parts).toEqual([
-      { text: 'Bachelor of Information Technology', fill: IT },
-      { text: 'Bachelor of Business', fill: BUSINESS },
-    ]);
-    // Drawn with a colour tag per part: the IT words in p0, the Business words in p1.
-    expect(t.tags).toEqual({ p0: IT, p1: BUSINESS });
-    expect(t.text).toMatch(/^<p0>Bachelor of<\/p0>/);
-    expect(t.text).toMatch(/<p1>Business<\/p1>$/);
+    // Since US-048 the double has no circle of its own (its halves do), so its title is only in the panel.
+    expect(await page.evaluate(() => window.__dst!.title('C10219'))).toBeNull();
 
     await goTo(page, 'C10219');
     const spans = page.getByTestId('degree-title').locator('span');

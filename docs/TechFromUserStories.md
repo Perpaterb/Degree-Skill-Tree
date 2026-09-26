@@ -686,3 +686,46 @@ Stories are in [`UserStories.md`](UserStories.md).
   and the chip). Seen to fail with click-to-choose restored. `e2e/multidegree.spec.ts`: the two tests
   that chose a degree by clicking its circle now click Choose in its panel.
 - Files: `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`, `e2e/degreepairs.spec.ts`, `e2e/multidegree.spec.ts`.
+
+### US-047, US-048, US-049 Double degrees from two halves, locking and add-on halves (`degree-pairs` branch)
+- `core/pairs.ts` (institution-agnostic, run in the map build before the layout):
+  - `pairDegrees(map)`: each double's title parts are matched to a stand-alone degree with that title
+    (the home one where two share a title), or to an add-on half found as the double's top-level
+    section named after it. 91 of 92 doubles get `Degree.halves`; Education Futures + Master of
+    Teaching in Primary Education has neither and keeps its circle.
+  - Add-on halves become degrees `A-<slug>` with `addOn.combined`, built from the section most of their
+    doubles share (containers re-id'd, since progress is keyed by container id).
+  - What a double adds beyond its halves (items in its section for that half; for doubles without a
+    section per half, the half whose faculty teaches most of the item's subjects) is grouped per half
+    by exactly which doubles add it: synthetic programs `X-<half>-<doubles>` titled "With <partner> or
+    ...", with `onlyWith`, listed in the half's `Degree.extras`. 43 groups, 93 items on 2027 data.
+  - `chosenDegrees`, `combinedOf`, `partnersOf`; `degreeLocks(map, degree)` (US-047, US-049) and
+    `pairingLocks(map, plan)` (groups and what they hold, unless one of their doubles is chosen and
+    unless a stand-alone degree also offers it; programs chosen under a half the chosen double drops).
+    `Lock.why` gains `'pairing'`.
+- The plan still stores the double's own code once both halves are chosen, so links are unchanged.
+- `core/layout.ts`: degrees with halves get no circle; a degree's circle also lists its `extras`;
+  `facultyOrder` counts only degrees drawn; an add-on half's title adds "(only as part of a double
+  degree)". Map: circles 1,086 to 1,041, subject copies 15,682 to 14,467, links 14,897 to 13,512.
+- Store (`web/src/store.ts`): `locks` merges `programLocks` with `pairingLocks`; new `degreeLocks`.
+- Canvas: a locked degree is drawn like a locked program; both halves of a chosen double look chosen;
+  copies inside either half count as inside the chosen degree; flying to a double goes to its first half.
+  Test hook `__dst.lockReasons()`.
+- Panels: `DegreeActions` (Choose / Add to make <double> / Chosen, part of <double> (remove) / Locked
+  with the reason and a clear button; notes for a double's halves and an add-on half's partners); the
+  lock note handles pairing locks with no degree chosen; group panels offer no Choose; the picker and
+  the degree count leave out add-on halves.
+- Tests: `core/pairs.test.ts` (real data: halves, partners, circles removed, groups inside their half,
+  add-on halves, degree locks with nothing / an undergraduate / a double / a postgraduate course chosen,
+  pairing locks, a program a stand-alone degree also offers never locks, carry-over lock).
+  `e2e/degreepairs.spec.ts` (US-047, US-048 x2, US-049, and US-046's picker-with-a-locked-degree case).
+  Seen to fail with no degree locks, no partners, chosen halves ignored, and the shared-program fix
+  removed. Updated for the new model: `core/layout.test.ts` (no circle for doubles with halves;
+  listers include extras; faculty order measured from the main map's centre, since US-050's areas widen
+  the bounds), `scraper/test/normalize.test.ts` (444 courses plus 3 add-on halves), `e2e/view.spec.ts`
+  (US-040's two colours checked on the panel title), `e2e/outline.spec.ts` (US-037's lock counts leave
+  out degree and pairing locks).
+- Files: `core/pairs.ts`, `core/pairs.test.ts`, `core/model.ts`, `core/engine.ts`, `core/layout.ts`,
+  `core/layout.test.ts`, `scraper/src/cli.ts`, `scraper/test/normalize.test.ts`, `web/src/store.ts`,
+  `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`, `e2e/degreepairs.spec.ts`, `e2e/view.spec.ts`,
+  `e2e/outline.spec.ts`, `web/public/trees/uts-2027.json`.

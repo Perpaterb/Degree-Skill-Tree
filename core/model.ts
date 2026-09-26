@@ -42,6 +42,15 @@ export interface Degree {
   titleParts?: TitlePart[];
   /** Where it is offered, from the handbook's intakes (e.g. "City campus", "China"); empty when none are listed. */
   locations?: string[];
+  /**
+   * A double degree built by choosing its two halves (US-048): the codes of its halves, each a
+   * stand-alone degree or an add-on half. It has no circle of its own on the map.
+   */
+  halves?: [string, string];
+  /** An add-on half (US-049): only studied as part of these double degrees, never on its own. */
+  addOn?: { combined: string[] };
+  /** Groups of what only a double degree adds to this half, drawn inside its circle (US-048). */
+  extras?: string[];
 }
 
 export interface TitlePart {
@@ -62,6 +71,11 @@ export interface Program {
   structure: Container;
   /** True when the degree names this program but the handbook year has no page for it. */
   legacy?: boolean;
+  /**
+   * A group of what some double degrees add to one of their halves, locked until one of those doubles
+   * is chosen (US-048): the doubles, the half it sits in, and the partner each double pairs it with.
+   */
+  onlyWith?: { combined: string[]; half: string; partners: string[] };
 }
 
 /**

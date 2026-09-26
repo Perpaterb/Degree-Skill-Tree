@@ -510,8 +510,11 @@ export function programProgress(map: MapDoc, code: string, plan: Plan): Progress
 
 /** Why a major or sub-major can no longer count towards the selected degree (US-037). */
 export interface Lock {
-  /** No room left for it; its subjects count elsewhere so it cannot be completed; or it clashes with a subject taken. */
-  why: 'room' | 'overlap' | 'clash';
+  /**
+   * No room left for it; its subjects count elsewhere so it cannot be completed; it clashes with a
+   * subject taken; or it belongs to a double degree that is not the one chosen (US-048).
+   */
+  why: 'room' | 'overlap' | 'clash' | 'pairing';
   text: string;
   /** Chosen programs (room, overlap) or taken subjects (clash) that cause it. */
   blockers: string[];
