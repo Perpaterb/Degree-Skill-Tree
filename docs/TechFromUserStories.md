@@ -747,3 +747,20 @@ Stories are in [`UserStories.md`](UserStories.md).
   and US-023 unchoose before choosing a degree that does not pair.
 - Files: `core/pairs.ts`, `core/pairs.test.ts`, `web/src/Panels.tsx`, `e2e/degreepairs.spec.ts`,
   `e2e/multidegree.spec.ts`, `docs/UserStories.md`.
+
+### US-045 Requisite lines missing for some subjects (bug, `degree-pairs` branch, 27 Sep 2026)
+- Canvas (`web/src/TreeCanvas.tsx`): the focus's requisite lines now light from every subject its rule
+  names (`ruleSubjects`), whichever alternative it is in; an unmet one is also ringed as on the chain, a
+  met one lights in the done colour. The deeper chain still comes from `missingFor`. Test hook
+  `__dst.litEdges()` ("from>to" codes).
+- Engine (`core/engine.ts`): `Missing.unchecked` counts conditions on a route the map cannot check (free
+  text; a course requirement with no degree chosen), and `missingFor` ranks each at 500, so a route
+  through subjects beats an admission-only one; with nothing else, the text route is still the answer.
+  This also changes which subjects the US-025 prompt lists for such rules (subjects, not the admission
+  note). Alone it lit 134 of the 421 dark subjects; lighting every named requisite covers the rest.
+- Tests: `core/engine.test.ts` (subjects route beats an admission-only one; the text route stands when
+  it is the only one), `e2e/requisites.spec.ts` (76024, 70317, 77889, and 70107 as a control, each
+  lights all its drawn requisite lines). Seen to fail with each change removed (all four E2E, including
+  70107, which lit one of its two).
+- Files: `core/engine.ts`, `core/engine.test.ts`, `web/src/TreeCanvas.tsx`, `e2e/requisites.spec.ts`,
+  `docs/UserStories.md`.

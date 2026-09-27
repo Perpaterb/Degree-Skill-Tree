@@ -303,16 +303,15 @@ As a student, I want circle titles to stay readable at every zoom, so the zoomed
 Considered and dropped (26 Sep 2026): a cloud per faculty naming it at the far zoom. With the
 titles decluttered the zoomed-out map reads well enough without it.
 
-### US-045 Bug: requisite lines missing for some subjects (noted 27 Sep 2026, not started)
+### US-045 Bug: requisite lines missing for some subjects (noted and fixed 27 Sep 2026)
 As a student, I want every subject's requisite lines to light up when I hover or select it, so I can see what it needs.
-- [ ] Hovering or selecting a subject lights the lines to its requisite subjects whenever its rule names any. Reported: 76024, 70317 (and many more); 77889 shows what it unlocks but not its requisites; 70107, 70109, 70114 work
-- [ ] E2E (tagged US-045) on 76024, 70317 and 77889
+- [x] Hovering or selecting a subject lights the lines to its requisite subjects whenever its rule names any. Reported: 76024, 70317 (and many more); 77889 shows what it unlocks but not its requisites; 70107, 70109, 70114 work
+- [x] E2E (tagged US-045) on 76024, 70317 and 77889
 
-Likely cause, to confirm when this is picked up: the lit chain comes from `missingFor` (`core/engine.ts`),
-which takes the cheapest branch of an OR. A text branch such as "Admission into C11211 Graduate
-Certificate in ..." costs nothing, so it wins and the chain has no subjects. The links exist in the map
-data (76024 has 28 incoming); only the highlight is empty. What a subject unlocks is worked out
-separately (`unlockedBy`), which is why those lines still show.
+Cause, confirmed: the lit chain came from `missingFor` (`core/engine.ts`), which takes the cheapest branch of
+an OR, and a text branch such as "Admission into C04143 Master of Laws" cost nothing, so the chain had no
+subjects. 421 of the 1,160 subjects with requisite lines drawn lit none of them. 70107 was only partly
+working: one of its two requisite lines lit.
 
 ### US-046 Choose a degree, don't just click it (`degree-pairs` branch)
 As a student, I want to choose a degree deliberately, as I choose a major, rather than by clicking its circle.

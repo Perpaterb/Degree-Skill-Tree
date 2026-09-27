@@ -152,6 +152,16 @@ describe('missingFor', () => {
   it('leaves out a credit-point condition that is already met', () => {
     expect(missingFor(tree, 'E', new Set(['A', 'B'])).notes).toEqual([]);
   });
+
+  it('prefers a route through subjects over one resting on a condition it cannot check (US-045)', () => {
+    // Z needs (A AND B) OR an admission it cannot check, e.g. "Admission into C11211 ...".
+    const admission = { text: 'Admission into C11211 Graduate Certificate in Australian Law' };
+    const withZ: MapDoc = { ...tree, subjects: { ...tree.subjects, Z: subject('Z', { requisite: { op: 'or', args: [{ op: 'and', args: [{ subject: 'A' }, { subject: 'B' }] }, admission] } }) } };
+    expect(missingFor(withZ, 'Z', new Set()).subjects).toEqual(['A', 'B']);
+    // With only the admission to go on, it is still the answer.
+    const onlyText: MapDoc = { ...tree, subjects: { ...tree.subjects, Z: subject('Z', { requisite: admission }) } };
+    expect(missingFor(onlyText, 'Z', new Set()).notes).toEqual([admission.text]);
+  });
 });
 
 describe('prerequisiteGap (US-025)', () => {

@@ -1,7 +1,7 @@
 import { Application, BitmapFont, BitmapText, CanvasTextMetrics, Container, Graphics, Text } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { useEffect, useRef } from 'react';
-import { compulsorySubjects, missingFor, subjectsUnder, unlockedBy } from '../../core/engine';
+import { compulsorySubjects, missingFor, ruleSubjects, subjectsUnder, unlockedBy } from '../../core/engine';
 import { chosenDegrees } from '../../core/pairs';
 import { circleAt, SUBJECT_R, TITLE_LINE, type Layout, type LayoutArea, type LayoutCircle, type LayoutNode, type PathCmd } from '../../core/layout';
 import type { MapDoc } from '../../core/model';
@@ -176,6 +176,8 @@ interface Scene {
   finished: Record<string, 'complete' | 'planned'>;
   /** Program circles drawn locked out (grey, red, crossed) in the last paint (US-037). */
   locked: string[];
+  /** Links lit as a requisite chain or an unlock in the last paint, as "from>to" codes (US-045). */
+  litEdges: string[];
   /** Subject codes drawn with the glow ring (search match or a hovered panel row) in the last paint. */
   ringed: Set<string>;
   /** Ask for one redraw on the next frame. */
@@ -215,6 +217,8 @@ declare global {
       zoom(): number;
       finished(): Record<string, 'complete' | 'planned'>;
       locked(): string[];
+      /** Links lit as a requisite chain or an unlock, as "from>to" subject codes (US-045). */
+      litEdges(): string[];
       /** Why each locked program is locked: 'room', 'overlap', 'clash' (US-037) or 'pairing' (US-048). */
       lockReasons(): Record<string, string>;
       ringed(): string[];
@@ -454,7 +458,7 @@ export function TreeCanvas() {
       });
 
       scene.current = {
-        app, viewport, areas, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, locked: [], ringed: new Set(), invalidate,
+        app, viewport, areas, nodes, circles, layout, map, hue, glowing: [], highlighted: [], finished: {}, locked: [], ringed: new Set(), invalidate, litEdges: [],
         nodeLayer, dots, far: false, dotsStale: true, edgesLit, edgeLayer, tiles, popLayer, hitGrid, lodStamp: 0,
       };
       // The camera moves on its own during inertia and fly-to animations, so each of these redraws.
@@ -492,6 +496,7 @@ export function TreeCanvas() {
         zoom: () => scene.current?.viewport.scale.x ?? 1,
         finished: () => scene.current?.finished ?? {},
         locked: () => scene.current?.locked ?? [],
+        litEdges: () => scene.current?.litEdges ?? [],
         lockReasons: () => Object.fromEntries([...useApp.getState().locks].map(([code, l]) => [code, l.why])),
         ringed: () => [...(scene.current?.ringed ?? [])],
         title(id) {
@@ -912,8 +917,15 @@ function paint(s: Scene) {
   const focus = hovered ?? (selected && map.subjects[selected] ? selected : null);
   const path = new Set<string>();
   const unlocks = new Set<string>();
+  // Every subject the focus's rule names, whichever alternative it is in: its lines always light
+  // (US-045). The chain below them follows the cheapest route to it.
+  const requires = new Set<string>();
   if (focus && map.subjects[focus]) {
     missingFor(map, focus, completed, plan.degree).subjects.forEach((c) => path.add(c));
+    ruleSubjects(map.subjects[focus].requisite).forEach((c) => {
+      requires.add(c);
+      if (!completed.has(c)) path.add(c);
+    });
     unlockedBy(map, focus).forEach((c) => unlocks.add(c));
   }
   const matchSet = new Set(matches);
@@ -1089,12 +1101,13 @@ function paint(s: Scene) {
   const style = (edge: Layout['edges'][number], focused: boolean) => {
     const from = edge.fromCode;
     const to = edge.toCode;
-    const onPath = focused && focus && (path.has(from) || from === focus) && (path.has(to) || to === focus);
+    const onPath = focused && focus && (((path.has(from) || from === focus) && (path.has(to) || to === focus)) || (to === focus && requires.has(from)));
     const unlocking = focused && focus && from === focus && unlocks.has(to);
     let alpha = 1;
     let color: number;
     let width: number;
-    if (onPath) (color = canvas.edgePath), (width = 5);
+    // A requisite already done lights in the done colour, not as something still needed.
+    if (onPath) (color = completed.has(from) ? canvas.edgeDone : canvas.edgePath), (width = 5);
     else if (unlocking) (color = canvas.edgeUnlock), (width = 4);
     else if (completed.has(from) && completed.has(to)) (color = canvas.edgeDone), (width = 5);
     else if (completed.has(from) && states.get(to) === 'available') (color = canvas.edgeOpen), (width = 3);
@@ -1126,9 +1139,11 @@ function paint(s: Scene) {
   }
   s.edgeLayer.alpha = dimming ? 0.15 : 1;
   const lit = s.edgesLit.clear();
+  s.litEdges = [];
   if (focus || dimming)
     for (const edge of layout.edges) {
       const st = style(edge, true);
+      if (st.lit) s.litEdges.push(`${edge.fromCode}>${edge.toCode}`);
       if (!(st.lit || (dimming && litNode(edge.fromCode) && litNode(edge.toCode)))) continue;
       tracePath(lit, edge.path);
       lit.stroke(st);

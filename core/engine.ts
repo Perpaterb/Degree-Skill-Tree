@@ -87,6 +87,11 @@ export interface Missing {
   creditPoints: number;
   /** Conditions that cannot be satisfied by picking subjects (credit-point totals, free text). */
   notes: string[];
+  /**
+   * Conditions on this route the map cannot check: free text (e.g. "Admission into C04143 Master of
+   * Laws"), or a course requirement when no degree is chosen. A route with fewer wins (US-045).
+   */
+  unchecked?: number;
 }
 
 /**
@@ -101,15 +106,20 @@ export function missingFor(map: MapDoc, code: string, have: Set<string>, enrolle
   const merge = (parts: Missing[]): Missing => {
     const subjects: string[] = [];
     const notes: string[] = [];
+    let unchecked = 0;
     for (const p of parts) {
       for (const s of p.subjects) if (!subjects.includes(s)) subjects.push(s);
       for (const n of p.notes) if (!notes.includes(n)) notes.push(n);
+      unchecked += p.unchecked ?? 0;
     }
-    return { subjects, notes, creditPoints: subjects.reduce((t, s) => t + (map.subjects[s]?.creditPoints ?? 6), 0) };
+    return { subjects, notes, creditPoints: subjects.reduce((t, s) => t + (map.subjects[s]?.creditPoints ?? 6), 0), unchecked };
   };
 
+  // A route through subjects beats one resting on a condition the map cannot check: an admission-only
+  // alternative used to win at no cost, so the requisite lines never lit (US-045). Legacy subjects
+  // cost the most, since they cannot be taken at all.
   const cost = (m: Missing | null) =>
-    m === null ? Infinity : m.creditPoints + m.subjects.filter((s) => map.subjects[s]?.legacy || !map.subjects[s]).length * 1000;
+    m === null ? Infinity : m.creditPoints + (m.unchecked ?? 0) * 500 + m.subjects.filter((s) => map.subjects[s]?.legacy || !map.subjects[s]).length * 1000;
 
   function forRule(rule: Rule | null, stack: string[]): Missing | null {
     if (!rule) return { subjects: [], notes: [], creditPoints: 0 };
@@ -121,10 +131,14 @@ export function missingFor(map: MapDoc, code: string, have: Set<string>, enrolle
       return best;
     }
     if ('subject' in rule) return forSubject(rule.subject, stack);
-    if ('course' in rule) return (enrolled ? rule.course === enrolled : !!map.degrees[rule.course]) ? merge([]) : null;
+    if ('course' in rule) {
+      if (enrolled) return rule.course === enrolled ? merge([]) : null;
+      // No degree chosen: assumed possible, but unchecked.
+      return map.degrees[rule.course] ? merge([{ subjects: [], notes: [], creditPoints: 0, unchecked: 1 }]) : null;
+    }
     if ('creditPoints' in rule)
       return merge(haveCp >= rule.creditPoints ? [] : [{ subjects: [], creditPoints: 0, notes: [`at least ${rule.creditPoints}cp completed`] }]);
-    return merge([{ subjects: [], creditPoints: 0, notes: [rule.text] }]);
+    return merge([{ subjects: [], creditPoints: 0, notes: [rule.text], unchecked: 1 }]);
   }
 
   function forSubject(c: string, stack: string[]): Missing | null {
