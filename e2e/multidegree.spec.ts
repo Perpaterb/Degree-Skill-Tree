@@ -58,6 +58,8 @@ test('US-021: a selected degree stays selected across reloads until another is c
   await waitReady(page);
   await expect(page.getByTestId('degree-picker')).toHaveValue('C10476');
 
+  // Another degree that does not pair with it is locked until this one is unchosen (US-047).
+  await page.getByTestId('unchoose-degree').click();
   await chooseDegree(page, 'C10148');
   await expect(page.getByTestId('degree-chip')).toContainText('Bachelor of Information Technology');
   await page.getByTestId('degree-chip').getByRole('button', { name: 'Clear degree' }).click();
@@ -94,7 +96,8 @@ test('US-023: completed subjects grey the degrees they do not fit, and a greyed 
   for (const code of ['22208', '24109', '25400']) await expect(fit).toContainText(code);
   await expect(fit).toContainText('free electives are used up');
 
-  // The same subjects all count towards Business itself.
+  // The same subjects all count towards Business itself (unchoosing first: US-047).
+  await page.getByTestId('unchoose-degree').click();
   await page.getByTestId('degree-picker').selectOption('C10026');
   await expect(page.getByTestId('degree-fit')).toContainText('36 of your 36cp would count');
 });

@@ -185,39 +185,26 @@ export function partnersOf(map: MapDoc, code: string): Map<string, string> {
   return out;
 }
 
-const undergraduate = (map: MapDoc, code: string) => /undergrad/i.test(map.degrees[code]?.level ?? '');
 const names = (map: MapDoc, codes: string[]) => codes.map((c) => map.degrees[c]?.title ?? c).join(', ');
 
 /**
- * Degrees that cannot be chosen with the current choice, and why (US-047, US-049). With an
- * undergraduate degree chosen, other undergraduate degrees lock unless they pair with it; with a
- * double chosen, every other undergraduate degree locks. Postgraduate courses never lock. An add-on
- * half is locked until a degree it pairs with is chosen. Doubles built from halves have no circle and
- * are not listed.
+ * Degrees that cannot be chosen with the current choice, and why (US-047, US-049). With a degree
+ * chosen, every other degree locks unless it pairs with it to make a combined course; with a double
+ * chosen, every other degree locks. An add-on half is locked until a degree it pairs with is chosen.
+ * Doubles built from halves have no circle and are not listed.
  */
 export function degreeLocks(map: MapDoc, degree: string | null): Map<string, string> {
   const locks = new Map<string, string>();
   const chosen = chosenDegrees(map, degree);
   const d = degree ? map.degrees[degree] : null;
   const partners = d && !d.halves ? partnersOf(map, d.code) : new Map<string, string>();
+  const notConnected = d
+    ? `This is not connected to your chosen degree. You'll need to unchoose ${d.title} before choosing this. You can also use Unchoose degree or Reset at the top right.`
+    : '';
   for (const x of Object.values(map.degrees)) {
-    if (x.halves || chosen.includes(x.code)) continue;
-    if (x.addOn) {
-      if (partners.has(x.code)) continue;
-      const pairs = [...partnersOf(map, x.code).keys()];
-      locks.set(
-        x.code,
-        d?.halves
-          ? `Only as part of a double degree, and ${d.title} is already a double degree.`
-          : d
-            ? `Only as part of a double degree, and it does not pair with ${d.title}. It pairs with: ${names(map, pairs)}.`
-            : `Only as part of a double degree. Choose a degree it pairs with first: ${names(map, pairs)}.`,
-      );
-      continue;
-    }
-    if (!d || !undergraduate(map, x.code) || !undergraduate(map, d.halves ? d.halves[0] : d.code)) continue;
-    if (d.halves) locks.set(x.code, `${d.title} is chosen, and a double degree cannot take a third degree.`);
-    else if (!partners.has(x.code)) locks.set(x.code, `Does not combine with ${d.title}: there is no double degree of the two.`);
+    if (x.halves || chosen.includes(x.code) || partners.has(x.code)) continue;
+    if (d) locks.set(x.code, notConnected);
+    else if (x.addOn) locks.set(x.code, `Only as part of a double degree. Choose a degree it pairs with first: ${names(map, [...partnersOf(map, x.code).keys()])}.`);
   }
   return locks;
 }

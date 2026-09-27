@@ -27,6 +27,7 @@ academic dress; double degrees in both colours; a standard faculty-colour lookup
 built on the `big-map` branch as an experiment).
 26 Sep 2026: US-044 added (titles never pile up on the zoomed-out map, `big-map` branch).
 27 Sep 2026: US-045 noted (bug: requisite lines missing for some subjects).
+27 Sep 2026: US-047 changed (every kind of course locks, not only undergraduate) and US-051 added (Unchoose degree button).
 27 Sep 2026: US-046 to US-050 added on the `degree-pairs` branch (degrees chosen from their panel;
 undergraduate degrees that cannot combine are locked; double degrees built from two halves, with their
 circles removed; add-on halves locked until they have a degree to attach to; offshore degrees apart).
@@ -315,21 +316,23 @@ separately (`unlockedBy`), which is why those lines still show.
 
 ### US-046 Choose a degree, don't just click it (`degree-pairs` branch)
 As a student, I want to choose a degree deliberately, as I choose a major, rather than by clicking its circle.
-- [x] Clicking a degree circle opens its panel; a **Choose this degree** button selects it. The top-bar picker still chooses directly, replacing the current choice even when the picked degree is locked
+- [x] Clicking a degree circle opens its panel; a **Choose this degree** button selects it. The top-bar picker still chooses directly *(27 Sep 2026: no longer past a lock; see US-047)*
 - [x] Clearing the degree (the chip or the panel) unchooses it
 - [x] E2E (tagged US-046): clicking a degree circle opens its panel without choosing it; Choose chooses it; clearing unchooses it
 
-### US-047 Undergraduate degrees that cannot go with your choice are locked (`degree-pairs` branch)
-As a student, I want the degrees I can no longer combine with my choice locked, so the map narrows to what is still possible.
-- [x] With an undergraduate degree chosen, every undergraduate degree that cannot combine with it is locked: grey, red outline, a cross, and Choose disabled with the reason (and a way to clear the current choice). Its double-degree partners stay open. With a double chosen, every other undergraduate degree is locked
-- [x] Postgraduate and research courses (master's, graduate certificates, PhDs) never lock because a bachelor is chosen: they are separate courses, open to a bachelor from anywhere. Choosing a postgraduate course locks nothing. Entry requirements (ATAR, prior degrees) are out of scope
-- [x] Clearing the choice unlocks everything
-- [x] E2E (tagged US-047): choosing the Bachelor of Business leaves its partners open and locks a non-partner bachelor; a master's stays open; clearing unlocks
+### US-047 Degrees that cannot join your choice are locked (`degree-pairs` branch)
+As a student, I want every degree I can no longer add to my choice locked, so the map narrows to what is still possible.
+*Changed 27 Sep 2026: was "undergraduate degrees only; postgraduate courses never lock", built and tested (see TechFromUserStories US-047), then changed so every kind of course locks.*
+- [x] With any degree chosen, every degree that cannot be added to it to make a combined course is locked: bachelors, master's, graduate certificates and PhDs alike, drawn grey with a red outline and a cross. Only its double-degree partners stay open. With a double chosen, everything else is locked
+- [x] A locked degree can still be clicked; its panel says "This is not connected to your chosen degree. You'll need to unchoose <degree> before choosing this. You can also use Unchoose degree or Reset at the top right." Its Choose button is disabled
+- [x] In the top-bar picker, locked degrees are shown disabled and cannot be picked; picking a partner makes the double, as "Add to make" does
+- [x] Unchoosing the degree unlocks everything
+- [x] E2E (tagged US-047): with the Bachelor of Science chosen, a bachelor it does not pair with, a master's and a PhD are locked with that message and disabled in the picker; a partner stays open; unchoosing unlocks
 
 ### US-048 Double degrees come from choosing two stand-alone halves; their circles go (`degree-pairs` branch)
 As a student, I want to build a double degree by choosing its two degrees, in either order, and see one map with no duplicate double-degree circles.
 - [x] Choosing two stand-alone partner degrees, in either order, makes the combined course the chosen degree; its panel shows the combined course's requirements and progress. Covers bachelor + bachelor, bachelor + master's (6 combined courses), master's + master's (3) and bachelor + diploma (2)
-- [x] Choosing a course that cannot combine with the current choice (a postgraduate course from its panel, or any degree from the picker) replaces it, as choosing a degree does today
+- [x] ~~Choosing a course that cannot combine with the current choice (a postgraduate course from its panel, or any degree from the picker) replaces it, as choosing a degree does today~~ *Dropped 27 Sep 2026: such a course is locked; unchoose first (US-047, US-051).*
 - [x] The circles of double degrees that can be built from halves are removed from the map. Education Futures + Master of Teaching in Primary Education keeps its circle (it has no halves). *91 of 92 removed: circles 1,086 to 1,041, subject copies 15,682 to 14,467, links 14,897 to 13,512, top-level circles 773 to 566.*
 - [ ] A major or subject that only a double offers sits in the circle of the half it belongs to, locked until the other half is chosen. The half is the one whose section of the double lists it; for the 11 doubles without a section per half, the half whose faculty teaches most of its subjects. On the 2027 data about 136 majors move this way, most into Bachelor of Science (46) and Bachelor of Engineering (Honours) (11) *Partial, 27 Sep 2026: built as 43 groups ("With Bachelor of Business or ...") of 93 items inside their halves (Science 25, Engineering 11); a group and the majors in it are locked until one of its doubles is chosen. Not done: subjects inside a group keep their own state rather than looking locked; a major a stand-alone degree also offers is never locked (it is not the double's alone); 3 items belong to groups in two different halves and so sit between circles.*
 - [x] Majors chosen under one half carry over when the double offers them; otherwise they are locked, with the reason (US-037's rules). *Unit tested on real data (MAJ09401 under Engineering + Business); no E2E.*
@@ -343,6 +346,11 @@ As a student, I want a degree that only exists as half of a double to wait until
 - [x] Once a degree it can join is chosen, it unlocks and can be added; the result is the combined course. It can never be chosen first
 - [x] Parts that belong to one pairing only (C09155's majors, Sustainability and Environment's partner streams) stay locked unless that partner is the one chosen
 - [x] E2E (tagged US-049): Sustainability and Environment cannot be chosen first; Business then Sustainability and Environment gives C10411
+
+### US-051 Unchoose degree button (`degree-pairs` branch)
+As a student, I want one button to unchoose my degree without losing the subjects I have marked.
+- [x] An **Unchoose degree** button at the top right, next to Reset, shown while a degree is chosen. It unchooses it (both halves of a double) and keeps marked subjects, unlike Reset
+- [x] E2E (tagged US-051): choose a double, mark a subject, press Unchoose degree: nothing is chosen and the subject stays marked
 
 ### US-050 Offshore degrees in their own areas (`degree-pairs` branch)
 As a student, I want courses taught only in another country kept apart and labelled, so I never plan around one I cannot attend.

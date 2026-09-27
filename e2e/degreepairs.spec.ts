@@ -40,28 +40,52 @@ async function press(page: import('@playwright/test').Page, code: string, label:
   await button.click();
 }
 
-test('US-047: choosing the Bachelor of Business locks bachelors it cannot pair with, not its partners or a master\'s; clearing unlocks', async ({ page }) => {
+test('US-047: with the Bachelor of Science chosen, every degree it cannot pair with is locked, master\'s and PhDs included; unchoosing unlocks', async ({ page }) => {
   await openTree(page, 't=uts-2027');
+  const picker = page.getByTestId('degree-picker');
+  const disabled = (code: string) => picker.locator(`option[value="${code}"]`).evaluate((o) => (o as HTMLOptionElement).disabled);
   expect((await locked(page)).filter((c) => /^C\d{5}$/.test(c))).toEqual([]);
-  await page.getByTestId('degree-picker').selectOption('C10026');
-  await expect.poll(() => locked(page)).toContain('C10476');
+  await press(page, 'C10242', /^Choose this degree$/);
+  await expect.poll(() => locked(page)).toContain('C10148');
   const now = await locked(page);
-  for (const open of ['C10148', BSE, 'C04273']) expect(now, open).not.toContain(open);
+  // A bachelor it does not pair with, a master's and a PhD: locked, on the map and in the picker.
+  for (const shut of ['C10148', 'C04295', 'C02090']) {
+    expect(now, shut).toContain(shut);
+    expect(await disabled(shut), shut).toBe(true);
+  }
+  // Partners, a master's among them, stay open.
+  for (const open of ['C10026', 'C04255', BSE]) {
+    expect(now, open).not.toContain(open);
+    if (open !== BSE) expect(await disabled(open), open).toBe(false);
+  }
 
-  await goTo(page, 'C10476');
-  await expect(page.getByTestId('degree-lock-note')).toContainText('Does not combine with Bachelor of Business');
+  // A locked degree still opens, says why, and cannot be chosen.
+  await page.getByTestId('search').fill('');
+  await goTo(page, 'C04295');
+  await expect(page.getByTestId('degree-lock-note')).toContainText(
+    "This is not connected to your chosen degree. You'll need to unchoose Bachelor of Science before choosing this. You can also use Unchoose degree or Reset at the top right.",
+  );
   await expect(page.getByTestId('choose-degree')).toBeDisabled();
 
-  await page.getByTestId('degree-lock-note').getByRole('button', { name: /Clear Bachelor of Business/ }).click();
-  await expect(page.getByTestId('degree-picker')).toHaveValue('');
-  await expect.poll(async () => (await locked(page)).filter((c) => /^C\d{5}$/.test(c))).toEqual([]);
+  // Picking a partner in the picker makes the double.
+  await picker.selectOption('C10026');
+  await expect(picker).toHaveValue('C10162');
 
-  // US-046: the picker replaces the current choice, even with a degree it has locked.
-  await page.getByTestId('degree-picker').selectOption('C10026');
-  await expect.poll(() => locked(page)).toContain('C10476');
-  await page.getByTestId('degree-picker').selectOption('C10476');
-  await expect(page.getByTestId('degree-picker')).toHaveValue('C10476');
-  await expect.poll(() => locked(page)).not.toContain('C10476');
+  await page.getByTestId('unchoose-degree').click();
+  await expect(picker).toHaveValue('');
+  await expect.poll(async () => (await locked(page)).filter((c) => /^C\d{5}$/.test(c))).toEqual([]);
+});
+
+test('US-051: Unchoose degree clears a chosen double and keeps marked subjects', async ({ page }) => {
+  await openTree(page, 't=uts-2027&d=C10219&c=31251');
+  await expect(page.getByTestId('degree-picker')).toHaveValue('C10219');
+  await page.getByTestId('unchoose-degree').click();
+  await expect(page.getByTestId('degree-picker')).toHaveValue('');
+  await expect(page.getByTestId('unchoose-degree')).toHaveCount(0);
+  // Still marked completed.
+  expect(await page.evaluate(() => location.hash)).toContain('31251');
+  await goTo(page, '31251');
+  await expect(page.getByTestId('detail-panel')).toContainText(/Completed/);
 });
 
 test('US-048: IT then Business, and Business then IT, both make C10219; removing a half leaves the other', async ({ page }) => {

@@ -449,7 +449,7 @@ function DegreeActions({ degree, map }: { degree: Degree; map: MapDoc }) {
           <b>✗ Locked.</b> {lock}{' '}
           {current ? (
             <button className="link" onClick={() => selectDegree(null)}>
-              Clear {now!.title}
+              Unchoose {now!.title}
             </button>
           ) : null}
         </div>
@@ -953,8 +953,16 @@ export function DegreeChip() {
   );
 }
 
+/** Whether the picker offers a degree with the current choice (US-047). */
+function pickerLocked(map: MapDoc, current: string | null, d: Degree, locks: Map<string, string>): boolean {
+  if (d.code === current) return false;
+  if (!d.halves) return locks.has(d.code);
+  return !!current && !(map.degrees[current]?.halves ? false : d.halves.includes(current));
+}
+
 export function TopBar() {
   const map = useApp((s) => s.map);
+  const degreeLocks = useApp((s) => s.degreeLocks);
   const plan = useApp((s) => s.plan);
   const selectDegree = useApp((s) => s.selectDegree);
   const search = useApp((s) => s.search);
@@ -993,8 +1001,11 @@ export function TopBar() {
         <select
           value={plan.degree ?? ''}
           onChange={(e) => {
-            selectDegree(e.target.value || null);
-            if (e.target.value) select(e.target.value, true);
+            // A partner of the chosen degree makes the double, as "Add to make" does (US-047).
+            const code = e.target.value || null;
+            const made = code && plan.degree ? partnersOf(map, plan.degree).get(code) : undefined;
+            selectDegree(made ?? code);
+            if (code) select(made ?? code, true);
           }}
           aria-label="Degree"
           data-testid="degree-picker"
@@ -1005,7 +1016,8 @@ export function TopBar() {
             .filter((d) => !d.addOn)
             .sort((a, b) => a.title.localeCompare(b.title))
             .map((d) => (
-            <option key={d.code} value={d.code}>
+            // Locked degrees show but cannot be picked; a double only while nothing, or one of its halves, is chosen (US-047).
+            <option key={d.code} value={d.code} disabled={pickerLocked(map, plan.degree, d, degreeLocks)}>
               {d.title}
             </option>
           ))}
@@ -1041,6 +1053,12 @@ export function TopBar() {
         <ViewSettingsButton />
         <ThemeButton />
         <button onClick={share}>{copied ? 'Link copied' : 'Share plan'}</button>
+        {plan.degree ? (
+          // Unchooses the degree (both halves of a double) and keeps marked subjects, unlike Reset (US-051).
+          <button onClick={() => selectDegree(null)} data-testid="unchoose-degree">
+            Unchoose degree
+          </button>
+        ) : null}
         <button
           onClick={() => {
             if (confirm('Clear everything you have marked on this map?')) reset();

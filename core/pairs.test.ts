@@ -69,24 +69,25 @@ describe('US-047 / US-049: degrees locked by the current choice', () => {
     expect([...degreeLocks(map, null).keys()].sort()).toEqual([BCII, BIS, BSE].sort());
   });
 
-  it('with the Bachelor of Business chosen, locks undergraduate degrees it cannot pair with, not its partners or postgraduate courses', () => {
-    const locks = degreeLocks(map, 'C10026');
-    expect(locks.has('C10476')).toBe(true);
-    expect(locks.get('C10476')).toMatch(/Does not combine with Bachelor of Business/);
-    for (const open of ['C10148', BSE, BCII, BIS, 'C10026', 'C04273']) expect(locks.has(open), open).toBe(false);
-    expect([...locks.keys()].filter((c) => !/undergrad/i.test(map.degrees[c].level))).toEqual([]);
+  it('with the Bachelor of Science chosen, locks every degree it cannot pair with, master\'s and PhDs included, but not its partners', () => {
+    const locks = degreeLocks(map, 'C10242');
+    for (const shut of ['C10148', 'C10476', 'C04295', 'C02090']) expect(locks.get(shut), shut).toMatch(/not connected to your chosen degree.*unchoose Bachelor of Science/);
+    // Partners, a master's among them, stay open; and so does the chosen degree.
+    for (const open of ['C10242', 'C10026', 'C09066', 'C04255', BSE, BCII, BIS]) expect(locks.has(open), open).toBe(false);
+    const courses = Object.values(map.degrees).filter((d) => !d.halves);
+    expect(locks.size).toBe(courses.length - 1 - partnersOf(map, 'C10242').size);
   });
 
-  it('with a double chosen, locks every other undergraduate degree but not its halves', () => {
+  it('with a double chosen, locks every other degree but not its halves', () => {
     const locks = degreeLocks(map, 'C10219');
     expect(locks.has('C10148') || locks.has('C10026')).toBe(false);
-    expect(locks.has('C10476')).toBe(true);
-    expect(locks.has(BSE)).toBe(true);
-    expect(locks.has('C04273')).toBe(false);
+    for (const shut of ['C10476', BSE, 'C04295', 'C02090']) expect(locks.has(shut), shut).toBe(true);
   });
 
-  it('with a postgraduate course chosen, locks nothing but the add-on halves', () => {
-    expect([...degreeLocks(map, 'C04273').keys()].sort()).toEqual([BCII, BIS, BSE].sort());
+  it('with a master\'s chosen, locks the rest the same way', () => {
+    const locks = degreeLocks(map, 'C04295');
+    expect(locks.has('C04295')).toBe(false);
+    for (const shut of ['C10242', 'C02090', BSE]) expect(locks.has(shut), shut).toBe(true);
   });
 });
 

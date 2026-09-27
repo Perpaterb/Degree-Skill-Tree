@@ -729,3 +729,21 @@ Stories are in [`UserStories.md`](UserStories.md).
   `core/layout.test.ts`, `scraper/src/cli.ts`, `scraper/test/normalize.test.ts`, `web/src/store.ts`,
   `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`, `e2e/degreepairs.spec.ts`, `e2e/view.spec.ts`,
   `e2e/outline.spec.ts`, `web/public/trees/uts-2027.json`.
+
+### US-047 changed, US-051 Unchoose degree (`degree-pairs` branch, 27 Sep 2026)
+- `degreeLocks` (`core/pairs.ts`): with any degree chosen, every degree that is not it, one of its halves
+  or one of its partners is locked, whatever its level; the message is "This is not connected to your
+  chosen degree. You'll need to unchoose <degree> before choosing this. You can also use Unchoose degree
+  or Reset at the top right." With nothing chosen only the add-on halves lock, as before.
+- Panels: the locked degree's panel link reads "Unchoose <degree>"; the top bar has an **Unchoose
+  degree** button (`data-testid="unchoose-degree"`) beside Reset while a degree is chosen; picker
+  options for locked degrees are disabled (`pickerLocked`: a double only while nothing, or one of its
+  halves, is chosen), and picking a partner makes the double.
+- Tests: `core/pairs.test.ts` (Science chosen locks a bachelor, a master's and a PhD it does not pair
+  with, not its partners, a master's among them; a double chosen; a master's chosen). `e2e/degreepairs.spec.ts`
+  (US-047 rewritten on the Bachelor of Science: map, panel message, disabled picker entries, partner in
+  the picker makes C10162, Unchoose; US-051: Unchoose clears C10219 and keeps 31251 completed). Seen to
+  fail with the undergraduate-only rule and with the button hidden. `e2e/multidegree.spec.ts`: US-021
+  and US-023 unchoose before choosing a degree that does not pair.
+- Files: `core/pairs.ts`, `core/pairs.test.ts`, `web/src/Panels.tsx`, `e2e/degreepairs.spec.ts`,
+  `e2e/multidegree.spec.ts`, `docs/UserStories.md`.
