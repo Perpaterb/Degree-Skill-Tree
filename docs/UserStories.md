@@ -381,6 +381,7 @@ As a student, I want to switch between the fixed map and one that rearranges its
 ### US-054 Dynamic shows only what is not locked (`dynamic-map` branch)
 As a student, I want Dynamic mode to show only what is still open to me.
 - [ ] Locked degrees, majors, sub-majors and "With ..." groups are not shown, nor anything inside them. Subjects are shown whatever their prerequisite state (their requisite lines still make sense)
+- [ ] A major shared by several degrees (drawn outside them all) is shown only while at least one degree offering it is shown. *On 2027 data: with the Bachelor of Science chosen, 114 top-level circles (Science, its 8 partners, and 105 programs they offer) instead of 214; with IT + Business, 63; with nothing chosen, 558.*
 - [ ] Offshore courses keep their own areas, apart and labelled, whenever any of them is shown
 - [ ] E2E (tagged US-054): with the Bachelor of Science chosen, no locked degree is on the map and its partners are
 
