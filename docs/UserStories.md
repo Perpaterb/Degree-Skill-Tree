@@ -35,6 +35,7 @@ US-019, US-021 and US-040 change with them (noted on each).
 28 Sep 2026: US-052 added (the circles an item sits in, as buttons above the detail card).
 28 Sep 2026: US-053 to US-057 added on the `dynamic-map` branch (a Dynamic mode: only what is not locked, pulled by gravity around the last chosen thing; the static map is tagged `static-map-2026-09-28`).
 29 Sep 2026: US-054 and US-055 changed (offshore last and apart; choosing leaves the degree and camera where they are; circles appear in their faculty's place). The selected circle is lit more strongly in both modes.
+29 Sep 2026: US-055 rewritten (a hierarchy of pulls: faculty spawn points, degrees, majors), US-056 sizes first, US-053 camera like a refresh, US-058 noted (subject lines in Dynamic mode).
 
 ---
 
@@ -366,6 +367,11 @@ As a student, I want to see every circle the thing I am looking at sits in, and 
 - [x] The buttons are the width of the card; closing the card removes them; on a phone they sit above the bottom sheet the same way
 - [x] E2E (tagged US-052): a subject in a major in a degree shows that chain in order; the degree button opens the degree; with a double chosen its button tops a half's chain and frames both halves; closing the card removes the buttons
 
+### US-058 Subject lines in Dynamic mode (`dynamic-map` branch, to do)
+As a student, I want the requisite lines in Dynamic mode to join the subjects they connect, as on the static map.
+- [ ] No line runs to a subject that is not shown (lines into a hidden circle stayed when their subjects went)
+- [ ] Lines are drawn the same as on the static map, in each circle as laid out for what is shown in it
+
 ### US-050 Offshore degrees in their own areas (`degree-pairs` branch)
 As a student, I want courses taught only in another country kept apart and labelled, so I never plan around one I cannot attend.
 - [x] The 7 China and 2 Vietnam degrees sit in two separate areas well off to one side of the Sydney map, titled "Offered only in China" and "Offered only in Ho Chi Minh City, Vietnam". *Changed 27 Sep 2026: only 5 of the 7 China courses name Shanghai (Shanghai University); 2 only say "offered offshore", so the area names the country. Both Vietnam courses name Ho Chi Minh City University of Technology.*
@@ -376,7 +382,8 @@ As a student, I want courses taught only in another country kept apart and label
 ### US-053 Static / Dynamic switch (`dynamic-map` branch, experiment)
 As a student, I want to switch between the fixed map and one that rearranges itself around my choices.
 - [x] A switch in the middle of the top bar: Static (default) | Dynamic. Remembered in this browser, not part of the shared link
-- [x] Static is the map as built so far, unchanged; switching back from Dynamic shows it exactly as it was, camera included
+- [x] Static is the map as built so far, unchanged; switching back from Dynamic shows it exactly as it was, camera included *Changed 29 Sep 2026, see below.*
+- [ ] Switching to Dynamic starts zoomed all the way out and centred, as the static map opens; switching back to Static is like a refresh (zoomed out and centred), then flies to the selected item if there is one. The zoom limit stays at the static map's (0.03), so "all the way out" is that
 *Not yet in Dynamic mode (28 Sep 2026): hover highlighting and lit requisite lines, search and panel-row glows, the finished-circle glows and credit points on titles, and copies popping out on hover. Clicking, the detail card and its layers, flying to things and the theme work.*
 - [x] E2E (tagged US-053): the switch defaults to Static, turns Dynamic on and off, and is remembered after a reload but not put in the link
 
@@ -387,16 +394,22 @@ As a student, I want Dynamic mode to show only what is still open to me.
 - [x] Offshore courses keep their own areas, apart and labelled, whenever any of them is shown. *Changed 29 Sep 2026: they come in last, once the rest have settled, and are pulled hard to their own places on the static map, far right, each location in its own cluster (they jumped about while their anchor followed the main cluster's edge). E2E-tested.*
 - [x] E2E (tagged US-054): with the Bachelor of Science chosen, no locked degree is on the map and its partners are
 
-### US-055 Gravity around the last chosen thing (`dynamic-map` branch)
-As a student, I want what I chose at the centre, with everything still open settling around it.
-- [x] The last chosen degree, double half, major or sub-major is the centre. *Changed 29 Sep 2026: its outermost circle stays exactly where it is and becomes the centre, and the camera does not move or zoom (it used to jump to the middle of the map, with the camera following).* Unchoosing moves the centre to what is still chosen; with nothing chosen, circles gather in faculty neighbourhoods as on the static map (biggest faculty in the middle)
-- [x] Every shown circle is pulled towards the centre, more strongly up and down than sideways, so the map spreads sideways. Circles never overlap; movement is quick but damped (high gravity, slow speed), and everything comes to rest
-- [x] A circle that becomes shown pops in at its place on the static map (its faculty's neighbourhood) and falls towards the centre; with nothing chosen it is pulled back to its faculty's place. One that stops being shown disappears and the rest close the gap. *Changed 29 Sep 2026: was "appears at the outside". Where it appears is seen, not asserted; disappearing and coming back are covered by the US-055 E2E.*
-- [x] E2E (tagged US-055): after choosing a degree, the map settles within 5 s with no two circles overlapping, the degree and the camera where they were, and the degree nearest its new centre; unchoosing brings circles back in
+### US-055 A hierarchy of pulls around the last chosen thing (`dynamic-map` branch)
+As a student, I want what I chose at the centre, with everything still open settling around it, still grouped by faculty.
+*Changed 29 Sep 2026: was "every circle pulled straight to the centre"; that rushed everything to the middle, overlapping, and spread nothing by faculty. Built and tested first (see TechFromUserStories US-053 to US-057).*
+- [ ] The centre of the galaxy is the last chosen degree, double half, major or sub-major's circle, which stays exactly where it is; the camera does not move or zoom. With nothing chosen it is the static map's centre (the biggest faculty)
+- [ ] Each faculty has a spawn point, starting at its place on the static map. Spawn points are pulled gently towards the centre of the galaxy, just enough to close the gaps between faculties, and keep apart from each other by their faculty's size
+- [ ] Degrees (bachelors, master's, PhDs: every course) are pulled to their faculty's spawn point (a course with two faculties, between their points), not to the centre
+- [ ] Majors and sub-majors drawn outside degrees are pulled to the shown degrees that offer them, not to spawn points or the centre
+- [ ] Offshore courses keep to their own places, as now (US-054)
+- [ ] Circles that become shown pop in gradually, not all at once, at their spawn point but above or below the band, and fall in; nothing rushes in or piles up overlapping. Circles never overlap once at rest
+- [ ] E2E (tagged US-055): choosing a degree leaves it and the camera where they are and the map comes to rest around it with no overlaps; nearly every degree ends nearer its own faculty's spawn point than any other; unchoosing brings circles back in gradually
 
 ### US-056 Circles fit what is shown in them (`dynamic-map` branch)
 As a student, I want circles to be only as big as what is visible in them.
 - [x] A circle's contents are laid out again from what is shown in it, and it resizes, pushing neighbours away as it grows. A new layout may arrive a moment after the choice rather than all at once
+- [ ] Sizes first (added 29 Sep 2026): when Dynamic is switched on or a choice changes, circles are resized before anything starts moving (collision sizes were the old, bigger ones until the new layouts arrived, e.g. the Bachelor of Science). Layouts come from several workers and are kept for reuse
+- [ ] E2E (tagged US-056): after switching on, and after choosing and unchoosing, no circle changes size once the map has started moving
 - [x] E2E (tagged US-056): choosing two majors in a degree (locking the rest) makes its circle smaller in Dynamic mode, and unchoosing one makes it grow again
 
 ### US-057 Dynamic stays smooth (`dynamic-map` branch)
