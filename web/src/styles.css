@@ -182,6 +182,31 @@ a {
   gap: 8px;
 }
 
+/* Static | Dynamic (US-053). */
+.mode-switch {
+  display: flex;
+  flex: none;
+  border: 1px solid var(--button-edge);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.mode-switch button {
+  background: var(--button-bg);
+  border: 0;
+  padding: 6px 14px;
+  color: var(--muted);
+}
+
+.mode-switch button.on {
+  background: var(--gold-deep);
+  color: var(--gold);
+}
+
+.mode-switch button:hover {
+  color: var(--text);
+}
+
 .top-actions button,
 .actions button,
 .modal-actions button {
@@ -206,6 +231,12 @@ a {
 .tree-canvas {
   position: absolute;
   inset: 0;
+}
+
+/* The static map while Dynamic mode is on (US-053): kept, not shown, and not in the way of the pointer. */
+.tree-canvas.hidden {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .tree-canvas canvas {

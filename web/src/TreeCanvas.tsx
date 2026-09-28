@@ -618,12 +618,14 @@ export function TreeCanvas() {
         if (s.theme !== prev.theme) restyle(scene.current);
         if (s.view !== prev.view) paint(scene.current);
         // A link in a circle's panel flies to the copy inside that circle, if it has one (US-052).
-        if (s.flyTo !== prev.flyTo && s.selected) flyTo(scene.current, s.selected, prev.selected);
+        if (s.flyTo !== prev.flyTo && s.selected && s.mode === 'static') flyTo(scene.current, s.selected, prev.selected);
       }),
     [],
   );
 
-  return <div ref={host} className="tree-canvas" data-testid="tree-canvas" />;
+  const mode = useApp((s) => s.mode);
+  // Hidden, not unmounted, while Dynamic is on: its camera and scene wait as they were (US-053).
+  return <div ref={host} className={`tree-canvas${mode === 'dynamic' ? ' hidden' : ''}`} data-testid="tree-canvas" />;
 }
 
 /**

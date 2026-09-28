@@ -81,3 +81,24 @@ export function saveTheme(t: ThemeName) {
     // Storage blocked: the choice lasts for this visit only.
   }
 }
+
+/** Static: the map as built. Dynamic: only what is not locked, pulled around the last chosen thing (US-053). */
+export type MapMode = 'static' | 'dynamic';
+const MODE_KEY = 'dst.mode';
+
+/** The remembered mode, else Static. */
+export function loadMode(): MapMode {
+  try {
+    return localStorage.getItem(MODE_KEY) === 'dynamic' ? 'dynamic' : 'static';
+  } catch {
+    return 'static';
+  }
+}
+
+export function saveMode(m: MapMode) {
+  try {
+    localStorage.setItem(MODE_KEY, m);
+  } catch {
+    // Storage blocked: the choice lasts for this visit only.
+  }
+}

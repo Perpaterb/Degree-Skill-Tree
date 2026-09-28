@@ -18,11 +18,11 @@ import {
   type TitleCp,
 } from '../../core/engine';
 import { layoutMap, type Layout } from '../../core/layout';
-import { degreeLocks, pairingLocks } from '../../core/pairs';
+import { chosenDegrees, degreeLocks, pairingLocks } from '../../core/pairs';
 import type { MapDoc } from '../../core/model';
 import { track } from './analytics';
 import { setThemeColours } from './theme';
-import { loadTheme, loadView, saveTheme, saveView, type ThemeName, type ViewSettings } from './view';
+import { loadMode, loadTheme, loadView, saveMode, saveTheme, saveView, type MapMode, type ThemeName, type ViewSettings } from './view';
 
 export interface MapIndexEntry {
   id: string;
@@ -50,6 +50,10 @@ interface AppState {
   degreeLocks: Map<string, string>;
   view: ViewSettings;
   theme: ThemeName;
+  /** Static or Dynamic map (US-053). */
+  mode: MapMode;
+  /** The degree, half or program chosen most recently: the centre in Dynamic mode (US-055). */
+  last: string | null;
   /** The subject, program or degree shown in the detail panel. */
   selected: string | null;
   /**
@@ -80,6 +84,7 @@ interface AppState {
   resetPlan(): void;
   setView(patch: Partial<ViewSettings>): void;
   setTheme(t: ThemeName): void;
+  setMode(m: MapMode): void;
 }
 
 const base = import.meta.env.BASE_URL;
@@ -165,6 +170,8 @@ export const useApp = create<AppState>((set, get) => ({
   degreeLocks: new Map(),
   view: loadView(),
   theme: initialTheme,
+  mode: loadMode(),
+  last: null,
   selected: null,
   copy: null,
   hovered: null,
@@ -223,7 +230,10 @@ export const useApp = create<AppState>((set, get) => ({
     const { map, plan } = get();
     if (!map || plan.degree === code) return;
     const next = { ...plan, degree: code };
-    set({ plan: next, ...derive(map, next), glow: [] });
+    // The degree just added (the second half of a double, when one is made) is the newest choice.
+    const before = chosenDegrees(map, plan.degree);
+    const added = chosenDegrees(map, code).filter((d) => !before.includes(d));
+    set({ plan: next, ...derive(map, next), glow: [], ...(added.length ? { last: added[added.length - 1] } : {}) });
     savePlan(map.id, next);
     if (code) track('degree_selected', { code });
   },
@@ -246,10 +256,11 @@ export const useApp = create<AppState>((set, get) => ({
   toggleProgram(code) {
     const { map, plan } = get();
     if (!map) return;
-    const programs = plan.programs.includes(code) ? plan.programs.filter((c) => c !== code) : [...plan.programs, code];
+    const adding = !plan.programs.includes(code);
+    const programs = adding ? [...plan.programs, code] : plan.programs.filter((c) => c !== code);
     const next = { ...plan, programs };
     // A chosen program changes how a degree's options are counted, so its glow too.
-    set({ plan: next, ...derive(map, next) });
+    set({ plan: next, ...derive(map, next), ...(adding ? { last: code } : {}) });
     savePlan(map.id, next);
     track('program_toggled', { code });
   },
@@ -277,5 +288,10 @@ export const useApp = create<AppState>((set, get) => ({
     applyTheme(t);
     set({ theme: t });
     saveTheme(t);
+  },
+
+  setMode(m) {
+    set({ mode: m });
+    saveMode(m);
   },
 }));

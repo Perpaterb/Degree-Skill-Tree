@@ -1011,6 +1011,21 @@ export function DegreeChip() {
   );
 }
 
+/** Static | Dynamic (US-053). */
+function ModeSwitch() {
+  const mode = useApp((s) => s.mode);
+  const setMode = useApp((s) => s.setMode);
+  return (
+    <div className="mode-switch" role="radiogroup" aria-label="Map mode" data-testid="mode-switch">
+      {(['static', 'dynamic'] as const).map((m) => (
+        <button key={m} role="radio" aria-checked={mode === m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)} data-testid={`mode-${m}`}>
+          {m === 'static' ? 'Static' : 'Dynamic'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Whether the picker offers a degree with the current choice (US-047). */
 function pickerLocked(map: MapDoc, current: string | null, d: Degree, locks: Map<string, string>): boolean {
   if (d.code === current) return false;
@@ -1107,6 +1122,7 @@ export function TopBar() {
           </span>
         ) : null}
       </div>
+      <ModeSwitch />
       <div className="top-actions">
         <ViewSettingsButton />
         <ThemeButton />
