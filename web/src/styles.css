@@ -239,13 +239,78 @@ a {
   z-index: 1;
 }
 
-.detail {
+/* The detail card, with the circles it sits in stacked above it at the same width (US-052). */
+.detail-column {
+  position: absolute;
   top: 12px;
   right: 12px;
   bottom: 12px;
   width: min(420px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.detail-column > * {
+  pointer-events: auto;
+}
+
+.detail {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 18px 20px 24px;
+}
+
+.layers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
+}
+
+.layer {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 12px;
+  background: var(--panel);
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px var(--shadow);
+  backdrop-filter: blur(6px);
+  text-align: left;
+  color: var(--gold);
+}
+
+.layer:hover,
+.layer:focus-visible {
+  background: var(--gold-deep);
+  outline: none;
+}
+
+.layer-kind {
+  flex: none;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.layer-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--serif);
+}
+
+.layer.st-locked {
+  border-color: var(--danger);
 }
 
 .detail h2 {
@@ -454,7 +519,7 @@ a {
     max-width: 55vw;
   }
 
-  .detail {
+  .detail-column {
     top: auto;
     left: 8px;
     right: 8px;

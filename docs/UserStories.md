@@ -32,6 +32,7 @@ built on the `big-map` branch as an experiment).
 undergraduate degrees that cannot combine are locked; double degrees built from two halves, with their
 circles removed; add-on halves locked until they have a degree to attach to; offshore degrees apart).
 US-019, US-021 and US-040 change with them (noted on each).
+28 Sep 2026: US-052 added (the circles an item sits in, as buttons above the detail card).
 
 ---
 
@@ -351,6 +352,17 @@ As a student, I want a degree that only exists as half of a double to wait until
 As a student, I want one button to unchoose my degree without losing the subjects I have marked.
 - [x] An **Unchoose degree** button at the top right, next to Reset, shown while a degree is chosen. It unchooses it (both halves of a double) and keeps marked subjects, unlike Reset
 - [x] E2E (tagged US-051): choose a double, mark a subject, press Unchoose degree: nothing is chosen and the subject stays marked
+
+### US-052 Layers above the detail card (`degree-pairs` branch)
+As a student, I want to see every circle the thing I am looking at sits in, and jump up to any of them, so I can go up one, two or three levels in one click.
+- [x] Above the right-hand detail card, a stack of gold buttons shows every circle the open item sits in, outermost at the top and nearest just above the card (a subject: degree, major, sub-major)
+- [x] For a subject, the chain is the copy clicked on the map; arriving by search or a link, the copy the camera flew to
+- [x] With a double degree chosen, when the item sits in one of its halves (or is one), the double is the top button
+- [x] Every level has it: a subject, a major or sub-major, a "With ..." group, a degree
+- [x] A locked layer shows the way it does in the detail panel (crossed out, with the lock colour)
+- [x] Clicking a button opens that circle's details and flies the camera to it; for a double, the camera frames both of its halves
+- [x] The buttons are the width of the card; closing the card removes them; on a phone they sit above the bottom sheet the same way
+- [x] E2E (tagged US-052): a subject in a major in a degree shows that chain in order; the degree button opens the degree; with a double chosen its button tops a half's chain and frames both halves; closing the card removes the buttons
 
 ### US-050 Offshore degrees in their own areas (`degree-pairs` branch)
 As a student, I want courses taught only in another country kept apart and labelled, so I never plan around one I cannot attend.

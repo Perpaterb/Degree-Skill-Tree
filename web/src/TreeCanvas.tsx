@@ -439,8 +439,9 @@ export function TreeCanvas() {
       viewport.on('pointertap', (e) => {
         if (!isClick(e)) return;
         const hit = nodeUnder(e);
-        // A press on a subject never reaches the circle round it.
-        if (hit) return useApp.getState().select(hit.node.code);
+        // A press on a subject never reaches the circle round it. The copy clicked decides the layers
+        // shown above the detail card (US-052).
+        if (hit) return useApp.setState({ copy: hit.node.id }), useApp.getState().select(hit.node.code);
         const w = viewport.toWorld(e.global.x, e.global.y);
         const circle = circleAt(layout, w.x, w.y, RIM_PX / viewport.scale.x);
         const s = useApp.getState();
@@ -616,7 +617,8 @@ export function TreeCanvas() {
           paint(scene.current);
         if (s.theme !== prev.theme) restyle(scene.current);
         if (s.view !== prev.view) paint(scene.current);
-        if (s.flyTo !== prev.flyTo && s.selected) flyTo(scene.current, s.selected);
+        // A link in a circle's panel flies to the copy inside that circle, if it has one (US-052).
+        if (s.flyTo !== prev.flyTo && s.selected) flyTo(scene.current, s.selected, prev.selected);
       }),
     [],
   );
@@ -624,13 +626,13 @@ export function TreeCanvas() {
   return <div ref={host} className="tree-canvas" data-testid="tree-canvas" />;
 }
 
-/** Which copy of a subject to fly to: one inside the selected degree if possible, preferring listed over entry copies. */
 /**
- * Which copy of a subject to fly to, the one most likely to matter to this student: inside the chosen
- * degree (either half of a double) and not in a locked circle; else any copy not in a locked circle;
- * else inside the chosen degree; preferring listed copies over entry copies throughout.
+ * Which copy of a subject to fly to, the one most likely to matter to this student: inside the circle
+ * whose panel it was opened from, if any (so the layers above the card stay that circle's, US-052);
+ * then inside the chosen degree (either half of a double) and not in a locked circle; else any copy not
+ * in a locked circle; else inside the chosen degree; preferring listed copies over entry copies.
  */
-function copyFor(s: Scene, code: string): LayoutNode | null {
+function copyFor(s: Scene, code: string, from: string | null = null): LayoutNode | null {
   const copies = Object.values(s.layout.nodes).filter((n) => n.code === code);
   if (!copies.length) return null;
   const { plan, locks, degreeLocks } = useApp.getState();
@@ -645,7 +647,7 @@ function copyFor(s: Scene, code: string): LayoutNode | null {
     const up = chain(n.circle);
     const inside = up.some((c) => chosen.includes(c));
     const open = !up.some((c) => locks.has(c) || degreeLocks.has(c));
-    return [inside && open, open, inside, !n.entry].reduce((t, b) => t * 2 + Number(b), 0);
+    return [!!from && up.includes(from), inside && open, open, inside, !n.entry].reduce((t, b) => t * 2 + Number(b), 0);
   };
   return copies.reduce((best, n) => (rank(n) > rank(best) ? n : best));
 }
@@ -662,19 +664,25 @@ function fit(viewport: Viewport, layout: Layout) {
   viewport.moveCenter((minX + maxX) / 2, (minY + maxY) / 2);
 }
 
-function flyTo(s: Scene, id: string) {
-  const n = copyFor(s, id);
+function flyTo(s: Scene, id: string, from: string | null = null) {
+  const n = copyFor(s, id, from && s.layout.circles.some((c) => c.id === from) ? from : null);
   s.flewTo = n?.id ?? null;
   if (n) {
+    // The copy flown to decides the layers above the detail card (US-052).
+    useApp.setState({ copy: n.id });
     s.viewport.animate({ position: { x: n.x, y: n.y }, scale: Math.max(s.viewport.scale.x, 0.9), time: 650, ease: 'easeInOutSine' });
     return;
   }
-  // A double built from halves has no circle: fly to its first half (US-048).
-  const target = s.map.degrees[id]?.halves?.[0] ?? id;
-  const c = s.layout.circles.find((k) => k.id === target);
-  if (!c) return;
-  const scale = Math.min(s.viewport.screenWidth, s.viewport.screenHeight) / (c.r * 2.4);
-  s.viewport.animate({ position: { x: c.x, y: c.y }, scale: Math.min(Math.max(scale, 0.03), 1.2), time: 650, ease: 'easeInOutSine' });
+  // A double built from halves has no circle: frame both of its halves (US-048, US-052).
+  const targets = s.map.degrees[id]?.halves ?? [id];
+  const cs = targets.map((t) => s.layout.circles.find((k) => k.id === t)).filter((c): c is LayoutCircle => !!c);
+  if (!cs.length) return;
+  const minX = Math.min(...cs.map((c) => c.x - c.r));
+  const maxX = Math.max(...cs.map((c) => c.x + c.r));
+  const minY = Math.min(...cs.map((c) => c.y - c.r));
+  const maxY = Math.max(...cs.map((c) => c.y + c.r));
+  const scale = Math.min(s.viewport.screenWidth / ((maxX - minX) * 1.2), s.viewport.screenHeight / ((maxY - minY) * 1.2));
+  s.viewport.animate({ position: { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }, scale: Math.min(Math.max(scale, 0.03), 1.2), time: 650, ease: 'easeInOutSine' });
 }
 
 const xy = (p: { x: number; y: number }): [number, number] => [p.x, p.y];

@@ -777,3 +777,27 @@ Stories are in [`UserStories.md`](UserStories.md).
   Business's panel). All three fail with the old ranking; the nothing-chosen one also fails without the
   lock check.
 - Files: `web/src/TreeCanvas.tsx`, `e2e/flyto.spec.ts`, `docs/UserStories.md`.
+
+### US-052 Layers above the detail card (`degree-pairs` branch, 28 Sep 2026)
+- Store: `copy`, the subject copy clicked on the map (`TreeCanvas` pointertap) or flown to (`flyTo`).
+- `web/src/Panels.tsx`: `DetailPanel` renders a `.detail-column` holding `Layers` above the card.
+  `layersOf` walks up from the copy's circle (a subject) or the circle's parent (a program or degree),
+  adds the chosen double on top when the chain reaches one of its halves, and reverses to outermost
+  first. Each button (`data-testid="layer"`, `data-code`) shows its kind and title, is struck through
+  with a red cross when locked (as in the outline, `.st-locked`), and opens that circle with a flight.
+- `web/src/TreeCanvas.tsx`: `copyFor` first prefers a copy inside the circle whose panel the link was
+  clicked in (the previous selection), so a subject opened from a major keeps that major as its layer;
+  flying to a double frames both of its halves.
+- `web/src/styles.css`: `.detail-column` takes the card's old place (and the phone bottom sheet's); the
+  card fills what the buttons leave; `.layer` buttons are gold, the card's width.
+- Tests: `e2e/layers.spec.ts` (US-052): with C10219 chosen, 21513's layers are C10219, C10148,
+  MAJ08966, each the card's width above it; up to the degree, then to the double (both halves framed);
+  a subject link from Business's panel keeps Business, one from Software Engineering (MAJ03523) keeps
+  C09066 > MAJ03523 rather than the copy another major would get; a map click shows the clicked copy's
+  chain; closing removes the buttons. Seen to fail with the buttons removed, the double left off the
+  top, and links ignoring the circle they came from. Checked by screenshot on desktop and phone.
+- The scratch `e2e/interact.tmp.spec.ts` (not committed) failed once in a full run while waiting for a
+  hover highlight; it passed 4 of 4 on the commit before and 14 of 15 after, so it is an intermittent
+  timing flake under load, not this change.
+- Files: `web/src/store.ts`, `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`, `web/src/styles.css`,
+  `e2e/layers.spec.ts`, `docs/UserStories.md`.

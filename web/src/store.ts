@@ -52,6 +52,11 @@ interface AppState {
   theme: ThemeName;
   /** The subject, program or degree shown in the detail panel. */
   selected: string | null;
+  /**
+   * The copy of a subject clicked on the map, or flown to ("<circle>/<code>"): the circles it sits in
+   * are the layers above the detail card (US-052).
+   */
+  copy: string | null;
   hovered: string | null;
   hoveredCircle: string | null;
   /** Circles and subjects to glow, e.g. while a progress row is hovered. */
@@ -161,6 +166,7 @@ export const useApp = create<AppState>((set, get) => ({
   view: loadView(),
   theme: initialTheme,
   selected: null,
+  copy: null,
   hovered: null,
   hoveredCircle: null,
   glow: [],

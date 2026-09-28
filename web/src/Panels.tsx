@@ -16,6 +16,7 @@ import {
   type WayPartProgress,
   type WayProgress,
 } from '../../core/engine';
+import type { Layout } from '../../core/layout';
 import { chosenDegrees, partnersOf } from '../../core/pairs';
 import type { Container, Degree, MapDoc, Program, Rule, Subject } from '../../core/model';
 import { track } from './analytics';
@@ -916,14 +917,71 @@ export function DetailPanel() {
   const program = map.programs[selected];
   const degree = map.degrees[selected];
   return (
-    <aside className="panel detail" data-testid="detail-panel">
-      <button className="close" onClick={() => select(null)} aria-label="Close">
-        ×
-      </button>
-      {subject ? <SubjectDetail subject={subject} map={map} /> : null}
-      {program ? <ProgramDetail program={program} map={map} /> : null}
-      {degree ? <DegreeDetail degree={degree} map={map} /> : null}
-    </aside>
+    <div className="detail-column">
+      <Layers map={map} selected={selected} />
+      <aside className="panel detail" data-testid="detail-panel">
+        <button className="close" onClick={() => select(null)} aria-label="Close">
+          ×
+        </button>
+        {subject ? <SubjectDetail subject={subject} map={map} /> : null}
+        {program ? <ProgramDetail program={program} map={map} /> : null}
+        {degree ? <DegreeDetail degree={degree} map={map} /> : null}
+      </aside>
+    </div>
+  );
+}
+
+/**
+ * The circles the open item sits in, outermost first, as buttons above the detail card (US-052). A
+ * subject's are those of the copy clicked or flown to; with a double chosen, the double tops a chain
+ * that reaches one of its halves.
+ */
+function layersOf(map: MapDoc, layout: Layout, selected: string, copy: string | null, degree: string | null): string[] {
+  const parent = new Map(layout.circles.map((c) => [c.id, c.parent]));
+  let start: string | null;
+  if (map.subjects[selected]) {
+    const node = copy && layout.nodes[copy]?.code === selected ? layout.nodes[copy] : Object.values(layout.nodes).find((n) => n.code === selected);
+    start = node?.circle ?? null;
+  } else start = parent.get(selected) ?? null;
+  const chain: string[] = [];
+  for (let c = start; c; c = parent.get(c) ?? null) chain.push(c);
+  const halves = degree ? map.degrees[degree]?.halves : undefined;
+  if (halves && selected !== degree && (halves.includes(selected) || halves.includes(chain[chain.length - 1]))) chain.push(degree!);
+  return chain.reverse();
+}
+
+function Layers({ map, selected }: { map: MapDoc; selected: string }) {
+  const layout = useApp((s) => s.layout);
+  const copy = useApp((s) => s.copy);
+  const degree = useApp((s) => s.plan.degree);
+  const locks = useApp((s) => s.locks);
+  const degreeLocks = useApp((s) => s.degreeLocks);
+  const select = useApp((s) => s.select);
+  if (!layout) return null;
+  const layers = layersOf(map, layout, selected, copy, degree);
+  if (!layers.length) return null;
+  const kindOf = (id: string) => {
+    const d = map.degrees[id];
+    if (d) return d.halves ? 'Double degree' : d.addOn ? 'Half of a double degree' : 'Degree';
+    const k = map.programs[id]?.kind;
+    return k === 'major' ? 'Major' : k === 'sub_major' ? 'Sub-major' : k === 'stream' ? 'Stream' : 'Group';
+  };
+  return (
+    <nav className="layers" aria-label="Circles it sits in" data-testid="layers">
+      {layers.map((id) => {
+        // Locked the way the detail panel and outline show it: struck through with a red cross.
+        const locked = locks.has(id) || degreeLocks.has(id);
+        return (
+          <button key={id} className={`layer ${locked ? 'st-locked' : ''}`} onClick={() => select(id, true)} data-testid="layer" data-code={id}>
+            <span className="layer-kind">{kindOf(id)}</span>
+            <span className="layer-title">
+              {map.degrees[id]?.title ?? map.programs[id]?.title ?? id}
+              {locked ? <span className="cross">✗</span> : null}
+            </span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
