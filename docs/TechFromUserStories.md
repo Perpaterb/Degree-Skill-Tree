@@ -801,3 +801,14 @@ Stories are in [`UserStories.md`](UserStories.md).
   timing flake under load, not this change.
 - Files: `web/src/store.ts`, `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`, `web/src/styles.css`,
   `e2e/layers.spec.ts`, `docs/UserStories.md`.
+
+### US-043 follow-up: the US-027 and US-029 E2E failures (28 Sep 2026)
+- US-027 (two outline tests): each reloads the whole 2027 map four or five times; alone they took 35 s
+  and 39 s of the 45 s limit, and timed out with 4 workers. Marked `test.slow()` with the reason; what
+  they assert is unchanged. Still needed: they are the only checks of the outline's progress colours.
+- US-029 (settings): it read the Bachelor of IT title size at the zoom the map opens at. Over 444
+  degrees that zoom leaves the title at its 16 px minimum, and one wheel step does not lift it off, so
+  "the title changes with zoom" failed. The test now flies to C10148 first; the assertions are
+  unchanged, and it still fails with text growth switched off.
+- Full E2E: 70 passed, 4 failed (all counts), 5 skipped.
+- Files: `e2e/outline.spec.ts`, `e2e/view.spec.ts`, `docs/UserStories.md`.

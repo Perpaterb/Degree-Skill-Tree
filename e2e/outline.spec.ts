@@ -26,6 +26,8 @@ async function openWay(panel: ReturnType<Page['getByTestId']>, n: number) {
 }
 
 test('US-027: a compulsory block is untouched, started, planned-complete, then complete', async ({ page }) => {
+  // Reloads the whole 2027 map several times, about 35 to 40 s on its own under software GL (US-043).
+  test.slow();
   let panel = await outline(page, 'c=');
   await expect(heading(panel, 'Compulsory')).toHaveAttribute('data-status', 'none');
 
@@ -45,6 +47,8 @@ test('US-027: a compulsory block is untouched, started, planned-complete, then c
 });
 
 test('US-027 / US-022: the Options ways each get their own line, fill in as sub-majors are chosen, planned and done, and count 48/48', async ({ page }) => {
+  // Reloads the whole 2027 map several times, about 35 to 40 s on its own under software GL (US-043).
+  test.slow();
   let panel = await outline(page, 'c=');
   await expect(panel.getByTestId('outline-way')).toHaveText([/^one major \(48cp\)/, /^two sub-majors/, /^one sub-major \(24cp\) and four electives/, /^one transdisciplinary elective/]);
   for (let i = 0; i < 4; i++) await expect(way(panel, i)).toHaveAttribute('data-status', 'none');

@@ -57,6 +57,11 @@ test.describe('in dark mode', () => {
 
   test('US-029: settings change text growth, size and credit points, persist in this browser, and stay out of the link', async ({ page }) => {
     await openTree(page, `t=uts-2027&c=${ADV.join('.')}`);
+    // Start at the Bachelor of IT: zoomed out over the whole 444-degree map its title sits at the 16px
+    // minimum, and one zoom step does not lift it off (US-043).
+    await goTo(page, 'C10148');
+    await page.getByRole('button', { name: 'Close' }).click();
+    await page.getByTestId('search').fill('');
     await page.getByTestId('view-settings-button').click();
     const popup = page.getByTestId('view-settings');
     await expect(popup).toBeVisible();
