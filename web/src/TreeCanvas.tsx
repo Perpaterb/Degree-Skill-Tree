@@ -603,6 +603,12 @@ export function TreeCanvas() {
     () =>
       useApp.subscribe((s, prev) => {
         if (!scene.current) return;
+        // Hidden while Dynamic mode is on: skip the work, and catch up on the way back (US-053).
+        if (s.mode === 'dynamic') return;
+        if (prev.mode === 'dynamic') {
+          restyle(scene.current);
+          return;
+        }
         if (
           s.states !== prev.states ||
           s.finish !== prev.finish ||

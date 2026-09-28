@@ -812,3 +812,33 @@ Stories are in [`UserStories.md`](UserStories.md).
   unchanged, and it still fails with text growth switched off.
 - Full E2E: 70 passed, 4 failed (all counts), 5 skipped.
 - Files: `e2e/outline.spec.ts`, `e2e/view.spec.ts`, `docs/UserStories.md`.
+
+### US-053 to US-057 Dynamic mode (`dynamic-map` branch, 28 Sep 2026; static tagged `static-map-2026-09-28`)
+- `core/layout.ts`: `layoutMap(map, { only, hide })` lays out one top-level circle centred on (0, 0) with
+  some programs left out; the placement and output code moved into `emitAll`. The static layout is
+  unchanged: re-laid out, the 6 MB stored layout compares equal.
+- `core/dynamic.ts`: `hiddenCircles` (locked, inside something hidden, or a shared program with every
+  offering degree hidden), `topOf`, `centreOf` (last chosen while still chosen, else the last program,
+  else a chosen degree). Tests `core/dynamic.test.ts` on real data (114 / 63 / 558 top-level circles).
+- Store: `mode` (remembered in `localStorage` as `dst.mode`, `web/src/view.ts`), `last` (set by
+  `selectDegree` to the degree just added, and by choosing a program). `ModeSwitch` in the top bar.
+- `web/src/DynamicCanvas.tsx`: each shown top-level circle is a body (a Pixi container drawn once in
+  its own coordinates) in a d3-force simulation: pulled to the centre (0.03 sideways, 0.1 up and down,
+  velocity decay 0.55), the centre's circle pinned at (0, 0); with nothing chosen, pulled sideways to
+  its static x; offshore bodies to anchors right of the main cluster, framed and titled. Collision on
+  circle-and-title radius plus 120. Physics runs on its own 16 ms timer, up to 6 ms of steps a time,
+  so settling does not wait on slow frames (under software GL a frame took over a second and stalled
+  it). New bodies start outside the cluster on a wide ellipse and fade in; hidden ones fade out. A body
+  that loses part of its contents is drawn at once without them and laid out again in
+  `web/src/layoutWorker.ts`. Titles are decluttered as bodies move (US-044's rule). Subject labels
+  appear per body when zoomed in. Clicks find the body, then a subject or the smallest circle; the
+  copy clicked feeds the layers above the detail card. Test hook `window.__dyn`.
+- `web/src/TreeCanvas.tsx`, `App.tsx`: the static canvas stays mounted and hidden while Dynamic is on,
+  skipping its repaints and camera flights, and catches up on the way back.
+- Tests: `e2e/dynamic.spec.ts` (US-053 to US-056; each seen to fail with Dynamic as the default,
+  nothing hidden, no centre, and no re-layouts). `e2e/perf-dynamic.spec.ts` (US-057, PERF only,
+  reports numbers). Full E2E: 75 passed, 4 failed (the known counts), 6 skipped.
+- Files: `core/layout.ts`, `core/dynamic.ts`, `core/dynamic.test.ts`, `web/src/DynamicCanvas.tsx`,
+  `web/src/layoutWorker.ts`, `web/src/App.tsx`, `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`,
+  `web/src/store.ts`, `web/src/view.ts`, `web/src/styles.css`, `e2e/dynamic.spec.ts`,
+  `e2e/perf-dynamic.spec.ts`.

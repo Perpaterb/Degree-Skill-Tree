@@ -60,7 +60,7 @@ declare global {
       zoom(): number;
       screen(): { x: number; y: number; scale: number };
       /** Simulation ticks so far, its alpha, and new layouts still awaited. */
-      stats(): { ticks: number; alpha: number; pending: number; tickMs: number; placeMs: number; renderMs: number };
+      stats(): { ticks: number; alpha: number; pending: number; tickMs: number; placeMs: number; renderMs: number; relayouts: number[] };
     };
   }
 }
@@ -167,6 +167,8 @@ export function DynamicCanvas() {
       cleanups.push(() => worker.terminate());
       let seq = 0;
       worker.onmessage = (e: MessageEvent<{ id: string; seq: number; layout: Layout }>) => {
+        // How long a new layout took, asked to arrived (US-057).
+        if (asked.has(e.data.seq)) timing.relayouts.push(performance.now() - asked.get(e.data.seq)!), asked.delete(e.data.seq);
         const b = bodies.get(e.data.id);
         if (!b || b.seq !== e.data.seq || b.leaving) return;
         b.seq = 0;
@@ -339,7 +341,8 @@ export function DynamicCanvas() {
         .force('collide', forceCollide<Body>((b) => b.r).strength(1).iterations(3))
         .stop();
       let ticks = 0;
-      const timing = { tickMs: 0, placeMs: 0, renderMs: 0 };
+      const timing = { tickMs: 0, placeMs: 0, renderMs: 0, relayouts: [] as number[] };
+      const asked = new Map<number, number>();
       // Physics runs on its own timer, as many steps as fit in a few milliseconds each time, so how fast
       // the map settles does not depend on how fast frames are drawn (slow ones stall the frame loop).
       const STEP_BUDGET_MS = 6;
@@ -469,6 +472,7 @@ export function DynamicCanvas() {
 
       const request = (b: Body, hide: string[]) => {
         b.seq = ++seq;
+        asked.set(b.seq, performance.now());
         worker.postMessage({ type: 'layout', id: b.id, hide, seq: b.seq });
       };
 

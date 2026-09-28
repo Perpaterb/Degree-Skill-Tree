@@ -374,32 +374,33 @@ As a student, I want courses taught only in another country kept apart and label
 
 ### US-053 Static / Dynamic switch (`dynamic-map` branch, experiment)
 As a student, I want to switch between the fixed map and one that rearranges itself around my choices.
-- [ ] A switch in the middle of the top bar: Static (default) | Dynamic. Remembered in this browser, not part of the shared link
-- [ ] Static is the map as built so far, unchanged; switching back from Dynamic shows it exactly as it was, camera included
-- [ ] E2E (tagged US-053): the switch defaults to Static, turns Dynamic on and off, and is remembered after a reload but not put in the link
+- [x] A switch in the middle of the top bar: Static (default) | Dynamic. Remembered in this browser, not part of the shared link
+- [x] Static is the map as built so far, unchanged; switching back from Dynamic shows it exactly as it was, camera included
+*Not yet in Dynamic mode (28 Sep 2026): hover highlighting and lit requisite lines, search and panel-row glows, the finished-circle glows and credit points on titles, and copies popping out on hover. Clicking, the detail card and its layers, flying to things and the theme work.*
+- [x] E2E (tagged US-053): the switch defaults to Static, turns Dynamic on and off, and is remembered after a reload but not put in the link
 
 ### US-054 Dynamic shows only what is not locked (`dynamic-map` branch)
 As a student, I want Dynamic mode to show only what is still open to me.
-- [ ] Locked degrees, majors, sub-majors and "With ..." groups are not shown, nor anything inside them. Subjects are shown whatever their prerequisite state (their requisite lines still make sense)
-- [ ] A major shared by several degrees (drawn outside them all) is shown only while at least one degree offering it is shown. *On 2027 data: with the Bachelor of Science chosen, 114 top-level circles (Science, its 8 partners, and 105 programs they offer) instead of 214; with IT + Business, 63; with nothing chosen, 558.*
-- [ ] Offshore courses keep their own areas, apart and labelled, whenever any of them is shown
-- [ ] E2E (tagged US-054): with the Bachelor of Science chosen, no locked degree is on the map and its partners are
+- [x] Locked degrees, majors, sub-majors and "With ..." groups are not shown, nor anything inside them. Subjects are shown whatever their prerequisite state (their requisite lines still make sense)
+- [x] A major shared by several degrees (drawn outside them all) is shown only while at least one degree offering it is shown. *On 2027 data: with the Bachelor of Science chosen, 114 top-level circles (Science, its 8 partners, and 105 programs they offer) instead of 214; with IT + Business, 63; with nothing chosen, 558.*
+- [ ] Offshore courses keep their own areas, apart and labelled, whenever any of them is shown *Partial: built (pulled to their own anchors right of the main cluster, framed and titled), not yet checked by a test or screenshot.*
+- [x] E2E (tagged US-054): with the Bachelor of Science chosen, no locked degree is on the map and its partners are
 
 ### US-055 Gravity around the last chosen thing (`dynamic-map` branch)
 As a student, I want what I chose at the centre, with everything still open settling around it.
-- [ ] The last chosen degree, double half, major or sub-major is the centre: its outermost circle rests at the centre and the camera goes to the chosen thing. Unchoosing moves the centre to what is still chosen; with nothing chosen, circles gather in faculty neighbourhoods as on the static map (biggest faculty in the middle)
-- [ ] Every shown circle is pulled towards the centre, more strongly up and down than sideways, so the map spreads sideways. Circles never overlap; movement is quick but damped (high gravity, slow speed), and everything comes to rest
-- [ ] A circle that becomes shown appears at the outside and falls inwards; one that stops being shown disappears and the rest close the gap
-- [ ] E2E (tagged US-055): after choosing a degree, the map settles within 5 s with no two circles overlapping and the chosen degree nearest the centre; unchoosing brings circles back in
+- [x] The last chosen degree, double half, major or sub-major is the centre: its outermost circle rests at the centre and the camera goes to the chosen thing. Unchoosing moves the centre to what is still chosen; with nothing chosen, circles gather in faculty neighbourhoods as on the static map (biggest faculty in the middle)
+- [x] Every shown circle is pulled towards the centre, more strongly up and down than sideways, so the map spreads sideways. Circles never overlap; movement is quick but damped (high gravity, slow speed), and everything comes to rest
+- [x] A circle that becomes shown appears at the outside and falls inwards; one that stops being shown disappears and the rest close the gap *Appearing at the outside is built but only seen, not asserted; disappearing is covered by the US-055 E2E (circle counts).*
+- [x] E2E (tagged US-055): after choosing a degree, the map settles within 5 s with no two circles overlapping and the chosen degree nearest the centre; unchoosing brings circles back in
 
 ### US-056 Circles fit what is shown in them (`dynamic-map` branch)
 As a student, I want circles to be only as big as what is visible in them.
-- [ ] A circle's contents are laid out again from what is shown in it, and it resizes, pushing neighbours away as it grows. A new layout may arrive a moment after the choice rather than all at once
-- [ ] E2E (tagged US-056): choosing two majors in a degree (locking the rest) makes its circle smaller in Dynamic mode, and unchoosing one makes it grow again
+- [x] A circle's contents are laid out again from what is shown in it, and it resizes, pushing neighbours away as it grows. A new layout may arrive a moment after the choice rather than all at once
+- [x] E2E (tagged US-056): choosing two majors in a degree (locking the rest) makes its circle smaller in Dynamic mode, and unchoosing one makes it grow again
 
 ### US-057 Dynamic stays smooth (`dynamic-map` branch)
 As the project owner, I want Dynamic mode measured, not assumed, to be smooth.
-- [ ] Measured with the existing benchmark (real GPU) with nothing chosen and with a degree chosen, while settling and while panning: US-004's 55 fps median target, and how long a re-layout takes; reported, not tuned into a pass
+- [x] Measured with the existing benchmark (real GPU) with nothing chosen and with a degree chosen, while settling and while panning: US-004's 55 fps median target, and how long a re-layout takes; reported, not tuned into a pass *28 Sep 2026, Intel Iris Xe (`e2e/perf-dynamic.spec.ts`): panning 60 fps median with nothing chosen and with Science chosen (slowest frame 17 ms). Settling: switching on with nothing chosen 2.3 s (7.5 s from opening the page) with one 3.4 s freeze while the 558 circles are built; choosing Science 0.17 s (slowest frame 133 ms); unchoosing 1.1 s (233 ms). Re-layouts: 54, median 3.9 s from asked to arrived, as one worker queues them.*
 
 ## Admin CMS
 
