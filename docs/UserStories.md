@@ -33,6 +33,7 @@ undergraduate degrees that cannot combine are locked; double degrees built from 
 circles removed; add-on halves locked until they have a degree to attach to; offshore degrees apart).
 US-019, US-021 and US-040 change with them (noted on each).
 28 Sep 2026: US-052 added (the circles an item sits in, as buttons above the detail card).
+28 Sep 2026: US-053 to US-057 added on the `dynamic-map` branch (a Dynamic mode: only what is not locked, pulled by gravity around the last chosen thing; the static map is tagged `static-map-2026-09-28`).
 
 ---
 
@@ -370,6 +371,34 @@ As a student, I want courses taught only in another country kept apart and label
 - [x] Majors and subjects used only by offshore degrees sit there; subjects shared with Sydney degrees appear as copies in both
 - [x] A general rule for any university: courses offered only in another location are laid out apart from the main campus's courses (read from the course's locations, not a list of codes; which locations are home is set per university in `data/locations/<institution>.json`)
 - [x] Unit test on real data: every offshore-only course is inside its area, and no Sydney or online course is; E2E (tagged US-050): the two area titles show
+
+### US-053 Static / Dynamic switch (`dynamic-map` branch, experiment)
+As a student, I want to switch between the fixed map and one that rearranges itself around my choices.
+- [ ] A switch in the middle of the top bar: Static (default) | Dynamic. Remembered in this browser, not part of the shared link
+- [ ] Static is the map as built so far, unchanged; switching back from Dynamic shows it exactly as it was, camera included
+- [ ] E2E (tagged US-053): the switch defaults to Static, turns Dynamic on and off, and is remembered after a reload but not put in the link
+
+### US-054 Dynamic shows only what is not locked (`dynamic-map` branch)
+As a student, I want Dynamic mode to show only what is still open to me.
+- [ ] Locked degrees, majors, sub-majors and "With ..." groups are not shown, nor anything inside them. Subjects are shown whatever their prerequisite state (their requisite lines still make sense)
+- [ ] Offshore courses keep their own areas, apart and labelled, whenever any of them is shown
+- [ ] E2E (tagged US-054): with the Bachelor of Science chosen, no locked degree is on the map and its partners are
+
+### US-055 Gravity around the last chosen thing (`dynamic-map` branch)
+As a student, I want what I chose at the centre, with everything still open settling around it.
+- [ ] The last chosen degree, double half, major or sub-major is the centre: its outermost circle rests at the centre and the camera goes to the chosen thing. Unchoosing moves the centre to what is still chosen; with nothing chosen, circles gather in faculty neighbourhoods as on the static map (biggest faculty in the middle)
+- [ ] Every shown circle is pulled towards the centre, more strongly up and down than sideways, so the map spreads sideways. Circles never overlap; movement is quick but damped (high gravity, slow speed), and everything comes to rest
+- [ ] A circle that becomes shown appears at the outside and falls inwards; one that stops being shown disappears and the rest close the gap
+- [ ] E2E (tagged US-055): after choosing a degree, the map settles within 5 s with no two circles overlapping and the chosen degree nearest the centre; unchoosing brings circles back in
+
+### US-056 Circles fit what is shown in them (`dynamic-map` branch)
+As a student, I want circles to be only as big as what is visible in them.
+- [ ] A circle's contents are laid out again from what is shown in it, and it resizes, pushing neighbours away as it grows. A new layout may arrive a moment after the choice rather than all at once
+- [ ] E2E (tagged US-056): choosing two majors in a degree (locking the rest) makes its circle smaller in Dynamic mode, and unchoosing one makes it grow again
+
+### US-057 Dynamic stays smooth (`dynamic-map` branch)
+As the project owner, I want Dynamic mode measured, not assumed, to be smooth.
+- [ ] Measured with the existing benchmark (real GPU) with nothing chosen and with a degree chosen, while settling and while panning: US-004's 55 fps median target, and how long a re-layout takes; reported, not tuned into a pass
 
 ## Admin CMS
 
