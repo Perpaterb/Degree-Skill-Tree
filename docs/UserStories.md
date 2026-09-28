@@ -131,6 +131,7 @@ As a student, I want to pick the degree I am aiming for and see what it needs.
 - [ ] The selected degree's remaining requirements stand out: its subjects I still need are highlighted, and the other degrees' outlines dim (their compatibility shading from US-023 stays visible). *Partial: implemented (gold rings on still-needed compulsory subjects, other degrees dimmed); checked by screenshot only, no automated check.*
 - [x] The selected degree is part of the shareable link and survives a reload
 - [x] Majors and sub-majors are chosen by clicking their circles while their degree is selected (the panel offers Choose only when the selected degree offers the program). *25 Sep 2026: and not while the program is locked out (US-037).*
+- [x] Going to a subject with several copies (search, or a link in a panel) flies to the copy that matters: inside the chosen degree (either half of a double) and not in a locked circle; else any copy not locked; listed copies before entry copies. *Added 28 Sep 2026 on `degree-pairs`. On 2027 data this picks a better copy for 181 subjects with nothing chosen, 989 with IT + Business chosen. Also fixes flying with a double chosen, which looked for copies inside the double's own circle, gone since US-048.*
 
 ### US-022 Progress panel for the selected degree
 As a student, I want progress shown for the degree I have selected, and to see which parts of the map each requirement means.

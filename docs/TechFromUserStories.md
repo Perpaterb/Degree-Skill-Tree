@@ -764,3 +764,16 @@ Stories are in [`UserStories.md`](UserStories.md).
   70107, which lit one of its two).
 - Files: `core/engine.ts`, `core/engine.test.ts`, `web/src/TreeCanvas.tsx`, `e2e/requisites.spec.ts`,
   `docs/UserStories.md`.
+
+### US-021 addition: fly to the copy that matters (`degree-pairs` branch, 28 Sep 2026)
+- `copyFor` (`web/src/TreeCanvas.tsx`), used by every camera flight (search, panel subject and program
+  links, the picker) and by the `pointFor` test hook, ranks a subject's copies: inside a chosen degree
+  (`chosenDegrees`, so either half of a double) and with no locked circle (program or degree lock) above
+  it; then not locked; then inside; then listed rather than entry. Before, only "inside `plan.degree`'s
+  circle" and entry counted, and a chosen double has no circle. Test hook `__dst.flewTo()`.
+- Measured on 2027 data: a more relevant copy for 181 subjects with nothing chosen, 989 with C10219 and
+  799 with C10242.
+- Tests: `e2e/flyto.spec.ts` (81511 with nothing chosen; 23115 and 21513 with C10219; a click on 23115 in
+  Business's panel). All three fail with the old ranking; the nothing-chosen one also fails without the
+  lock check.
+- Files: `web/src/TreeCanvas.tsx`, `e2e/flyto.spec.ts`, `docs/UserStories.md`.

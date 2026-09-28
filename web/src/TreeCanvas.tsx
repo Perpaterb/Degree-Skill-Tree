@@ -178,6 +178,8 @@ interface Scene {
   locked: string[];
   /** Links lit as a requisite chain or an unlock in the last paint, as "from>to" codes (US-045). */
   litEdges: string[];
+  /** The subject copy the camera last flew to. */
+  flewTo?: string | null;
   /** Subject codes drawn with the glow ring (search match or a hovered panel row) in the last paint. */
   ringed: Set<string>;
   /** Ask for one redraw on the next frame. */
@@ -219,6 +221,8 @@ declare global {
       locked(): string[];
       /** Links lit as a requisite chain or an unlock, as "from>to" subject codes (US-045). */
       litEdges(): string[];
+      /** The subject copy id ("<circle>/<code>") the camera last flew to. */
+      flewTo(): string | null;
       /** Why each locked program is locked: 'room', 'overlap', 'clash' (US-037) or 'pairing' (US-048). */
       lockReasons(): Record<string, string>;
       ringed(): string[];
@@ -497,6 +501,7 @@ export function TreeCanvas() {
         finished: () => scene.current?.finished ?? {},
         locked: () => scene.current?.locked ?? [],
         litEdges: () => scene.current?.litEdges ?? [],
+        flewTo: () => scene.current?.flewTo ?? null,
         lockReasons: () => Object.fromEntries([...useApp.getState().locks].map(([code, l]) => [code, l.why])),
         ringed: () => [...(scene.current?.ringed ?? [])],
         title(id) {
@@ -620,12 +625,29 @@ export function TreeCanvas() {
 }
 
 /** Which copy of a subject to fly to: one inside the selected degree if possible, preferring listed over entry copies. */
+/**
+ * Which copy of a subject to fly to, the one most likely to matter to this student: inside the chosen
+ * degree (either half of a double) and not in a locked circle; else any copy not in a locked circle;
+ * else inside the chosen degree; preferring listed copies over entry copies throughout.
+ */
 function copyFor(s: Scene, code: string): LayoutNode | null {
   const copies = Object.values(s.layout.nodes).filter((n) => n.code === code);
   if (!copies.length) return null;
-  const degree = useApp.getState().plan.degree;
-  const inDegree = (n: LayoutNode) => !!degree && within(s.layout, n.circle, degree);
-  return [...copies].sort((a, b) => Number(inDegree(b)) - Number(inDegree(a)) || Number(!!a.entry) - Number(!!b.entry))[0];
+  const { plan, locks, degreeLocks } = useApp.getState();
+  const chosen = chosenDegrees(s.map, plan.degree);
+  const parent = new Map(s.layout.circles.map((c) => [c.id, c.parent]));
+  const chain = (id: string) => {
+    const out: string[] = [];
+    for (let c: string | null = id; c; c = parent.get(c) ?? null) out.push(c);
+    return out;
+  };
+  const rank = (n: LayoutNode) => {
+    const up = chain(n.circle);
+    const inside = up.some((c) => chosen.includes(c));
+    const open = !up.some((c) => locks.has(c) || degreeLocks.has(c));
+    return [inside && open, open, inside, !n.entry].reduce((t, b) => t * 2 + Number(b), 0);
+  };
+  return copies.reduce((best, n) => (rank(n) > rank(best) ? n : best));
 }
 
 /** Whether circle `id` is `ancestor` or sits (at any depth) inside it. */
@@ -642,6 +664,7 @@ function fit(viewport: Viewport, layout: Layout) {
 
 function flyTo(s: Scene, id: string) {
   const n = copyFor(s, id);
+  s.flewTo = n?.id ?? null;
   if (n) {
     s.viewport.animate({ position: { x: n.x, y: n.y }, scale: Math.max(s.viewport.scale.x, 0.9), time: 650, ease: 'easeInOutSine' });
     return;
