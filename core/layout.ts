@@ -499,7 +499,15 @@ interface Box {
 
 type Packed = { r: number; x: number; y: number };
 
-export function layoutMap(map: MapDoc): Layout {
+/** Laying out one top-level circle on its own, for Dynamic mode (US-056). */
+export interface LayoutOptions {
+  /** Lay out only this top-level circle (a degree or a program), centred on (0, 0). */
+  only?: string;
+  /** Programs left out, with everything inside them (locked ones, in Dynamic mode). */
+  hide?: Set<string>;
+}
+
+export function layoutMap(map: MapDoc, opts: LayoutOptions = {}): Layout {
   // A double degree built from two halves has no circle of its own: its halves do (US-048).
   const degreeCodes = Object.keys(map.degrees)
     .filter((d) => !map.degrees[d].halves)
@@ -537,7 +545,7 @@ export function layoutMap(map: MapDoc): Layout {
     const structure = structureOf(id, kind);
     const disc = buildDisc(map, directSubjects(map, structure));
     const kids = [...directPrograms(map, structure)]
-      .filter((p) => !topLevel.has(p) && !stack.includes(p) && !built.has(p))
+      .filter((p) => !topLevel.has(p) && !stack.includes(p) && !built.has(p) && !opts.hide?.has(p))
       .sort()
       .map((p) => build(p, 'program', [...stack, id]));
     // Children are packed by the disc around each child and its title, so no title can touch
@@ -564,6 +572,13 @@ export function layoutMap(map: MapDoc): Layout {
     };
   }
 
+  if (opts.only) {
+    // One circle, centred on (0, 0): no placement, no areas.
+    const kind = map.degrees[opts.only] ? 'degree' : 'program';
+    const box = build(opts.only, kind, []);
+    if (kind === 'program') box.sharedBy = [...(offeredBy.get(opts.only) ?? [])].sort();
+    return emitAll(map, structureOf, [{ box, r: box.outer.r, x: box.outer.x, y: box.outer.y }], []);
+  }
   const tops: Box[] = degreeCodes.map((d) => build(d, 'degree', []));
   for (const p of [...topLevel].sort()) {
     if (built.has(p)) continue;
@@ -606,6 +621,11 @@ export function layoutMap(map: MapDoc): Layout {
     right += w + Math.max(AREA_PAD * 4, (main.maxX - main.minX) * AREA_GAP * 0.5);
   }
 
+  return emitAll(map, structureOf, placed, areas);
+}
+
+/** Every placed circle, with its subjects and links, in world coordinates. */
+function emitAll(map: MapDoc, structureOf: (id: string, kind: 'degree' | 'program') => Container, placed: (Packed & { box: Box })[], areas: LayoutArea[]): Layout {
   const nodes: Record<string, LayoutNode> = {};
   const circles: LayoutCircle[] = [];
   const edges: LayoutEdge[] = [];
