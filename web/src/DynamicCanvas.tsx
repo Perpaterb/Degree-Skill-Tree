@@ -17,6 +17,8 @@ import { textPx } from './view';
 const BODY_GAP = 120;
 /** Gravity: weaker sideways than up and down, so the map spreads sideways (US-055). */
 const PULL = { x: 0.03, y: 0.1 };
+/** World units a step: however strong the pull, nothing moves faster (US-055, "not thrown across"). */
+const MAX_SPEED = 300;
 /** Damping: high, so bodies come to rest rather than being thrown across (US-055). */
 const DECAY = 0.55;
 /** Fade in and out, in ms. */
@@ -60,7 +62,10 @@ declare global {
       zoom(): number;
       screen(): { x: number; y: number; scale: number };
       /** Simulation ticks so far, its alpha, and new layouts still awaited. */
-      stats(): { ticks: number; alpha: number; pending: number; tickMs: number; placeMs: number; renderMs: number; relayouts: number[] };
+      /** For tests and screenshots: point the camera at a world point and zoom. */
+      look(x: number, y: number, scale: number): void;
+      movers(): { id: string; v: number; x: number; y: number; tx: number; ty: number; r: number }[];
+      stats(): { ticks: number; fastest: number; alpha: number; pending: number; tickMs: number; placeMs: number; renderMs: number; relayouts: number[] };
     };
   }
 }
@@ -102,13 +107,15 @@ function tracePath(g: Graphics, path: PathCmd[]) {
   }
 }
 
-/** Collision radius: the top circle, or its title if that reaches further, plus the gap. */
+/**
+ * Collision radius: the top circle plus the gap. Titles are left to decluttering: a radius stretched to
+ * reach the title's far corner made circles bigger than their static spacing, so they shoved each
+ * other forever and never came to rest.
+ */
 function reach(lay: Layout, id: string): { cr: number; r: number } {
   const c = lay.circles.find((k) => k.id === id)!;
-  const title = Math.hypot(c.label.w / 2, c.y - c.label.y);
-  return { cr: c.r, r: Math.max(c.r, title) + BODY_GAP };
+  return { cr: c.r, r: c.r + BODY_GAP };
 }
-
 
 export function DynamicCanvas() {
   const host = useRef<HTMLDivElement>(null);
@@ -172,8 +179,12 @@ export function DynamicCanvas() {
         if (!b || b.seq !== e.data.seq || b.leaving) return;
         b.seq = 0;
         setLayout(b, e.data.layout);
-        sim.alpha(Math.max(sim.alpha(), 0.3));
+        // A resized circle nudges its neighbours: a little warmth, without restarting the cooling (each
+        // of dozens of arrivals used to restart it, sending the map round again and again).
+        sim.alpha(Math.max(sim.alpha(), 0.15));
         settled = false;
+        still = 0;
+        since = ticks;
       };
 
       const bodies = new Map<string, Body>();
@@ -339,29 +350,67 @@ export function DynamicCanvas() {
       const pullX = forceX<Body>((b) => b.tx).strength((b) => (b.fx != null ? 0 : b.area ? 0.2 : PULL.x));
       const sim: Simulation<Body, undefined> = forceSimulation<Body>([])
         .velocityDecay(DECAY)
-        .alphaDecay(0.03)
-        .alphaMin(0.003)
+        // Energy is held constant: the map stops only once everything has come to rest (see `step`), not
+        // when a cooling timer runs out, which left far-off circles stranded half way in.
+        .alphaDecay(0)
         .force('x', pullX)
         .force('y', forceY<Body>((b) => b.ty).strength((b) => (b.fy != null ? 0 : b.area ? 0.2 : PULL.y)))
         .force('collide', forceCollide<Body>((b) => b.r).strength(1).iterations(3))
+        // A speed limit, applied last: nothing is flung into the pack hard enough to bounce back out
+        // (circles pressed against it vibrated in and out by ~400 units a step, forever).
+        .force('limit', () => {
+          for (const b of sim.nodes()) {
+            const v = Math.hypot(b.vx ?? 0, b.vy ?? 0);
+            if (v > MAX_SPEED) (b.vx = (b.vx! * MAX_SPEED) / v), (b.vy = (b.vy! * MAX_SPEED) / v);
+          }
+        })
         .stop();
       let ticks = 0;
+      /** Steps in a row with nothing moving faster than REST_SPEED, and the step the current settling began. */
+      let still = 0;
+      let since = 0;
+      let cooling = false;
+      /** How far the fastest circle moved in the last step. */
+      let lastMove = 0;
       const timing = { tickMs: 0, placeMs: 0, renderMs: 0, relayouts: [] as number[] };
       const asked = new Map<number, number>();
       // Physics runs on its own timer, as many steps as fit in a few milliseconds each time, so how fast
       // the map settles does not depend on how fast frames are drawn (slow ones stall the frame loop).
-      const STEP_BUDGET_MS = 6;
+      const STEP_BUDGET_MS = 8;
+      /** World units per step: slower than this everywhere, for REST_STEPS steps, is at rest. */
+      const REST_SPEED = 2;
+      const REST_STEPS = 20;
+      /** Nineteen in twenty circles slower than this have arrived; then the energy starts to fall by COOL a step. */
+      const ARRIVED_SPEED = 20;
+      const COOL = 0.005;
+      /** Start cooling after this many steps anyway, so a vibration cannot keep the map warm for ever. */
+      const COOL_AFTER = 3000;
+      /** However long, stop after this many steps (a jitter that never quite stops). */
+      const MAX_STEPS = 5000;
       const step = () => {
         if (settled) return;
         const t0 = performance.now();
         const before = ticks;
         do {
+          const nodes = sim.nodes();
+          const was = nodes.map((b) => [b.x!, b.y!]);
           sim.tick();
           ticks++;
           if (ticks % 30 === 0) retarget();
-        } while (sim.alpha() > sim.alphaMin() && performance.now() - t0 < STEP_BUDGET_MS);
+          // Full energy while circles are still falling in; once they have arrived, cool gradually so the
+          // pack stops jostling. At rest: nothing moving more than a whisker for a run of steps (or a cap).
+          // Measured as how far circles actually moved: a circle pressed against the pack keeps a high
+          // velocity that the collisions cancel, so its velocity says nothing about whether it moves.
+          const moves = nodes.map((b, i) => Math.hypot(b.x! - was[i][0], b.y! - was[i][1])).sort((a, b) => a - b);
+          const fastest = moves[moves.length - 1] ?? 0;
+          lastMove = fastest;
+          // Arrived: nearly all have stopped travelling (a few pressed against the pack may still vibrate).
+          const most = moves[Math.floor(moves.length * 0.95)] ?? 0;
+          if (!cooling && (most < ARRIVED_SPEED || ticks - since > COOL_AFTER)) (cooling = true), sim.alphaDecay(COOL);
+          still = fastest < REST_SPEED ? still + 1 : 0;
+        } while (still < REST_STEPS && ticks - since < MAX_STEPS && performance.now() - t0 < STEP_BUDGET_MS);
         timing.tickMs = (performance.now() - t0) / (ticks - before);
-        if (sim.alpha() <= sim.alphaMin()) (settled = true), bringOffshore();
+        if (still >= REST_STEPS || ticks - since >= MAX_STEPS) (settled = true), bringOffshore();
         const t1 = performance.now();
         place();
         timing.placeMs = performance.now() - t1;
@@ -377,8 +426,9 @@ export function DynamicCanvas() {
           if (b.area) (b.tx = home.x), (b.ty = home.y);
           // Something chosen: towards where it rests.
           else if (pinned) (b.tx = pinned.fx ?? pinned.x!), (b.ty = pinned.fy ?? pinned.y!);
-          // Nothing chosen: back towards their faculty's place, as on the static map.
-          else (b.tx = home.x), (b.ty = 0);
+          // Nothing chosen: back to their place on the static map, faculty neighbourhoods and all. (Pulling
+          // them all onto one line crowded them into a jostle that never came to rest.)
+          else (b.tx = home.x), (b.ty = home.y);
         }
         pullX.x((b) => b.tx);
       };
@@ -468,8 +518,11 @@ export function DynamicCanvas() {
         sim.nodes([...bodies.values()].filter((b) => !b.leaving));
         retarget();
         sim.force('collide', forceCollide<Body>((b) => b.r).strength(1).iterations(3));
-        sim.alpha(alpha);
+        sim.alpha(alpha).alphaDecay(0);
+        cooling = false;
         settled = false;
+        still = 0;
+        since = ticks;
       };
 
       /** Once the rest have settled, the offshore circles come in (US-054). */
@@ -477,7 +530,11 @@ export function DynamicCanvas() {
         if (!waiting.size) return;
         for (const add of waiting.values()) add();
         waiting.clear();
-        restart(0.5);
+        // They appear at their own places, already at rest: join the simulation without waking the
+        // rest (restarting it here set everything moving a second time).
+        sim.nodes([...bodies.values()].filter((b) => !b.leaving));
+        retarget();
+        place();
       };
 
       const request = (b: Body, hide: string[]) => {
@@ -544,7 +601,19 @@ export function DynamicCanvas() {
         centre: () => centre,
         zoom: () => viewport.scale.x,
         screen: () => ({ x: viewport.center.x, y: viewport.center.y, scale: viewport.scale.x }),
-        stats: () => ({ ticks, alpha: sim.alpha(), pending: [...bodies.values()].filter((b) => b.seq && !b.leaving).length, ...timing }),
+        look: (x, y, scale) => {
+          viewport.setZoom(scale, true);
+          viewport.moveCenter(x, y);
+          lod();
+          invalidate();
+        },
+        movers: () =>
+          sim
+            .nodes()
+            .map((b) => ({ id: b.id, v: Math.hypot(b.vx ?? 0, b.vy ?? 0), x: b.x!, y: b.y!, tx: b.tx, ty: b.ty, r: b.r }))
+            .sort((a, b) => b.v - a.v)
+            .slice(0, 5),
+        stats: () => ({ ticks, fastest: lastMove, alpha: sim.alpha(), pending: [...bodies.values()].filter((b) => b.seq && !b.leaving).length, ...timing }),
       };
       cleanups.push(() => delete window.__dyn);
 
