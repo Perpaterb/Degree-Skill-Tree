@@ -842,3 +842,20 @@ Stories are in [`UserStories.md`](UserStories.md).
   `web/src/layoutWorker.ts`, `web/src/App.tsx`, `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`,
   `web/src/store.ts`, `web/src/view.ts`, `web/src/styles.css`, `e2e/dynamic.spec.ts`,
   `e2e/perf-dynamic.spec.ts`.
+
+### US-054 / US-055 changes, and a stronger selection highlight (`dynamic-map` branch, 29 Sep 2026)
+- `web/src/DynamicCanvas.tsx`: the centre's top-level circle is pinned where it already is (`fx`, `fy`
+  = its position) and the rest are pulled towards it; `aim()` runs only on the first load, and the
+  picker no longer flies the camera in Dynamic mode (`Panels.tsx`). New bodies start at their static
+  position; with nothing chosen they are pulled to their static x. Offshore bodies are held in a
+  `waiting` list until the rest settle (`bringOffshore`), then pulled at 0.2 both ways to their static
+  positions; the anchors that followed the main cluster's right edge are gone.
+- Both canvases: the selected circle's whole disc is filled with the glow colour at 0.16, with a rim
+  `max(6, r * 0.035)` wide (was a fixed 3-unit ring, invisible zoomed out). `TreeCanvas.tsx` and
+  `DynamicCanvas.tsx`.
+- Tests: `e2e/dynamic.spec.ts` US-055 rewritten (camera and chosen degree unmoved) and a new US-054
+  offshore test (in last, right of every other circle, China's left of Vietnam's). Both fail with the
+  degree pinned at the origin, and with offshore circles pulled to the centre. The highlight is checked
+  by screenshot only.
+- Files: `web/src/DynamicCanvas.tsx`, `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`,
+  `e2e/dynamic.spec.ts`, `docs/UserStories.md`.

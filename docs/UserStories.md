@@ -34,6 +34,7 @@ circles removed; add-on halves locked until they have a degree to attach to; off
 US-019, US-021 and US-040 change with them (noted on each).
 28 Sep 2026: US-052 added (the circles an item sits in, as buttons above the detail card).
 28 Sep 2026: US-053 to US-057 added on the `dynamic-map` branch (a Dynamic mode: only what is not locked, pulled by gravity around the last chosen thing; the static map is tagged `static-map-2026-09-28`).
+29 Sep 2026: US-054 and US-055 changed (offshore last and apart; choosing leaves the degree and camera where they are; circles appear in their faculty's place). The selected circle is lit more strongly in both modes.
 
 ---
 
@@ -383,15 +384,15 @@ As a student, I want to switch between the fixed map and one that rearranges its
 As a student, I want Dynamic mode to show only what is still open to me.
 - [x] Locked degrees, majors, sub-majors and "With ..." groups are not shown, nor anything inside them. Subjects are shown whatever their prerequisite state (their requisite lines still make sense)
 - [x] A major shared by several degrees (drawn outside them all) is shown only while at least one degree offering it is shown. *On 2027 data: with the Bachelor of Science chosen, 114 top-level circles (Science, its 8 partners, and 105 programs they offer) instead of 214; with IT + Business, 63; with nothing chosen, 558.*
-- [ ] Offshore courses keep their own areas, apart and labelled, whenever any of them is shown *Partial: built (pulled to their own anchors right of the main cluster, framed and titled), not yet checked by a test or screenshot.*
+- [x] Offshore courses keep their own areas, apart and labelled, whenever any of them is shown. *Changed 29 Sep 2026: they come in last, once the rest have settled, and are pulled hard to their own places on the static map, far right, each location in its own cluster (they jumped about while their anchor followed the main cluster's edge). E2E-tested.*
 - [x] E2E (tagged US-054): with the Bachelor of Science chosen, no locked degree is on the map and its partners are
 
 ### US-055 Gravity around the last chosen thing (`dynamic-map` branch)
 As a student, I want what I chose at the centre, with everything still open settling around it.
-- [x] The last chosen degree, double half, major or sub-major is the centre: its outermost circle rests at the centre and the camera goes to the chosen thing. Unchoosing moves the centre to what is still chosen; with nothing chosen, circles gather in faculty neighbourhoods as on the static map (biggest faculty in the middle)
+- [x] The last chosen degree, double half, major or sub-major is the centre. *Changed 29 Sep 2026: its outermost circle stays exactly where it is and becomes the centre, and the camera does not move or zoom (it used to jump to the middle of the map, with the camera following).* Unchoosing moves the centre to what is still chosen; with nothing chosen, circles gather in faculty neighbourhoods as on the static map (biggest faculty in the middle)
 - [x] Every shown circle is pulled towards the centre, more strongly up and down than sideways, so the map spreads sideways. Circles never overlap; movement is quick but damped (high gravity, slow speed), and everything comes to rest
-- [x] A circle that becomes shown appears at the outside and falls inwards; one that stops being shown disappears and the rest close the gap *Appearing at the outside is built but only seen, not asserted; disappearing is covered by the US-055 E2E (circle counts).*
-- [x] E2E (tagged US-055): after choosing a degree, the map settles within 5 s with no two circles overlapping and the chosen degree nearest the centre; unchoosing brings circles back in
+- [x] A circle that becomes shown pops in at its place on the static map (its faculty's neighbourhood) and falls towards the centre; with nothing chosen it is pulled back to its faculty's place. One that stops being shown disappears and the rest close the gap. *Changed 29 Sep 2026: was "appears at the outside". Where it appears is seen, not asserted; disappearing and coming back are covered by the US-055 E2E.*
+- [x] E2E (tagged US-055): after choosing a degree, the map settles within 5 s with no two circles overlapping, the degree and the camera where they were, and the degree nearest its new centre; unchoosing brings circles back in
 
 ### US-056 Circles fit what is shown in them (`dynamic-map` branch)
 As a student, I want circles to be only as big as what is visible in them.

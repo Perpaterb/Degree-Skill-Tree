@@ -109,7 +109,6 @@ function reach(lay: Layout, id: string): { cr: number; r: number } {
   return { cr: c.r, r: Math.max(c.r, title) + BODY_GAP };
 }
 
-const hash = (s: string) => [...s].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 
 export function DynamicCanvas() {
   const host = useRef<HTMLDivElement>(null);
@@ -180,6 +179,10 @@ export function DynamicCanvas() {
       const bodies = new Map<string, Body>();
       let settled = false;
       let centre: string | null = null;
+      /** The top-level circle holding the centre: it stays where it is and the rest gather round it. */
+      let centreBody: string | null = null;
+      /** Offshore circles wait until the rest have settled, then come in last. */
+      const waiting = new Map<string, () => void>();
 
       const makeBody = (id: string, lay: Layout, hideKey: string, x: number, y: number): Body => {
         const root = new Container();
@@ -233,7 +236,8 @@ export function DynamicCanvas() {
               .fill({ color: on ? canvas.chosen : canvas.programFill, alpha: on ? 0.08 : 0.035 })
               .stroke({ color: locks.has(c.id) ? canvas.wasted : on ? canvas.chosen : canvas.programRing, width: on ? 6 : 3 });
           }
-          if (c.id === selected) g.circle(c.x, c.y, c.r + 10).stroke({ color: canvas.selectRing, width: 3, alpha: 0.8 });
+          // The open circle stands out at any zoom, as on the static map.
+          if (c.id === selected) g.circle(c.x, c.y, c.r).fill({ color: canvas.glow, alpha: 0.16 }).circle(c.x, c.y, c.r + 10).stroke({ color: canvas.selectRing, width: Math.max(6, c.r * 0.035), alpha: 0.9 });
         }
         const e = b.links.clear();
         for (const edge of b.lay.edges) {
@@ -331,13 +335,14 @@ export function DynamicCanvas() {
       };
 
       // Gravity (US-055).
-      const pullX = forceX<Body>((b) => b.tx).strength((b) => (b.fx != null ? 0 : PULL.x));
+      // Offshore bodies hold their own cluster: pulled to their spots hard, both ways.
+      const pullX = forceX<Body>((b) => b.tx).strength((b) => (b.fx != null ? 0 : b.area ? 0.2 : PULL.x));
       const sim: Simulation<Body, undefined> = forceSimulation<Body>([])
         .velocityDecay(DECAY)
         .alphaDecay(0.03)
         .alphaMin(0.003)
         .force('x', pullX)
-        .force('y', forceY<Body>((b) => b.ty).strength((b) => (b.fy != null ? 0 : PULL.y)))
+        .force('y', forceY<Body>((b) => b.ty).strength((b) => (b.fy != null ? 0 : b.area ? 0.2 : PULL.y)))
         .force('collide', forceCollide<Body>((b) => b.r).strength(1).iterations(3))
         .stop();
       let ticks = 0;
@@ -356,7 +361,7 @@ export function DynamicCanvas() {
           if (ticks % 30 === 0) retarget();
         } while (sim.alpha() > sim.alphaMin() && performance.now() - t0 < STEP_BUDGET_MS);
         timing.tickMs = (performance.now() - t0) / (ticks - before);
-        if (sim.alpha() <= sim.alphaMin()) settled = true;
+        if (sim.alpha() <= sim.alphaMin()) (settled = true), bringOffshore();
         const t1 = performance.now();
         place();
         timing.placeMs = performance.now() - t1;
@@ -365,21 +370,15 @@ export function DynamicCanvas() {
       /** Where each body is pulled: its faculty's place (nothing chosen) or the centre; offshore to its own area. */
       const retarget = () => {
         const live = [...bodies.values()].filter((b) => !b.leaving);
-        const main = live.filter((b) => !b.area);
-        const right = main.length ? Math.max(...main.map((b) => b.x! + b.r)) : 0;
-        const areas = [...new Set(live.filter((b) => b.area).map((b) => b.area!))].sort();
-        let at = right + 4000;
-        const anchor = new Map<string, number>();
-        for (const a of areas) {
-          const members = live.filter((b) => b.area === a);
-          const w = 2 * Math.sqrt(members.reduce((t, b) => t + b.r * b.r, 0) / 0.6);
-          anchor.set(a, at + w / 2);
-          at += w + 4000;
-        }
+        const pinned = centreBody ? bodies.get(centreBody) : undefined;
         for (const b of live) {
-          if (b.area) (b.tx = anchor.get(b.area)!), (b.ty = 0);
-          else if (centre) (b.tx = 0), (b.ty = 0);
-          else (b.tx = staticAt.get(b.id)!.x), (b.ty = 0);
+          const home = staticAt.get(b.id)!;
+          // Offshore: always their own spot far to the right, as on the static map, never the centre.
+          if (b.area) (b.tx = home.x), (b.ty = home.y);
+          // Something chosen: towards where it rests.
+          else if (pinned) (b.tx = pinned.fx ?? pinned.x!), (b.ty = pinned.fy ?? pinned.y!);
+          // Nothing chosen: back towards their faculty's place, as on the static map.
+          else (b.tx = home.x), (b.ty = 0);
         }
         pullX.x((b) => b.tx);
       };
@@ -429,45 +428,56 @@ export function DynamicCanvas() {
         const centreTop = nextCentre ? topOfCircle.get(nextCentre)! : null;
         const shown = tops.filter((c) => !hidden.has(c.id));
         const shownIds = new Set(shown.map((c) => c.id));
-        // The edge of what is there now: new bodies appear outside it and fall in.
-        const live = [...bodies.values()].filter((b) => !b.leaving);
-        const edge = live.length ? Math.max(...live.map((b) => Math.hypot(b.x!, b.y!) + b.r)) : 0;
         for (const c of shown) {
           const inside = part(c.id).circles.filter((k) => hidden.has(k.id)).map((k) => k.id);
           const hideKey = inside.sort().join(',');
           let b = bodies.get(c.id);
           if (!b || b.leaving) {
-            let x = c.x;
-            let y = c.y;
-            if (!first) {
-              const a = ((hash(c.id) % 3600) / 3600) * Math.PI * 2;
-              const r = edge + 2000;
-              // Out on a wide ellipse, as the map spreads sideways.
-              (x = Math.cos(a) * r * 2), (y = Math.sin(a) * r);
+            // A new circle pops in where it sits on the static map, in its faculty's place, and falls in.
+            const add = () => {
+              const old = bodies.get(c.id);
+              if (old) old.root.destroy({ children: true });
+              const nb = makeBody(c.id, hideKey ? without(part(c.id), new Set(inside)) : part(c.id), hideKey, c.x, c.y);
+              bodies.set(c.id, nb);
+              if (hideKey) request(nb, inside);
+            };
+            if (areaOf(c)) {
+              waiting.set(c.id, add);
+              continue;
             }
-            if (b) b.root.destroy({ children: true });
-            b = makeBody(c.id, hideKey ? without(part(c.id), new Set(inside)) : part(c.id), hideKey, x, y);
-            bodies.set(c.id, b);
-            if (hideKey) request(b, inside);
+            add();
           } else if (b.hideKey !== hideKey) {
             b.hideKey = hideKey;
             setLayout(b, hideKey ? without(part(c.id), new Set(inside)) : part(c.id));
             if (hideKey) request(b, inside);
           } else draw(b);
         }
+        for (const id of [...waiting.keys()]) if (!shownIds.has(id)) waiting.delete(id);
         for (const b of bodies.values()) if (!shownIds.has(b.id) && !b.leaving) (b.leaving = performance.now()), (b.fx = null), (b.fy = null);
-        // The centre's circle rests at the centre.
-        for (const b of bodies.values()) (b.fx = null), (b.fy = null);
+        // The centre's circle stays exactly where it is; the camera does not move (US-055).
+        for (const b of bodies.values()) if (b.id !== centreTop) (b.fx = null), (b.fy = null);
         const pinned = centreTop ? bodies.get(centreTop) : undefined;
-        if (pinned) (pinned.fx = 0), (pinned.fy = 0);
-        const moved = nextCentre !== centre;
+        if (pinned && pinned.fx == null) (pinned.fx = pinned.x), (pinned.fy = pinned.y);
+        centreBody = pinned ? centreTop : null;
         centre = nextCentre;
+        restart(first ? 0.6 : 0.8);
+        if (first) aim();
+      };
+
+      const restart = (alpha: number) => {
         sim.nodes([...bodies.values()].filter((b) => !b.leaving));
         retarget();
         sim.force('collide', forceCollide<Body>((b) => b.r).strength(1).iterations(3));
-        sim.alpha(first ? 0.6 : 0.8);
+        sim.alpha(alpha);
         settled = false;
-        if (moved || first) aim();
+      };
+
+      /** Once the rest have settled, the offshore circles come in (US-054). */
+      const bringOffshore = () => {
+        if (!waiting.size) return;
+        for (const add of waiting.values()) add();
+        waiting.clear();
+        restart(0.5);
       };
 
       const request = (b: Body, hide: string[]) => {

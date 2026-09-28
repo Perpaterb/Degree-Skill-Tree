@@ -1039,7 +1039,12 @@ function paint(s: Scene) {
         });
       title.alpha = inSel || glowing ? 1 : 0.35;
     }
-    if (circle.id === selected) g?.circle(circle.x, circle.y, circle.r + 10).stroke({ color: canvas.selectRing, width: 3, alpha: 0.8 });
+    if (circle.id === selected) {
+      // The open circle stands out at any zoom: its whole disc lit, and a rim that grows with it
+      // (a fixed 3-unit ring vanished when zoomed out).
+      g?.circle(circle.x, circle.y, circle.r).fill({ color: canvas.glow, alpha: 0.16 });
+      g?.circle(circle.x, circle.y, circle.r + 10).stroke({ color: canvas.selectRing, width: Math.max(6, circle.r * 0.035), alpha: 0.9 });
+    }
     // Credit points after the title, with a tick coloured like the glow (US-028).
     const t = titles.get(circle.id);
     const mark = lockedOut ? ' ✗' : halo !== null ? ' ✓' : '';

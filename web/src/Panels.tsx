@@ -1078,7 +1078,8 @@ export function TopBar() {
             const code = e.target.value || null;
             const made = code && plan.degree ? partnersOf(map, plan.degree).get(code) : undefined;
             selectDegree(made ?? code);
-            if (code) select(made ?? code, true);
+            // In Dynamic mode choosing never moves the camera: the degree stays put and becomes the centre (US-055).
+            if (code) select(made ?? code, useApp.getState().mode === 'static');
           }}
           aria-label="Degree"
           data-testid="degree-picker"
