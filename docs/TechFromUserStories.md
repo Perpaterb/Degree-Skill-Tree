@@ -905,3 +905,17 @@ Stories are in [`UserStories.md`](UserStories.md).
   wait is 120 s: software GL blocks the physics timer while drawing, and under 4 parallel tests the
   choose test ran out at 60 s (it passes alone in 1.3 min).
 - Files: `web/src/DynamicCanvas.tsx`, `e2e/dynamic.spec.ts`, `docs/TechFromUserStories.md`.
+
+### US-055 fix: gather about the middle of the screen (`dynamic-map` branch, 29 Sep 2026)
+- On switching on, the map still slid left: it gathered about the middle of its faculties (about
+  x 10,000) while the camera opened centred on the whole map with the offshore areas (x 24,600).
+- The galaxy centre with nothing chosen is now halfway between the leftmost and rightmost faculty
+  spawn points as they are (`spawnMiddle`; TD School at -78,224 and Vice-Chancellor at 98,306 on the
+  static map), and switching on centres the camera there.
+- Test: `e2e/dynamic.spec.ts`, at rest the map's middle is within 5 % of its width of the camera's
+  centre, and so is halfway between the outermost spawn points. Against the previous code it fails on
+  a 15,223-unit slide. The earlier drift test compared the map with itself, not with the screen, so it
+  missed this.
+- The Dynamic tests now run one at a time (`describe.configure({ mode: 'default' })`): nine full-map
+  tests four at a time under software GL ran out of time; one after another all nine pass (7.7 min).
+- Files: `web/src/DynamicCanvas.tsx`, `e2e/dynamic.spec.ts`, `docs/TechFromUserStories.md`.

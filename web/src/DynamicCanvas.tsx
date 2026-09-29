@@ -413,6 +413,15 @@ export function DynamicCanvas() {
         const y1 = Math.max(...main.map((c) => c.y + c.r));
         return { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
       })();
+      /**
+       * The galaxy's centre while nothing is chosen: halfway between the leftmost and rightmost faculty
+       * spawn points, as they are now.
+       */
+      const spawnMiddle = () => {
+        const xs = [...anchors.values()].map((a) => a.x!);
+        if (!xs.length) xs.push(...staticAnchor.values());
+        return xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : mapMiddle.x;
+      };
       /** Where each faculty sits on the static map: the middle of its degrees, on the centre line. */
       const staticAnchor = new Map<string, number>();
       {
@@ -604,7 +613,7 @@ export function DynamicCanvas() {
         // (The static map's origin is the biggest faculty, well left of the map's middle: pulling to it
         // sent everything drifting left when Dynamic was switched on.)
         const c = centreBody ? bodies.get(centreBody) : undefined;
-        galaxy.x = c ? (c.fx ?? c.x!) : mapMiddle.x;
+        galaxy.x = c ? (c.fx ?? c.x!) : spawnMiddle();
         galaxy.y = c ? (c.fy ?? c.y!) : mapMiddle.y;
         anchorSim.nodes([...anchors.values()]);
         anchorSim.force('x', forceX<Anchor>(galaxy.x).strength(ANCHOR_PULL.x));
@@ -733,7 +742,9 @@ export function DynamicCanvas() {
         const { minX, minY, maxX, maxY } = layout.bounds;
         viewport.fit(true, maxX - minX, maxY - minY);
         if (viewport.scale.x < MIN_ZOOM) viewport.setZoom(MIN_ZOOM, true);
-        viewport.moveCenter((minX + maxX) / 2, (minY + maxY) / 2);
+        // Centred on the galaxy's centre, so the map gathers evenly about the middle of the screen (centred
+        // on the whole map, offshore areas and all, it slid left as it gathered).
+        viewport.moveCenter(galaxy.x, galaxy.y);
         lod();
         invalidate();
       };

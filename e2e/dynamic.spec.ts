@@ -3,6 +3,9 @@ import { goTo, openTree } from './helpers';
 
 // US-053 to US-056: Dynamic mode.
 test.slow(); // the whole 2027 map, twice over (static underneath, dynamic on top), under software GL
+// One at a time: several of these at once starve each other under software GL, and the physics waits on
+// drawing, so they ran out of time rather than failed. Other files still run alongside.
+test.describe.configure({ mode: 'default' });
 
 const bodies = (page: Page) => page.evaluate(() => window.__dyn!.bodies());
 // Coming to rest waits on software GL, which blocks the physics timer while it draws: with several tests
@@ -196,4 +199,21 @@ test('US-055: switching on with nothing chosen keeps the map where it was, long 
   expect(Math.abs(rest.mean - start.mean)).toBeLessThan(rest.w * 0.05);
   // Long and thin, strung along the line rather than bunched up.
   expect(rest.w / rest.h).toBeGreaterThan(3);
+});
+
+test('US-055: on switching on, the map gathers about the middle of the screen: halfway between the outermost faculty spawn points', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('dst.mode', 'dynamic'));
+  await page.goto('./#t=uts-2027');
+  await page.waitForFunction(() => !!window.__dyn && window.__dyn.bodies().length > 400, undefined, { timeout: 60_000 });
+  const camera = await page.evaluate(() => window.__dyn!.screen());
+  await settled(page, 120_000);
+  const offshore = new Set(['C04283', 'C04308', 'C04426', 'C10226', 'C11256', 'C11266', 'C11334', 'C10487', 'C10488']);
+  const m = (await bodies(page)).filter((x) => !offshore.has(x.id));
+  const x0 = Math.min(...m.map((x) => x.x - x.r));
+  const x1 = Math.max(...m.map((x) => x.x + x.r));
+  // At rest the map sits about the screen's middle (it slid about 15,000 units left of it before).
+  expect(Math.abs((x0 + x1) / 2 - camera.x)).toBeLessThan((x1 - x0) * 0.05);
+  // And the camera is on halfway between the leftmost and rightmost spawn points.
+  const a = (await page.evaluate(() => window.__dyn!.anchors())).map((p) => p.x);
+  expect(Math.abs((Math.min(...a) + Math.max(...a)) / 2 - camera.x)).toBeLessThan((x1 - x0) * 0.05);
 });
