@@ -5,7 +5,8 @@ import { goTo, openTree } from './helpers';
 test.slow(); // the whole 2027 map, twice over (static underneath, dynamic on top), under software GL
 
 const bodies = (page: Page) => page.evaluate(() => window.__dyn!.bodies());
-const settled = (page: Page) => expect.poll(() => page.evaluate(() => !!window.__dyn?.settled()), { timeout: 20_000 }).toBe(true);
+const settled = (page: Page, timeout = 60_000) =>
+  expect.poll(() => page.evaluate(() => !!window.__dyn?.settled() && window.__dyn!.arriving() === 0), { timeout }).toBe(true);
 /** Open a link with Dynamic mode already on (remembered in this browser). */
 async function openDynamic(page: Page, hash: string) {
   await page.addInitScript(() => localStorage.setItem('dst.mode', 'dynamic'));
@@ -16,36 +17,44 @@ async function openDynamic(page: Page, hash: string) {
   await settled(page);
 }
 
-test('US-053: the switch defaults to Static, turns Dynamic on and off, is remembered but not in the link, and Static comes back as it was', async ({ page }) => {
+test('US-053: the switch defaults to Static, is remembered but not in the link; Dynamic opens zoomed out and centred; back to Static is like a refresh, then goes to the selection', async ({ page }) => {
   await openTree(page, 't=uts-2027');
   await expect(page.getByTestId('mode-static')).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByTestId('dynamic-canvas')).toHaveCount(0);
+  const opened = await page.evaluate(() => window.__dst!.zoom());
   // Somewhere particular on the static map.
   await goTo(page, 'C10148');
   await page.getByRole('button', { name: 'Close' }).click();
-  const before = await page.evaluate(() => ({ zoom: window.__dst!.zoom(), at: window.__dst!.pointFor('C10148') }));
 
   await page.getByTestId('mode-dynamic').click();
   await expect(page.getByTestId('dynamic-canvas')).toBeVisible();
   await expect(page.getByTestId('tree-canvas')).toHaveClass(/hidden/);
+  await page.waitForFunction(() => !!window.__dyn);
+  // Zoomed all the way out, as the static map opens.
+  expect(await page.evaluate(() => window.__dyn!.zoom())).toBeCloseTo(opened, 6);
   expect(page.url()).not.toMatch(/dynamic|mode/);
   await page.reload();
   await expect(page.getByTestId('mode-dynamic')).toHaveAttribute('aria-checked', 'true');
   await page.waitForFunction(() => !!window.__dyn);
 
-  // Moving about in Dynamic mode does not move the static map's camera.
-  await page.getByTestId('mode-static').click();
-  await goTo(page, 'C10148');
-  await page.getByRole('button', { name: 'Close' }).click();
-  const at = await page.evaluate(() => ({ zoom: window.__dst!.zoom(), at: window.__dst!.pointFor('C10148') }));
-  await page.getByTestId('mode-dynamic').click();
-  await page.waitForFunction(() => !!window.__dyn);
-  await goTo(page, 'C10476');
+  // Back to Static with nothing selected: zoomed out and centred, like a refresh.
   await page.getByTestId('mode-static').click();
   await expect(page.getByTestId('dynamic-canvas')).toHaveCount(0);
   await expect(page.getByTestId('tree-canvas')).not.toHaveClass(/hidden/);
-  expect(await page.evaluate(() => ({ zoom: window.__dst!.zoom(), at: window.__dst!.pointFor('C10148') }))).toEqual(at);
-  expect(before.zoom).toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() => window.__dst!.zoom())).toBeCloseTo(opened, 6);
+
+  // With a subject selected: the same, then off to the subject.
+  await page.getByTestId('mode-dynamic').click();
+  await page.waitForFunction(() => !!window.__dyn);
+  await goTo(page, '31268');
+  await page.getByTestId('mode-static').click();
+  const b = (await page.getByTestId('tree-canvas').boundingBox())!;
+  await expect
+    .poll(async () => {
+      const at = await page.evaluate(() => window.__dst!.pointFor('31268'));
+      return !!at && Math.abs(at.x - b.width / 2) < 40 && Math.abs(at.y - b.height / 2) < 40;
+    }, { timeout: 10_000 })
+    .toBe(true);
 });
 
 test('US-054: with the Bachelor of Science chosen, no locked degree is shown and its partners are', async ({ page }) => {
@@ -58,16 +67,14 @@ test('US-054: with the Bachelor of Science chosen, no locked degree is shown and
   expect(ids).toHaveLength(114);
 });
 
-test('US-055: choosing a degree leaves it and the camera where they are, the rest settle round it within 5 s with no overlaps; unchoosing brings circles back', async ({ page }) => {
+test('US-055: choosing a degree leaves it and the camera where they are; the rest come to rest round it by faculty, without overlaps; unchoosing brings circles back gradually', async ({ page }) => {
   await openDynamic(page, 't=uts-2027');
   const all = (await bodies(page)).length;
   const camera = await page.evaluate(() => window.__dyn!.screen());
   const was = (await bodies(page)).find((b) => b.id === 'C10242')!;
   await page.getByTestId('degree-picker').selectOption('C10242');
-  const t0 = Date.now();
   await page.waitForTimeout(100);
-  await expect.poll(() => page.evaluate(() => window.__dyn!.settled()), { timeout: 5_000 }).toBe(true);
-  expect(Date.now() - t0).toBeLessThan(5_000);
+  await settled(page);
   expect(await page.evaluate(() => window.__dyn!.centre())).toBe('C10242');
   // Neither the camera nor the chosen degree moved.
   const now = await page.evaluate(() => window.__dyn!.screen());
@@ -76,15 +83,37 @@ test('US-055: choosing a degree leaves it and the camera where they are, the res
   const b = await bodies(page);
   const sci = b.find((x) => x.id === 'C10242')!;
   expect(Math.hypot(sci.x - was.x, sci.y - was.y)).toBeLessThan(1);
-  // Everything else gathered round it, without overlapping.
   for (let i = 0; i < b.length; i++)
     for (let j = i + 1; j < b.length; j++) expect(Math.hypot(b[i].x - b[j].x, b[i].y - b[j].y), `${b[i].id} / ${b[j].id}`).toBeGreaterThanOrEqual(b[i].circleR + b[j].circleR);
-  const nearest = [...b].sort((p, q) => Math.hypot(p.x - sci.x, p.y - sci.y) - Math.hypot(q.x - sci.x, q.y - sci.y));
-  expect(nearest[0].id).toBe('C10242');
+  // Gathered round it: the farthest circle within 3 times the radius a tight disc of them all would need.
+  const far = Math.max(...b.map((x) => Math.hypot(x.x - sci.x, x.y - sci.y) + x.r));
+  expect(far).toBeLessThan(3 * Math.sqrt(b.reduce((t, x) => t + x.r * x.r, 0)));
 
+  // Unchosen: circles come back a few at a time, not all at once, then everything comes to rest.
   await page.getByTestId('unchoose-degree').click();
-  await expect.poll(async () => (await bodies(page)).length, { timeout: 15_000 }).toBe(all);
+  await page.waitForTimeout(150);
+  const early = (await bodies(page)).length;
+  expect(early).toBeLessThan(all);
+  await settled(page, 90_000);
+  expect((await bodies(page)).length).toBe(all);
   expect(await page.evaluate(() => window.__dyn!.centre())).toBeNull();
+  // A few at a time: never more than a handful in one step.
+  expect(await page.evaluate(() => window.__dyn!.biggestArrival())).toBeLessThanOrEqual(4);
+  // Grouped by faculty: nearly every single-faculty degree ends nearer its own faculty's spawn point than any other.
+  const anchors = await page.evaluate(() => window.__dyn!.anchors());
+  const faculty = await page.evaluate(() => window.__dyn!.faculties());
+  const settledBodies = await bodies(page);
+  let own = 0;
+  let counted = 0;
+  for (const d of settledBodies) {
+    const fs = faculty[d.id];
+    if (!fs || fs.length !== 1 || !anchors.some((a) => a.faculty === fs[0])) continue;
+    counted++;
+    const nearest = [...anchors].sort((p, q) => Math.hypot(p.x - d.x, p.y - d.y) - Math.hypot(q.x - d.x, q.y - d.y))[0];
+    if (nearest.faculty === fs[0]) own++;
+  }
+  expect(counted).toBeGreaterThan(100);
+  expect(own / counted).toBeGreaterThan(0.8);
 });
 
 test('US-054: offshore circles come in last, to the right of everything else, in their own cluster', async ({ page }) => {
@@ -96,7 +125,7 @@ test('US-054: offshore circles come in last, to the right of everything else, in
   // Not there while the rest are still settling.
   const early = (await bodies(page)).map((b) => b.id);
   if (!(await page.evaluate(() => window.__dyn!.settled()))) expect(early.filter((id) => offshore.includes(id))).toEqual([]);
-  await expect.poll(async () => (await bodies(page)).filter((b) => offshore.includes(b.id)).length, { timeout: 20_000 }).toBe(9);
+  await expect.poll(async () => (await bodies(page)).filter((b) => offshore.includes(b.id)).length, { timeout: 90_000 }).toBe(9);
   await settled(page);
   const b = await bodies(page);
   const main = b.filter((x) => !offshore.includes(x.id));
@@ -121,4 +150,16 @@ test('US-056: choosing two majors makes the degree\'s circle smaller in Dynamic 
   await goTo(page, 'MAJ02092');
   await page.getByTestId('detail-panel').getByRole('button', { name: /Chosen/ }).click();
   await expect.poll(radius, { timeout: 15_000 }).toBeGreaterThan(small);
+});
+
+test('US-056: sizes first: no circle changes size once the map has started moving', async ({ page }) => {
+  await openDynamic(page, 't=uts-2027');
+  expect(await page.evaluate(() => window.__dyn!.lateResizes())).toBe(0);
+  await page.getByTestId('degree-picker').selectOption('C10242');
+  await page.waitForTimeout(100);
+  await settled(page);
+  await page.getByTestId('unchoose-degree').click();
+  await page.waitForTimeout(100);
+  await settled(page, 90_000);
+  expect(await page.evaluate(() => window.__dyn!.lateResizes())).toBe(0);
 });

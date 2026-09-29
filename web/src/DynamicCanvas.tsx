@@ -3,7 +3,7 @@ import { Application, BitmapText, Container, Graphics, Text } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 import { useEffect, useRef } from 'react';
 import { centreOf, hiddenCircles } from '../../core/dynamic';
-import { awayArea, circleAt, TITLE_LINE, type Layout, type LayoutCircle, type PathCmd } from '../../core/layout';
+import { awayArea, circleAt, facultiesOf, TITLE_LINE, type Layout, type LayoutCircle, type PathCmd } from '../../core/layout';
 import type { MapDoc } from '../../core/model';
 import { chosenDegrees } from '../../core/pairs';
 import { useApp } from './store';
@@ -15,8 +15,15 @@ import { textPx } from './view';
 
 /** Bodies keep this much space between them, in world units, beyond their circle and title. */
 const BODY_GAP = 120;
-/** Gravity: weaker sideways than up and down, so the map spreads sideways (US-055). */
-const PULL = { x: 0.03, y: 0.1 };
+/** A circle's pull to its spawn point (or its degrees): the same every way, so each faculty gathers
+ * into a round cluster rather than being squashed flat, jostling (US-055). */
+const PULL = { x: 0.05, y: 0.05 };
+/** Offshore courses are held to their own places hard, both ways (US-054). */
+const AREA_PULL = { x: 0.2, y: 0.2 };
+/** Faculty spawn points: a gentle pull to the centre, just enough to close the gaps between faculties. */
+const ANCHOR_PULL = { x: 0.02, y: 0.1 };
+/** The static map's zoom limit: "all the way out" in both modes (US-053). */
+const MIN_ZOOM = 0.03;
 /** World units a step: however strong the pull, nothing moves faster (US-055, "not thrown across"). */
 const MAX_SPEED = 300;
 /** Damping: high, so bodies come to rest rather than being thrown across (US-055). */
@@ -62,10 +69,19 @@ declare global {
       zoom(): number;
       screen(): { x: number; y: number; scale: number };
       /** Simulation ticks so far, its alpha, and new layouts still awaited. */
+      /** Faculty spawn points (US-055). */
+      anchors(): { faculty: string; x: number; y: number; r: number }[];
+      /** Each shown degree's faculties, for checking the grouping (US-055). */
+      faculties(): Record<string, string[]>;
+      /** Circles resized while the map was already moving (US-056: should stay 0). */
+      lateResizes(): number;
+      /** Circles still queued to come in, and the most that ever came in at one step. */
+      arriving(): number;
+      biggestArrival(): number;
       /** For tests and screenshots: point the camera at a world point and zoom. */
       look(x: number, y: number, scale: number): void;
       movers(): { id: string; v: number; x: number; y: number; tx: number; ty: number; r: number }[];
-      stats(): { ticks: number; fastest: number; alpha: number; pending: number; tickMs: number; placeMs: number; renderMs: number; relayouts: number[] };
+      stats(): { ticks: number; fastest: number; anchorMove: number; cooling: boolean; alpha: number; pending: number; tickMs: number; placeMs: number; renderMs: number; relayouts: number[] };
     };
   }
 }
@@ -139,7 +155,7 @@ export function DynamicCanvas() {
       app.ticker.remove(app.render, app);
 
       const viewport = new Viewport({ screenWidth: el.clientWidth, screenHeight: el.clientHeight, events: app.renderer.events });
-      viewport.drag().pinch().wheel({ smooth: 4 }).decelerate({ friction: 0.92 }).clampZoom({ minScale: 0.01, maxScale: 3 });
+      viewport.drag().pinch().wheel({ smooth: 4 }).decelerate({ friction: 0.92 }).clampZoom({ minScale: MIN_ZOOM, maxScale: 3 });
       viewport.isRenderGroup = true;
       viewport.interactiveChildren = false;
       app.stage.addChild(viewport);
@@ -167,24 +183,46 @@ export function DynamicCanvas() {
         return by.length && at.size === 1 ? [...at][0] : null;
       };
 
-      // New layouts for circles that lost some of what is in them, laid out off the main thread (US-056).
-      const worker = new Worker(new URL('./layoutWorker.ts', import.meta.url), { type: 'module' });
-      worker.postMessage({ type: 'map', map });
-      cleanups.push(() => worker.terminate());
+      // New layouts for circles that lost some of what is in them, laid out off the main thread by a few
+      // workers, and kept: the same circle with the same parts hidden is laid out once (US-056).
+      const workers = Array.from({ length: 3 }, () => new Worker(new URL('./layoutWorker.ts', import.meta.url), { type: 'module' }));
+      for (const w of workers) w.postMessage({ type: 'map', map });
+      cleanups.push(() => workers.forEach((w) => w.terminate()));
       let seq = 0;
-      worker.onmessage = (e: MessageEvent<{ id: string; seq: number; layout: Layout }>) => {
+      let nextWorker = 0;
+      const laidOut = new Map<string, Layout>();
+      /** Layouts asked for and not yet back, by key "<circle>|<hidden programs>", with who is waiting. */
+      const pending = new Map<string, ((lay: Layout) => void)[]>();
+      const keyOf = new Map<number, string>();
+      /** Resizes that landed while the map was moving: sizes should all be known first (US-056). */
+      let lateResizes = 0;
+      /** When the physics began holding for sizes, or null when it is not holding. */
+      let holdingSince: number | null = null;
+      /** Sizes first (US-056): hold for layouts up to this long, a safety net rather than a timetable. */
+      const HOLD_MAX_MS = 20000;
+      const onLayout = (e: MessageEvent<{ id: string; seq: number; layout: Layout }>) => {
         // How long a new layout took, asked to arrived (US-057).
         if (asked.has(e.data.seq)) timing.relayouts.push(performance.now() - asked.get(e.data.seq)!), asked.delete(e.data.seq);
-        const b = bodies.get(e.data.id);
-        if (!b || b.seq !== e.data.seq || b.leaving) return;
-        b.seq = 0;
-        setLayout(b, e.data.layout);
-        // A resized circle nudges its neighbours: a little warmth, without restarting the cooling (each
-        // of dozens of arrivals used to restart it, sending the map round again and again).
-        sim.alpha(Math.max(sim.alpha(), 0.15));
-        settled = false;
-        still = 0;
-        since = ticks;
+        const key = keyOf.get(e.data.seq)!;
+        keyOf.delete(e.data.seq);
+        laidOut.set(key, e.data.layout);
+        const waiters = pending.get(key) ?? [];
+        pending.delete(key);
+        for (const w of waiters) w(e.data.layout);
+      };
+      for (const w of workers) w.onmessage = onLayout;
+      /** A circle laid out with these programs hidden: now if known, else when a worker has done it. */
+      const layoutFor = (id: string, hide: string[], then: (lay: Layout) => void) => {
+        const key = `${id}|${hide.join(',')}`;
+        const known = laidOut.get(key);
+        if (known) return then(known);
+        const waiters = pending.get(key);
+        if (waiters) return void waiters.push(then);
+        pending.set(key, [then]);
+        const n = ++seq;
+        keyOf.set(n, key);
+        asked.set(n, performance.now());
+        workers[nextWorker++ % workers.length].postMessage({ type: 'layout', id, hide, seq: n });
       };
 
       const bodies = new Map<string, Body>();
@@ -345,16 +383,58 @@ export function DynamicCanvas() {
         }
       };
 
-      // Gravity (US-055).
-      // Offshore bodies hold their own cluster: pulled to their spots hard, both ways.
-      const pullX = forceX<Body>((b) => b.tx).strength((b) => (b.fx != null ? 0 : b.area ? 0.2 : PULL.x));
+      // A hierarchy of pulls (US-055). Faculty spawn points are pulled gently towards the centre of the
+      // galaxy and kept apart by their faculty's size; degrees are pulled to their faculty's point;
+      // majors outside degrees to the shown degrees offering them; offshore courses to their own places.
+      interface Anchor extends SimulationNodeDatum {
+        faculty: string;
+        r: number;
+      }
+      const galaxy = { x: 0, y: 0 };
+      const anchors = new Map<string, Anchor>();
+      const anchorSim: Simulation<Anchor, undefined> = forceSimulation<Anchor>([])
+        .velocityDecay(0.6)
+        .alpha(0.5)
+        .alphaDecay(0)
+        .force('x', forceX<Anchor>(() => galaxy.x).strength(ANCHOR_PULL.x))
+        .force('y', forceY<Anchor>(() => galaxy.y).strength(ANCHOR_PULL.y))
+        .force('collide', forceCollide<Anchor>((a) => a.r).strength(0.7).iterations(2))
+        .stop();
+      /** Where each faculty sits on the static map: the middle of its degrees, on the centre line. */
+      const staticAnchor = new Map<string, number>();
+      {
+        const xs = new Map<string, number[]>();
+        for (const c of tops) if (c.kind === 'degree' && !areaOf(c)) for (const f of facultiesOf(map, c.id)) xs.set(f, [...(xs.get(f) ?? []), c.x]);
+        for (const [f, v] of xs) staticAnchor.set(f, v.reduce((t, x) => t + x, 0) / v.length);
+      }
+      /** The point a body is pulled to. */
+      const targetOf = (b: Body): { x: number; y: number } | null => {
+        const home = staticAt.get(b.id)!;
+        if (b.area) return home;
+        if (home.kind === 'degree') {
+          const as = facultiesOf(map, b.id).map((f) => anchors.get(f)).filter((a): a is Anchor => !!a);
+          if (!as.length) return home;
+          return { x: as.reduce((t, a) => t + a.x!, 0) / as.length, y: as.reduce((t, a) => t + a.y!, 0) / as.length };
+        }
+        const by = (home.sharedBy ?? []).map((d) => bodies.get(d)).filter((d): d is Body => !!d && !d.leaving);
+        if (!by.length) return home;
+        return { x: by.reduce((t, d) => t + d.x!, 0) / by.length, y: by.reduce((t, d) => t + d.y!, 0) / by.length };
+      };
       const sim: Simulation<Body, undefined> = forceSimulation<Body>([])
         .velocityDecay(DECAY)
         // Energy is held constant: the map stops only once everything has come to rest (see `step`), not
         // when a cooling timer runs out, which left far-off circles stranded half way in.
         .alphaDecay(0)
-        .force('x', pullX)
-        .force('y', forceY<Body>((b) => b.ty).strength((b) => (b.fy != null ? 0 : b.area ? 0.2 : PULL.y)))
+        .force('pull', (alpha) => {
+          for (const b of sim.nodes()) {
+            if (b.fx != null) continue;
+            const t = targetOf(b);
+            if (!t) continue;
+            const k = b.area ? AREA_PULL : PULL;
+            b.vx! += (t.x - b.x!) * k.x * alpha;
+            b.vy! += (t.y - b.y!) * k.y * alpha;
+          }
+        })
         .force('collide', forceCollide<Body>((b) => b.r).strength(1).iterations(3))
         // A speed limit, applied last: nothing is flung into the pack hard enough to bounce back out
         // (circles pressed against it vibrated in and out by ~400 units a step, forever).
@@ -370,8 +450,9 @@ export function DynamicCanvas() {
       let still = 0;
       let since = 0;
       let cooling = false;
-      /** How far the fastest circle moved in the last step. */
+      /** How far the fastest circle, and the fastest spawn point, moved in the last step. */
       let lastMove = 0;
+      let lastAnchorMove = 0;
       const timing = { tickMs: 0, placeMs: 0, renderMs: 0, relayouts: [] as number[] };
       const asked = new Map<number, number>();
       // Physics runs on its own timer, as many steps as fit in a few milliseconds each time, so how fast
@@ -387,16 +468,38 @@ export function DynamicCanvas() {
       const COOL_AFTER = 3000;
       /** However long, stop after this many steps (a jitter that never quite stops). */
       const MAX_STEPS = 5000;
+      /** New circles come in a few at a time, not all at once (US-055). */
+      const SPAWN_PER_STEP = 4;
+      /** Circles waiting to come in, with their layout once it is known. */
+      const arrivals: { id: string; hideKey: string; lay: Layout | null }[] = [];
+      /** The most circles that came in at one step (US-055: a few at a time). */
+      let biggestArrival = 0;
+      /** How far above and below the centre line the circles already here reach. */
+      let spawnBand = 0;
+      /** Existing circles waiting for their new size: the physics holds until they have it (US-056). */
+      const resizing = new Set<string>();
+
       const step = () => {
+        // Sizes first: nothing moves while a shown circle waits for its new size (or for a while at most).
+        if (resizing.size && holdingSince !== null && performance.now() - holdingSince < HOLD_MAX_MS) return place();
+        holdingSince = null;
+        // A few arrivals at a time, once their size is known.
+        let added = 0;
+        while (arrivals.length && arrivals[0].lay && added < SPAWN_PER_STEP) arrive(arrivals.shift()!), added++;
+        if (added) warm(0.8);
+        biggestArrival = Math.max(biggestArrival, added);
         if (settled) return;
         const t0 = performance.now();
         const before = ticks;
         do {
           const nodes = sim.nodes();
           const was = nodes.map((b) => [b.x!, b.y!]);
+          const anchorWas = anchorSim.nodes().map((a) => [a.x!, a.y!]);
+          anchorSim.tick();
+          const anchorMove = anchorSim.nodes().reduce((m, a, i) => Math.max(m, Math.hypot(a.x! - anchorWas[i][0], a.y! - anchorWas[i][1])), 0);
+          lastAnchorMove = anchorMove;
           sim.tick();
           ticks++;
-          if (ticks % 30 === 0) retarget();
           // Full energy while circles are still falling in; once they have arrived, cool gradually so the
           // pack stops jostling. At rest: nothing moving more than a whisker for a run of steps (or a cap).
           // Measured as how far circles actually moved: a circle pressed against the pack keeps a high
@@ -406,31 +509,15 @@ export function DynamicCanvas() {
           lastMove = fastest;
           // Arrived: nearly all have stopped travelling (a few pressed against the pack may still vibrate).
           const most = moves[Math.floor(moves.length * 0.95)] ?? 0;
-          if (!cooling && (most < ARRIVED_SPEED || ticks - since > COOL_AFTER)) (cooling = true), sim.alphaDecay(COOL);
+          // The spawn points must have arrived too: circles trail slowly behind a moving point.
+          if (!cooling && !arrivals.length && ((most < ARRIVED_SPEED && anchorMove < ARRIVED_SPEED / 4) || ticks - since > COOL_AFTER)) (cooling = true), sim.alphaDecay(COOL), anchorSim.alphaDecay(COOL);
           still = fastest < REST_SPEED ? still + 1 : 0;
         } while (still < REST_STEPS && ticks - since < MAX_STEPS && performance.now() - t0 < STEP_BUDGET_MS);
         timing.tickMs = (performance.now() - t0) / (ticks - before);
-        if (still >= REST_STEPS || ticks - since >= MAX_STEPS) (settled = true), bringOffshore();
+        if (!arrivals.length && (still >= REST_STEPS || ticks - since >= MAX_STEPS)) (settled = true), bringOffshore();
         const t1 = performance.now();
         place();
         timing.placeMs = performance.now() - t1;
-      };
-
-      /** Where each body is pulled: its faculty's place (nothing chosen) or the centre; offshore to its own area. */
-      const retarget = () => {
-        const live = [...bodies.values()].filter((b) => !b.leaving);
-        const pinned = centreBody ? bodies.get(centreBody) : undefined;
-        for (const b of live) {
-          const home = staticAt.get(b.id)!;
-          // Offshore: always their own spot far to the right, as on the static map, never the centre.
-          if (b.area) (b.tx = home.x), (b.ty = home.y);
-          // Something chosen: towards where it rests.
-          else if (pinned) (b.tx = pinned.fx ?? pinned.x!), (b.ty = pinned.fy ?? pinned.y!);
-          // Nothing chosen: back to their place on the static map, faculty neighbourhoods and all. (Pulling
-          // them all onto one line crowded them into a jostle that never came to rest.)
-          else (b.tx = home.x), (b.ty = home.y);
-        }
-        pullX.x((b) => b.tx);
       };
 
       /** Move each body to where the simulation has it, fading bodies in and out. */
@@ -470,6 +557,34 @@ export function DynamicCanvas() {
         invalidate();
       };
 
+      /** Faculty spawn points for the shown degrees, sized by what they hold. */
+      const refreshAnchors = () => {
+        const room = new Map<string, number>();
+        for (const b of bodies.values()) {
+          if (b.leaving || b.area || staticAt.get(b.id)!.kind !== 'degree') continue;
+          const fs = facultiesOf(map, b.id);
+          for (const f of fs) room.set(f, (room.get(f) ?? 0) + (b.r * b.r) / fs.length);
+        }
+        for (const [f, r2] of room) {
+          let a = anchors.get(f);
+          if (!a) {
+            a = { faculty: f, r: 0, x: staticAnchor.get(f) ?? 0, y: 0 };
+            anchors.set(f, a);
+          }
+          a.r = Math.sqrt(r2 / 0.6);
+        }
+        for (const f of [...anchors.keys()]) if (!room.has(f)) anchors.delete(f);
+        // The galaxy's centre now: the chosen circle where it rests, else the static map's centre. Forces
+        // read their targets when given their nodes, so this comes first.
+        const c = centreBody ? bodies.get(centreBody) : undefined;
+        galaxy.x = c ? (c.fx ?? c.x!) : 0;
+        galaxy.y = c ? (c.fy ?? c.y!) : 0;
+        anchorSim.nodes([...anchors.values()]);
+        anchorSim.force('x', forceX<Anchor>(galaxy.x).strength(ANCHOR_PULL.x));
+        anchorSim.force('y', forceY<Anchor>(galaxy.y).strength(ANCHOR_PULL.y));
+        anchorSim.force('collide', forceCollide<Anchor>((a) => a.r).strength(0.7).iterations(2));
+      };
+
       /** Bring the bodies in line with what is locked now (US-054, US-056). */
       const sync = (first: boolean) => {
         const s = useApp.getState();
@@ -478,28 +593,37 @@ export function DynamicCanvas() {
         const centreTop = nextCentre ? topOfCircle.get(nextCentre)! : null;
         const shown = tops.filter((c) => !hidden.has(c.id));
         const shownIds = new Set(shown.map((c) => c.id));
+        for (let i = arrivals.length - 1; i >= 0; i--) if (!shownIds.has(arrivals[i].id)) arrivals.splice(i, 1);
         for (const c of shown) {
-          const inside = part(c.id).circles.filter((k) => hidden.has(k.id)).map((k) => k.id);
-          const hideKey = inside.sort().join(',');
-          let b = bodies.get(c.id);
+          const inside = part(c.id).circles.filter((k) => hidden.has(k.id)).map((k) => k.id).sort();
+          const hideKey = inside.join(',');
+          const b = bodies.get(c.id);
           if (!b || b.leaving) {
-            // A new circle pops in where it sits on the static map, in its faculty's place, and falls in.
-            const add = () => {
-              const old = bodies.get(c.id);
-              if (old) old.root.destroy({ children: true });
-              const nb = makeBody(c.id, hideKey ? without(part(c.id), new Set(inside)) : part(c.id), hideKey, c.x, c.y);
-              bodies.set(c.id, nb);
-              if (hideKey) request(nb, inside);
-            };
+            if (arrivals.some((a) => a.id === c.id)) continue;
+            // Offshore circles come in last, at their own places (US-054).
             if (areaOf(c)) {
-              waiting.set(c.id, add);
+              waiting.set(c.id, () => layoutFor(c.id, inside, (lay) => arrive({ id: c.id, hideKey, lay }, c.x, c.y)));
               continue;
             }
-            add();
+            // On switching on, everything starts at its static place; later arrivals queue and come in a few
+            // at a time, each once its size is known.
+            const entry = { id: c.id, hideKey, lay: hideKey ? null : part(c.id) };
+            if (hideKey) layoutFor(c.id, inside, (lay) => (entry.lay = lay));
+            if (first) {
+              if (!entry.lay) {
+                arrive({ ...entry, lay: without(part(c.id), new Set(inside)) }, c.x, c.y);
+                resizing.add(c.id);
+                layoutFor(c.id, inside, (lay) => resized(c.id, hideKey, lay));
+              } else arrive(entry, c.x, c.y);
+            } else arrivals.push(entry);
           } else if (b.hideKey !== hideKey) {
             b.hideKey = hideKey;
-            setLayout(b, hideKey ? without(part(c.id), new Set(inside)) : part(c.id));
-            if (hideKey) request(b, inside);
+            if (!hideKey) setLayout(b, part(c.id));
+            else {
+              // Sizes first: hold the physics until this circle has its new size.
+              resizing.add(c.id);
+              layoutFor(c.id, inside, (lay) => resized(c.id, hideKey, lay));
+            }
           } else draw(b);
         }
         for (const id of [...waiting.keys()]) if (!shownIds.has(id)) waiting.delete(id);
@@ -510,15 +634,53 @@ export function DynamicCanvas() {
         if (pinned && pinned.fx == null) (pinned.fx = pinned.x), (pinned.fy = pinned.y);
         centreBody = pinned ? centreTop : null;
         centre = nextCentre;
-        restart(first ? 0.6 : 0.8);
+        if (resizing.size && holdingSince === null) holdingSince = performance.now();
+        // How far the band reaches, measured now from the circles already here: arrivals appear just
+        // beyond it. (Measured at each arrival, it included earlier arrivals and ran away outwards.)
+        const here = [...bodies.values()].filter((b) => !b.leaving);
+        spawnBand = here.length ? Math.max(...here.map((b) => Math.abs(b.y! - galaxy.y) + b.r)) : 0;
+        warm(first ? 0.6 : 0.8);
         if (first) aim();
       };
 
-      const restart = (alpha: number) => {
+      /** A circle that has waited for its size now has it. */
+      const resized = (id: string, hideKey: string, lay: Layout) => {
+        const b = bodies.get(id);
+        resizing.delete(id);
+        if (!b || b.leaving || b.hideKey !== hideKey) return;
+        if (holdingSince === null && !settled) lateResizes++;
+        setLayout(b, lay);
+        if (settled) warm(0.3);
+      };
+
+      /** A circle comes in: at its static place (switching on, offshore) or above or below the band. */
+      const arrive = (a: { id: string; hideKey: string; lay: Layout | null }, x?: number, y?: number) => {
+        const old = bodies.get(a.id);
+        if (old) old.root.destroy({ children: true });
+        const home = staticAt.get(a.id)!;
+        let px = x;
+        let py = y;
+        if (px === undefined || py === undefined) {
+          // Above or below everything shown, over the place it is pulled to, and it falls in from there.
+          const b0 = makeBody(a.id, a.lay!, a.hideKey, 0, 0);
+          const t = targetOf(b0) ?? home;
+          const band = spawnBand;
+          const side = [...a.id].reduce((h, ch) => h + ch.charCodeAt(0), 0) % 2 ? 1 : -1;
+          b0.x = t.x + (Math.random() - 0.5) * 2 * b0.r;
+          b0.y = galaxy.y + side * (band + b0.r + 1500);
+          bodies.set(a.id, b0);
+          return;
+        }
+        bodies.set(a.id, makeBody(a.id, a.lay!, a.hideKey, px, py));
+      };
+
+      /** Wake the map: take in who is there now and let it come to rest again. */
+      const warm = (alpha: number) => {
         sim.nodes([...bodies.values()].filter((b) => !b.leaving));
-        retarget();
+        refreshAnchors();
         sim.force('collide', forceCollide<Body>((b) => b.r).strength(1).iterations(3));
         sim.alpha(alpha).alphaDecay(0);
+        anchorSim.alpha(0.5).alphaDecay(0);
         cooling = false;
         settled = false;
         still = 0;
@@ -533,31 +695,17 @@ export function DynamicCanvas() {
         // They appear at their own places, already at rest: join the simulation without waking the
         // rest (restarting it here set everything moving a second time).
         sim.nodes([...bodies.values()].filter((b) => !b.leaving));
-        retarget();
         place();
       };
 
-      const request = (b: Body, hide: string[]) => {
-        b.seq = ++seq;
-        asked.set(b.seq, performance.now());
-        worker.postMessage({ type: 'layout', id: b.id, hide, seq: b.seq });
-      };
-
-      /** The camera goes to the chosen thing, or takes in the whole map when nothing is chosen. */
+      /** Zoomed all the way out and centred, as the static map opens (US-053). */
       const aim = () => {
-        if (centre) {
-          const top = topOfCircle.get(centre)!;
-          const b = bodies.get(top);
-          const c = b?.lay.circles.find((k) => k.id === centre);
-          if (b && c) {
-            const scale = Math.min(viewport.screenWidth, viewport.screenHeight) / (c.r * 3);
-            viewport.animate({ position: { x: c.x, y: c.y }, scale: Math.min(Math.max(scale, 0.01), 1.2), time: 800, ease: 'easeInOutSine' });
-            return;
-          }
-        }
         const { minX, minY, maxX, maxY } = layout.bounds;
         viewport.fit(true, maxX - minX, maxY - minY);
+        if (viewport.scale.x < MIN_ZOOM) viewport.setZoom(MIN_ZOOM, true);
         viewport.moveCenter((minX + maxX) / 2, (minY + maxY) / 2);
+        lod();
+        invalidate();
       };
 
       /** Fly to a subject copy or a circle that is shown. */
@@ -601,6 +749,11 @@ export function DynamicCanvas() {
         centre: () => centre,
         zoom: () => viewport.scale.x,
         screen: () => ({ x: viewport.center.x, y: viewport.center.y, scale: viewport.scale.x }),
+        anchors: () => [...anchors.values()].map((a) => ({ faculty: a.faculty, x: a.x!, y: a.y!, r: a.r })),
+        lateResizes: () => lateResizes,
+        faculties: () => Object.fromEntries([...bodies.values()].filter((b) => !b.leaving && !b.area && staticAt.get(b.id)!.kind === 'degree').map((b) => [b.id, facultiesOf(map, b.id)])),
+        arriving: () => arrivals.length,
+        biggestArrival: () => biggestArrival,
         look: (x, y, scale) => {
           viewport.setZoom(scale, true);
           viewport.moveCenter(x, y);
@@ -613,7 +766,7 @@ export function DynamicCanvas() {
             .map((b) => ({ id: b.id, v: Math.hypot(b.vx ?? 0, b.vy ?? 0), x: b.x!, y: b.y!, tx: b.tx, ty: b.ty, r: b.r }))
             .sort((a, b) => b.v - a.v)
             .slice(0, 5),
-        stats: () => ({ ticks, fastest: lastMove, alpha: sim.alpha(), pending: [...bodies.values()].filter((b) => b.seq && !b.leaving).length, ...timing }),
+        stats: () => ({ ticks, fastest: lastMove, anchorMove: lastAnchorMove, cooling, alpha: sim.alpha(), pending: [...bodies.values()].filter((b) => b.seq && !b.leaving).length, ...timing }),
       };
       cleanups.push(() => delete window.__dyn);
 

@@ -606,7 +606,13 @@ export function TreeCanvas() {
         // Hidden while Dynamic mode is on: skip the work, and catch up on the way back (US-053).
         if (s.mode === 'dynamic') return;
         if (prev.mode === 'dynamic') {
-          restyle(scene.current);
+          // Back from Dynamic: like a refresh, zoomed all the way out and centred, then off to the
+          // selected item if there is one (US-053).
+          const sc = scene.current;
+          restyle(sc);
+          fit(sc.viewport, sc.layout);
+          applyLod(sc);
+          if (s.selected) setTimeout(() => scene.current && flyTo(scene.current, s.selected!), 150);
           return;
         }
         if (

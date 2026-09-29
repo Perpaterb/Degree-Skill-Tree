@@ -859,3 +859,32 @@ Stories are in [`UserStories.md`](UserStories.md).
   by screenshot only.
 - Files: `web/src/DynamicCanvas.tsx`, `web/src/TreeCanvas.tsx`, `web/src/Panels.tsx`,
   `e2e/dynamic.spec.ts`, `docs/UserStories.md`.
+
+### US-055 rework: a hierarchy of pulls; US-056 sizes first; US-053 camera (`dynamic-map` branch, 29 Sep 2026)
+- Why the old gravity failed: the simulation stopped on a cooling timer, stranding far-off circles
+  (8.4x a tight disc after choosing Science); collision radii reached the title's far corner, so
+  circles overlapped at their static places and shoved for ever; pulling everything onto one line jammed.
+- `web/src/DynamicCanvas.tsx`:
+  - Settling: energy held while circles fall in, cooling (0.005 a step) once 95 % of circles and all
+    faculty spawn points have arrived; at rest when nothing moves more than 2 units a step for 20
+    steps, measured by position, not velocity (circles pressed against the pack vibrated in place).
+    A speed limit of 300 units a step. Collision radius: the circle plus 120.
+  - Hierarchy: faculty spawn points are a second simulation (`anchorSim`), starting at the middle of
+    their faculty's degrees on the static map, pulled to the galaxy centre (0.02 sideways, 0.1 up and
+    down) and kept apart by `sqrt(sum r² / 0.6)`. The galaxy centre is the chosen circle where it rests,
+    else (0, 0); it is set before the spawn points take their targets (it was set after, so they went
+    to the old centre). Degrees are pulled evenly (0.05) to their faculties' points; majors outside
+    degrees to the shown degrees offering them; offshore courses to their static places (0.2).
+  - Arrivals: queued, 4 a step, each once its layout is known, above or below the band measured when
+    the choice changed (measured per arrival, it ran away to 700,000 units). Offshore circles join at
+    rest, without waking the rest.
+  - Sizes first: three layout workers, results kept by circle and hidden set; while a shown circle
+    waits for its size the physics holds (up to 20 s as a safety net). Test hooks `lateResizes`,
+    `biggestArrival`, `anchors`, `faculties`, `arriving`, `look`.
+  - Camera: the zoom limit is the static map's (0.03); switching on fits and centres as the static map
+    opens. `web/src/TreeCanvas.tsx`: back to Static re-fits and centres, then flies to the selection.
+- Tests: `e2e/dynamic.spec.ts` (US-053 camera both ways; US-055 gather within 3x a tight disc, no
+  overlaps, degree and camera unmoved, 80 % of degrees nearest their own spawn point, arrivals at most 4
+  a step; US-056 no late resizes). Each seen to fail with its behaviour removed: no hold, degrees
+  pulled to the centre, everything arriving at once (438 in one step), Static not re-fitted.
+- Files: `web/src/DynamicCanvas.tsx`, `web/src/TreeCanvas.tsx`, `e2e/dynamic.spec.ts`, `docs/UserStories.md`.
