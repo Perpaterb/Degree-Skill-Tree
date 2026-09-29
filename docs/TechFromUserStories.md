@@ -919,3 +919,7 @@ Stories are in [`UserStories.md`](UserStories.md).
 - The Dynamic tests now run one at a time (`describe.configure({ mode: 'default' })`): nine full-map
   tests four at a time under software GL ran out of time; one after another all nine pass (7.7 min).
 - Files: `web/src/DynamicCanvas.tsx`, `e2e/dynamic.spec.ts`, `docs/TechFromUserStories.md`.
+- Follow-up: offshore circles whose layout arrived after they were let in were drawn but never added to
+  the simulation; they now join it when the layout lands. `__dyn.arriving()` counts offshore circles
+  still waiting or on their way, so "at rest" in the tests means everything is in (the live US-055 run
+  counted 550 of 558 at the start).

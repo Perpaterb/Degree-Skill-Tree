@@ -234,6 +234,8 @@ export function DynamicCanvas() {
       let centre: string | null = null;
       /** The top-level circle holding the centre: it stays where it is and the rest gather round it. */
       let centreBody: string | null = null;
+      /** Offshore circles let in but still waiting for their layout. */
+      let offshoreComing = 0;
       /** Offshore circles wait until the rest have settled, then come in last. */
       const waiting = new Map<string, () => void>();
 
@@ -638,7 +640,16 @@ export function DynamicCanvas() {
             if (arrivals.some((a) => a.id === c.id)) continue;
             // Offshore circles come in last, at their own places (US-054).
             if (areaOf(c)) {
-              waiting.set(c.id, () => layoutFor(c.id, inside, (lay) => arrive({ id: c.id, hideKey, lay }, c.x, c.y)));
+              waiting.set(c.id, () => {
+                offshoreComing++;
+                layoutFor(c.id, inside, (lay) => {
+                  offshoreComing--;
+                  if (bodies.get(c.id) && !bodies.get(c.id)!.leaving) return;
+                  arrive({ id: c.id, hideKey, lay }, c.x, c.y);
+                  sim.nodes([...bodies.values()].filter((b) => !b.leaving));
+                  place();
+                });
+              });
               continue;
             }
             // On switching on, everything starts at its static place; later arrivals queue and come in a few
@@ -795,7 +806,8 @@ export function DynamicCanvas() {
         staleCollisions: () => staleCollisions,
         collision: () => sim.nodes().map((b) => ({ id: b.id, using: collisionR.get(b.id) ?? -1, should: b.r })),
         faculties: () => Object.fromEntries([...bodies.values()].filter((b) => !b.leaving && !b.area && staticAt.get(b.id)!.kind === 'degree').map((b) => [b.id, facultiesOf(map, b.id)])),
-        arriving: () => arrivals.length,
+        // Everything still to come in: queued arrivals, and offshore circles waiting or on their way.
+        arriving: () => arrivals.length + waiting.size + offshoreComing,
         biggestArrival: () => biggestArrival,
         look: (x, y, scale) => {
           viewport.setZoom(scale, true);
