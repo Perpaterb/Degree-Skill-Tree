@@ -21,7 +21,7 @@ const PULL = { x: 0.05, y: 0.05 };
 /** Offshore courses are held to their own places hard, both ways (US-054). */
 const AREA_PULL = { x: 0.2, y: 0.2 };
 /** Faculty spawn points: a gentle pull to the centre, just enough to close the gaps between faculties. */
-const ANCHOR_PULL = { x: 0.02, y: 0.1 };
+const ANCHOR_PULL = { x: 0.01, y: 0.3 };
 /** The static map's zoom limit: "all the way out" in both modes (US-053). */
 const MIN_ZOOM = 0.03;
 /** World units a step: however strong the pull, nothing moves faster (US-055, "not thrown across"). */
@@ -73,6 +73,10 @@ declare global {
       anchors(): { faculty: string; x: number; y: number; r: number }[];
       /** Each shown degree's faculties, for checking the grouping (US-055). */
       faculties(): Record<string, string[]>;
+      /** The radius the collision force is using for each circle, and the one it should (US-056). */
+      collision(): { id: string; using: number; should: number }[];
+      /** How many times a moving circle was found colliding at the wrong size. */
+      staleCollisions(): number;
       /** Circles resized while the map was already moving (US-056: should stay 0). */
       lateResizes(): number;
       /** Circles still queued to come in, and the most that ever came in at one step. */
@@ -390,7 +394,7 @@ export function DynamicCanvas() {
         faculty: string;
         r: number;
       }
-      const galaxy = { x: 0, y: 0 };
+      const galaxy = { x: 0, y: 0 }; // set by refreshAnchors
       const anchors = new Map<string, Anchor>();
       const anchorSim: Simulation<Anchor, undefined> = forceSimulation<Anchor>([])
         .velocityDecay(0.6)
@@ -400,6 +404,15 @@ export function DynamicCanvas() {
         .force('y', forceY<Anchor>(() => galaxy.y).strength(ANCHOR_PULL.y))
         .force('collide', forceCollide<Anchor>((a) => a.r).strength(0.7).iterations(2))
         .stop();
+      /** The middle of the static map (offshore areas aside): the galaxy's centre while nothing is chosen. */
+      const mapMiddle = (() => {
+        const main = tops.filter((c) => !areaOf(c));
+        const x0 = Math.min(...main.map((c) => c.x - c.r));
+        const x1 = Math.max(...main.map((c) => c.x + c.r));
+        const y0 = Math.min(...main.map((c) => c.y - c.r));
+        const y1 = Math.max(...main.map((c) => c.y + c.r));
+        return { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+      })();
       /** Where each faculty sits on the static map: the middle of its degrees, on the centre line. */
       const staticAnchor = new Map<string, number>();
       {
@@ -420,6 +433,16 @@ export function DynamicCanvas() {
         if (!by.length) return home;
         return { x: by.reduce((t, d) => t + d.x!, 0) / by.length, y: by.reduce((t, d) => t + d.y!, 0) / by.length };
       };
+      let staleCollisions = 0;
+      /** The radius the collision force last read for each circle (it reads them only when given nodes). */
+      const collisionR = new Map<string, number>();
+      const bodyCollide = () =>
+        forceCollide<Body>((b) => {
+          collisionR.set(b.id, b.r);
+          return b.r;
+        })
+          .strength(1)
+          .iterations(3);
       const sim: Simulation<Body, undefined> = forceSimulation<Body>([])
         .velocityDecay(DECAY)
         // Energy is held constant: the map stops only once everything has come to rest (see `step`), not
@@ -435,7 +458,7 @@ export function DynamicCanvas() {
             b.vy! += (t.y - b.y!) * k.y * alpha;
           }
         })
-        .force('collide', forceCollide<Body>((b) => b.r).strength(1).iterations(3))
+        .force('collide', bodyCollide())
         // A speed limit, applied last: nothing is flung into the pack hard enough to bounce back out
         // (circles pressed against it vibrated in and out by ~400 units a step, forever).
         .force('limit', () => {
@@ -514,6 +537,8 @@ export function DynamicCanvas() {
           still = fastest < REST_SPEED ? still + 1 : 0;
         } while (still < REST_STEPS && ticks - since < MAX_STEPS && performance.now() - t0 < STEP_BUDGET_MS);
         timing.tickMs = (performance.now() - t0) / (ticks - before);
+        // Circles colliding at a size other than their own, while moving (US-056: should never happen).
+        for (const b of sim.nodes()) if (Math.abs((collisionR.get(b.id) ?? b.r) - b.r) > 0.5) staleCollisions++;
         if (!arrivals.length && (still >= REST_STEPS || ticks - since >= MAX_STEPS)) (settled = true), bringOffshore();
         const t1 = performance.now();
         place();
@@ -568,7 +593,7 @@ export function DynamicCanvas() {
         for (const [f, r2] of room) {
           let a = anchors.get(f);
           if (!a) {
-            a = { faculty: f, r: 0, x: staticAnchor.get(f) ?? 0, y: 0 };
+            a = { faculty: f, r: 0, x: staticAnchor.get(f) ?? mapMiddle.x, y: mapMiddle.y };
             anchors.set(f, a);
           }
           a.r = Math.sqrt(r2 / 0.6);
@@ -576,9 +601,11 @@ export function DynamicCanvas() {
         for (const f of [...anchors.keys()]) if (!room.has(f)) anchors.delete(f);
         // The galaxy's centre now: the chosen circle where it rests, else the static map's centre. Forces
         // read their targets when given their nodes, so this comes first.
+        // (The static map's origin is the biggest faculty, well left of the map's middle: pulling to it
+        // sent everything drifting left when Dynamic was switched on.)
         const c = centreBody ? bodies.get(centreBody) : undefined;
-        galaxy.x = c ? (c.fx ?? c.x!) : 0;
-        galaxy.y = c ? (c.fy ?? c.y!) : 0;
+        galaxy.x = c ? (c.fx ?? c.x!) : mapMiddle.x;
+        galaxy.y = c ? (c.fy ?? c.y!) : mapMiddle.y;
         anchorSim.nodes([...anchors.values()]);
         anchorSim.force('x', forceX<Anchor>(galaxy.x).strength(ANCHOR_PULL.x));
         anchorSim.force('y', forceY<Anchor>(galaxy.y).strength(ANCHOR_PULL.y));
@@ -650,6 +677,9 @@ export function DynamicCanvas() {
         if (!b || b.leaving || b.hideKey !== hideKey) return;
         if (holdingSince === null && !settled) lateResizes++;
         setLayout(b, lay);
+        // The collision force reads radii only when given its nodes: give it the new one now (it kept the
+        // old, bigger size, so circles collided well outside what was drawn).
+        sim.force('collide', bodyCollide());
         if (settled) warm(0.3);
       };
 
@@ -678,7 +708,7 @@ export function DynamicCanvas() {
       const warm = (alpha: number) => {
         sim.nodes([...bodies.values()].filter((b) => !b.leaving));
         refreshAnchors();
-        sim.force('collide', forceCollide<Body>((b) => b.r).strength(1).iterations(3));
+        sim.force('collide', bodyCollide());
         sim.alpha(alpha).alphaDecay(0);
         anchorSim.alpha(0.5).alphaDecay(0);
         cooling = false;
@@ -751,6 +781,8 @@ export function DynamicCanvas() {
         screen: () => ({ x: viewport.center.x, y: viewport.center.y, scale: viewport.scale.x }),
         anchors: () => [...anchors.values()].map((a) => ({ faculty: a.faculty, x: a.x!, y: a.y!, r: a.r })),
         lateResizes: () => lateResizes,
+        staleCollisions: () => staleCollisions,
+        collision: () => sim.nodes().map((b) => ({ id: b.id, using: collisionR.get(b.id) ?? -1, should: b.r })),
         faculties: () => Object.fromEntries([...bodies.values()].filter((b) => !b.leaving && !b.area && staticAt.get(b.id)!.kind === 'degree').map((b) => [b.id, facultiesOf(map, b.id)])),
         arriving: () => arrivals.length,
         biggestArrival: () => biggestArrival,

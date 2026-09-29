@@ -888,3 +888,20 @@ Stories are in [`UserStories.md`](UserStories.md).
   a step; US-056 no late resizes). Each seen to fail with its behaviour removed: no hold, degrees
   pulled to the centre, everything arriving at once (438 in one step), Static not re-fitted.
 - Files: `web/src/DynamicCanvas.tsx`, `web/src/TreeCanvas.tsx`, `e2e/dynamic.spec.ts`, `docs/UserStories.md`.
+
+### US-055 / US-056 fixes: drift to the left, collision sizes (`dynamic-map` branch, 29 Sep 2026)
+- Drift: with nothing chosen the galaxy centre was the static origin, the middle of the biggest faculty,
+  well left of the map's middle, so switching on pulled everything left. Now `mapMiddle`, the middle of
+  the static map without the offshore areas. Spawn points pull 0.01 sideways and 0.3 up and down (was
+  0.02 and 0.1), so faculties string out along the line: at rest the map is about 3.9 times wider than
+  tall (2.2 before), as tall as the static map.
+- Collision sizes: d3's collision force reads radii only when given its nodes, so a circle resized after
+  switching on kept colliding at its old, bigger size (e.g. the Bachelor of Science) until something
+  re-armed it. `resized` now re-arms it (`bodyCollide`, which records the radii read). Test hooks
+  `collision`, `staleCollisions` (counted after each batch of steps while moving).
+- Tests: `e2e/dynamic.spec.ts`: no stale collisions while switching on, choosing and unchoosing (18,024
+  with the fix removed); switching on keeps the map's mean x within 5 % of its width (it moved about
+  11 %) and at least 3 times wider than tall (fails with the old spawn-point pull). The shared settle
+  wait is 120 s: software GL blocks the physics timer while drawing, and under 4 parallel tests the
+  choose test ran out at 60 s (it passes alone in 1.3 min).
+- Files: `web/src/DynamicCanvas.tsx`, `e2e/dynamic.spec.ts`, `docs/TechFromUserStories.md`.

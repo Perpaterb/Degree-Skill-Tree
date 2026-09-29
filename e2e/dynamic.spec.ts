@@ -5,7 +5,9 @@ import { goTo, openTree } from './helpers';
 test.slow(); // the whole 2027 map, twice over (static underneath, dynamic on top), under software GL
 
 const bodies = (page: Page) => page.evaluate(() => window.__dyn!.bodies());
-const settled = (page: Page, timeout = 60_000) =>
+// Coming to rest waits on software GL, which blocks the physics timer while it draws: with several tests
+// in parallel it can take over a minute. A time limit, not a check on the behaviour.
+const settled = (page: Page, timeout = 120_000) =>
   expect.poll(() => page.evaluate(() => !!window.__dyn?.settled() && window.__dyn!.arriving() === 0), { timeout }).toBe(true);
 /** Open a link with Dynamic mode already on (remembered in this browser). */
 async function openDynamic(page: Page, hash: string) {
@@ -94,7 +96,7 @@ test('US-055: choosing a degree leaves it and the camera where they are; the res
   await page.waitForTimeout(150);
   const early = (await bodies(page)).length;
   expect(early).toBeLessThan(all);
-  await settled(page, 90_000);
+  await settled(page, 120_000);
   expect((await bodies(page)).length).toBe(all);
   expect(await page.evaluate(() => window.__dyn!.centre())).toBeNull();
   // A few at a time: never more than a handful in one step.
@@ -160,6 +162,38 @@ test('US-056: sizes first: no circle changes size once the map has started movin
   await settled(page);
   await page.getByTestId('unchoose-degree').click();
   await page.waitForTimeout(100);
-  await settled(page, 90_000);
+  await settled(page, 120_000);
   expect(await page.evaluate(() => window.__dyn!.lateResizes())).toBe(0);
+});
+
+test('US-056: circles collide at the size they are drawn, including ones resized after switching on', async ({ page }) => {
+  // Counted after every batch of physics steps, while moving: at rest the radii are right anyway.
+  await openDynamic(page, 't=uts-2027');
+  await page.getByTestId('degree-picker').selectOption('C10242');
+  await page.waitForTimeout(100);
+  await settled(page);
+  await page.getByTestId('unchoose-degree').click();
+  await page.waitForTimeout(100);
+  await settled(page, 120_000);
+  expect(await page.evaluate(() => window.__dyn!.staleCollisions())).toBe(0);
+});
+
+test('US-055: switching on with nothing chosen keeps the map where it was, long and thin, not drifting to one side', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('dst.mode', 'dynamic'));
+  await page.goto('./#t=uts-2027');
+  await page.waitForFunction(() => !!window.__dyn && window.__dyn.bodies().length > 400, undefined, { timeout: 60_000 });
+  const offshore = new Set(['C04283', 'C04308', 'C04426', 'C10226', 'C11256', 'C11266', 'C11334', 'C10487', 'C10488']);
+  const shape = (b: { id: string; x: number; y: number; r: number }[]) => {
+    const m = b.filter((x) => !offshore.has(x.id));
+    const w = Math.max(...m.map((x) => x.x + x.r)) - Math.min(...m.map((x) => x.x - x.r));
+    const h = Math.max(...m.map((x) => x.y + x.r)) - Math.min(...m.map((x) => x.y - x.r));
+    return { mean: m.reduce((t, x) => t + x.x, 0) / m.length, w, h };
+  };
+  const start = shape(await bodies(page));
+  await settled(page, 120_000);
+  const rest = shape(await bodies(page));
+  // Its middle stays put: it drifted left by about a tenth of its width when pulled to the static origin.
+  expect(Math.abs(rest.mean - start.mean)).toBeLessThan(rest.w * 0.05);
+  // Long and thin, strung along the line rather than bunched up.
+  expect(rest.w / rest.h).toBeGreaterThan(3);
 });
